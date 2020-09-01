@@ -3,6 +3,7 @@
 from RandomVariable import *
 from Common import *
 from enum import Enum
+from Outcomes import *
 
 class HitOutcome(Enum):
     MISS = 0
@@ -17,9 +18,10 @@ class HitType(Enum):
     SUPER_ADVANTAGE = 3
 
 
-class Attack(object):
+class Attack(Outcomes):
 
     def __init__(self, bonus_rv, armor_class, hit_type = HitType.NORMAL, crit_lb = 20, halfling_lucky = False):
+        super().__init__()
         self.bonuses = bonus_rv
         self.target = armor_class
         self.hit_type = hit_type
@@ -56,6 +58,15 @@ class Attack(object):
         # can't use 1 - miss because some of the probability is tied up in crit_chance and auto_miss_chance
         self.hit_chance = self.hit_miss_rv.cdf(self.hit_miss_rv.get_ub()) - self.hit_miss_rv.cdf(self.target-1)
 
+        chance_dict = {}
+        chance_dict[HitOutcome.MISS] = self.auto_miss_chance + self.reg_miss_chance
+        chance_dict[HitOutcome.HIT] = self.hit_chance
+        chance_dict[HitOutcome.CRIT] = self.crit_chance
+
+        self.set_outcome_chances(chance_dict)
+        # damage is never negative
+        self.set_cap_lb(0)
+
         self.damage_rv = None
         self.crit_damage_rv = None
         
@@ -67,44 +78,12 @@ class Attack(object):
             raise RuntimeError("damage RV is not set")
         self.crit_damage_rv = self.damage_rv.add_rv(damage)
 
-    def describe_outcomes(self, approx = False):
-        total = 0
-        for outcome in HitOutcome:
-            outcome_chance = self.get_outcome_chance(outcome)
-            total += outcome_chance
-            if approx:
-                print(outcome,":",outcome_chance,"~=",float(outcome_chance))
-            else:
-                print(outcome,":",outcome_chance)
-        print("Total:",total)
-
-    def get_outcome_chance(self, outcome):
-        if outcome == HitOutcome.MISS:
-            return self.get_miss_chance()
-        elif outcome == HitOutcome.HIT:
-            return self.get_hit_chance()
-        else: # outcome == HitOutcome.CRIT
-            return self.get_crit_chance()
-
-    def get_miss_chance(self):
-        return self.auto_miss_chance + self.reg_miss_chance
-
-    def get_hit_chance(self):
-        return self.hit_chance
-
-    def get_crit_chance(self):
-        return self.crit_chance
-
-    def get_attack_rv(self):
-        def dmg_pdf(x):
-            if x == 0:
-                # cdf instead of pdf because negative damage counts as 0 damage
-                return self.get_miss_chance() + self.get_hit_chance() * self.damage_rv.cdf(0) + self.get_crit_chance() * self.crit_damage_rv.cdf(0)
-            else:
-                return self.get_hit_chance() * self.damage_rv.pdf(x) + self.get_crit_chance() * self.crit_damage_rv.pdf(x)
-        true_ub = max(self.damage_rv.get_ub(),self.crit_damage_rv.get_ub())
-        attackRV = RandomVariable(0,true_ub)
-        attackRV.set_pdf(dmg_pdf)
-        return attackRV
-
+    def finish_setup(self):
+        if self.damage_rv is None or self.crit_damage_rv is None:
+            raise RuntimeError("damage/crit RV is not set")
+        damage_dict = {}
+        damage_dict[HitOutcome.MISS] = Constant(0)
+        damage_dict[HitOutcome.HIT] = self.damage_rv
+        damage_dict[HitOutcome.CRIT] = self.crit_damage_rv
+        self.set_outcome_rvs(damage_dict)
 

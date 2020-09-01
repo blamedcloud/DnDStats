@@ -17,21 +17,27 @@ if __name__ == "__main__":
     
     hit_bonus = Constant(5) # str + prof = 3 + 2
 
-    armor_class = 11
+    armor_class = 13
     hit_type = HitType.ADVANTAGE
+    resisted = False
 
     print("AC:",armor_class)
     print("Hit Type:",hit_type)
 
+    if resisted:
+        damage = damage.half_round_down()
+        crit_dmg = crit_dmg.half_round_down()
+
     attack = Attack(hit_bonus, armor_class, hit_type)
     attack.set_damage_rv(damage)
     attack.set_crit_bonus_rv(crit_dmg)
+    attack.finish_setup()
 
     print()
     print("Outcomes RV:")
     attack.describe_outcomes(True)
 
-    attack_dmg_rv = attack.get_attack_rv()
+    attack_dmg_rv = attack.get_rv()
 
     print()
     print("Attack RV:")

@@ -115,5 +115,13 @@ class RandomVariable(object):
         sumVar.set_pdf(convolution(self.pdf, other.pdf, true_lb, true_ub))
         return sumVar
 
+    def half_round_down(self):
+        lb = math.floor(self.lower_bound/2)
+        ub = math.floor(self.upper_bound/2)
+        def halfPdf(x):
+            return self.pdf(2*x) + self.pdf(2*x+1)
+        halfVar = RandomVariable(lb,ub)
+        halfVar.set_pdf(halfPdf)
+        return halfVar
 
 
