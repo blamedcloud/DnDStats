@@ -69,21 +69,45 @@ class Attack(Outcomes):
 
         self.damage_rv = None
         self.crit_damage_rv = None
-        
-    def set_damage_rv(self, damage):
-        self.damage_rv = damage
 
-    def set_crit_bonus_rv(self, damage):
-        if self.damage_rv is None:
-            raise RuntimeError("damage RV is not set")
-        self.crit_damage_rv = self.damage_rv.add_rv(damage)
+        self.resisted_dmg_rv = None
+        self.resisted_crit_dmg_rv = None
+
+    def add_damage(self, damage):
+        if damage.is_resisted():
+            if self.resisted_dmg_rv is None:
+                self.resisted_dmg_rv = damage.get_base_damage_rv()
+            else:
+                self.resisted_dmg_rv = self.resisted_dmg_rv.add_rv(damage.get_base_damage_rv())
+            if self.resisted_crit_dmg_rv is None:
+                self.resisted_crit_dmg_rv = damage.get_crit_damage_rv()
+            else:
+                self.resisted_crit_dmg_rv = self.resisted_crit_dmg_rv.add_rv(damage.get_crit_damage_rv())
+        else:
+            if self.damage_rv is None:
+                self.damage_rv = damage.get_base_damage_rv()
+            else:
+                self.damage_rv = self.damage_rv.add_rv(damage.get_base_damage_rv())
+            if self.crit_damage_rv is None:
+                self.crit_damage_rv = damage.get_crit_damage_rv()
+            else:
+                self.crit_damage_rv = self.crit_damage_rv.add_rv(damage.get_crit_damage_rv())
 
     def finish_setup(self):
         if self.damage_rv is None or self.crit_damage_rv is None:
             raise RuntimeError("damage/crit RV is not set")
         damage_dict = {}
         damage_dict[HitOutcome.MISS] = Constant(0)
-        damage_dict[HitOutcome.HIT] = self.damage_rv
-        damage_dict[HitOutcome.CRIT] = self.crit_damage_rv
+        if self.resisted_dmg_rv is None:
+            damage_dict[HitOutcome.HIT] = self.damage_rv
+        else:
+            hit_dmg = self.damage_rv.add_rv(self.resisted_dmg_rv.half_round_down())
+            damage_dict[HitOutcome.HIT] = hit_dmg
+        if self.resisted_crit_dmg_rv is None:
+            damage_dict[HitOutcome.CRIT] = self.crit_damage_rv
+        else:
+            crit_dmg = self.crit_damage_rv.add_rv(self.resisted_crit_dmg_rv.half_round_down())
+            damage_dict[HitOutcome.CRIT] = crit_dmg
         self.set_outcome_rvs(damage_dict)
+
 
