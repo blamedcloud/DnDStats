@@ -85,6 +85,7 @@ class Outcomes(object):
             ub = self.cap_ub
         rv = RandomVariable(lb,ub)
         rv.set_pdf(self.pdf)
+        rv.memoize()
         return rv
 
 

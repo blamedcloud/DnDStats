@@ -37,6 +37,14 @@ class RandomVariable(object):
     def is_constant(self):
         return self.lower_bound == self.upper_bound
 
+    def memoize(self):
+        pdf_dict = {}
+        for x in range(self.lower_bound,self.upper_bound+1):
+            pdf_dict[x] = self.pdf(x)
+        def newPdf(x):
+            return pdf_dict[x]
+        self.set_pdf(newPdf)
+
     def pdf(self, x):
         if x < self.lower_bound:
             return 0
