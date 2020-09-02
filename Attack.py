@@ -118,13 +118,14 @@ class MultiAttack(object):
 
 class Attack(Outcomes):
 
-    def __init__(self, bonus_rv, armor_class, hit_type = HitType.NORMAL, crit_lb = 20, halfling_lucky = False):
+    def __init__(self, bonus_rv, armor_class, hit_type = HitType.NORMAL, crit_lb = 20, halfling_lucky = False, auto_crit = False):
         super().__init__()
         self.bonuses = bonus_rv
         self.target = armor_class
         self.hit_type = hit_type
         self.crit_lb = crit_lb
         self.halfling_lucky = halfling_lucky
+        self.auto_crit = auto_crit
 
         firstD20 = None
 
@@ -158,8 +159,12 @@ class Attack(Outcomes):
 
         chance_dict = {}
         chance_dict[HitOutcome.MISS] = self.auto_miss_chance + self.reg_miss_chance
-        chance_dict[HitOutcome.HIT] = self.hit_chance
-        chance_dict[HitOutcome.CRIT] = self.crit_chance
+        if self.auto_crit:
+            chance_dict[HitOutcome.HIT] = 0
+            chance_dict[HitOutcome.CRIT] = self.hit_chance + self.crit_chance
+        else:
+            chance_dict[HitOutcome.HIT] = self.hit_chance
+            chance_dict[HitOutcome.CRIT] = self.crit_chance
 
         self.set_outcome_chances(chance_dict)
         # damage is never negative

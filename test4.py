@@ -11,6 +11,7 @@ if __name__ == "__main__":
     armor_class = 13
     hit_type = HitType.NORMAL
     resisted = False
+    auto_crit = False
 
     # lvl 1 rogue dual wielding shortswords, 16 dex, w/ sneak attack
     damage = Damage("1d6 + 3", resisted)
@@ -19,11 +20,11 @@ if __name__ == "__main__":
 
     hit_bonus = Constant(5) # dex + prof = 3 + 2
 
-    attack = Attack(hit_bonus, armor_class, hit_type)
+    attack = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
     attack.add_damage(damage)
     attack.finish_setup()
 
-    offhand_atk = Attack(hit_bonus, armor_class, hit_type)
+    offhand_atk = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
     offhand_atk.add_damage(offhand_damage)
     offhand_atk.finish_setup()
 
