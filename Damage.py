@@ -5,12 +5,12 @@ from Common import *
 
 class Damage(object):
 
-    def __init__(self, dmg_expr = None):
+    def __init__(self, dmg_expr = None, resisted = False):
         self.damage_rv = None
         self.crit_rv = None
 
         self.static_dmg_key = "static"
-        self.resisted = False
+        self.resisted = resisted
 
         if dmg_expr is not None:
             self.set_damage(dmg_expr)
