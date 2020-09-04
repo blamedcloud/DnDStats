@@ -1,9 +1,8 @@
 #!/usr/bin/python3
 
-from Common import *
+from MultiAttack import *
 from Attack import * 
 from Damage import *
-from math import sqrt
 
 if __name__ == "__main__":
 

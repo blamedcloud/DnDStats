@@ -27,6 +27,9 @@ class Outcomes(object):
     def set_cap_ub(self, ub):
         self.cap_ub = ub
 
+    def get_outcomes(self):
+        return list(self.outcome_chance_dict.keys())
+
     def get_outcome_chance(self, outcome):
         return self.outcome_chance_dict[outcome]
 
@@ -67,7 +70,7 @@ class Outcomes(object):
                 f = lambda o, x: (1 - self.get_outcome_rv(o).cdf(x))
         return self.outcome_pdf_(f,x)
 
-    def get_rv(self):
+    def get_bounds(self):
         lb = None
         ub = None
         for _, rv in self.outcome_rv_dict.items():
@@ -83,6 +86,10 @@ class Outcomes(object):
             lb = self.cap_lb
         if self.cap_ub is not None:
             ub = self.cap_ub
+        return (lb,ub)
+
+    def get_rv(self):
+        lb, ub = self.get_bounds()
         rv = RandomVariable(lb,ub)
         rv.set_pdf(self.pdf)
         rv.memoize()
