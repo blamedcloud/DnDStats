@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 from MultiAttack import *
-from Attack import * 
+from Attack import *
 from Damage import *
 
 if __name__ == "__main__":
@@ -21,11 +21,9 @@ if __name__ == "__main__":
 
     attack = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
     attack.add_damage(damage)
-    attack.finish_setup()
 
     offhand_atk = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
     offhand_atk.add_damage(offhand_damage)
-    offhand_atk.finish_setup()
 
     round_dmg = MultiAttack()
     round_dmg.add_attack(attack)

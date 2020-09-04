@@ -18,6 +18,7 @@ class MultiAttack(object):
         self.damage_max = None
 
     def add_attack(self, atk):
+        atk.finish_setup()
         self.attacks.append(atk)
         _, ub = atk.get_bounds()
         if self.damage_max is None:
