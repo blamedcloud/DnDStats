@@ -16,6 +16,10 @@ class MultiAttack(object):
         self.resisted_crit_dmg_rv = None
 
         self.damage_max = None
+        self.damage_min_ub = None
+
+        self.miss_atk = None
+        self.miss_atk_ub = None
 
     def add_attack(self, atk):
         atk.finish_setup()
@@ -25,6 +29,15 @@ class MultiAttack(object):
             self.damage_max = ub
         else:
             self.damage_max += ub
+        if self.damage_min_ub is None:
+            self.damage_min_ub= ub
+        elif ub < self.damage_min_ub:
+            self.damage_min_ub = ub
+
+    def add_miss_extra_attack(self, atk):
+        atk.finish_setup()
+        self.miss_atk = atk
+        _, self.miss_atk_ub = atk.get_bounds()
 
     def add_first_hit_damage(self, damage):
         if damage.is_resisted():
@@ -54,14 +67,16 @@ class MultiAttack(object):
             outcomes_coeffs = {}
             for outcomes in all_outcomes:
                 outcome_coeff = self.get_attack_outcome_chance_(outcomes)
-                outcomes_coeffs[tuple(outcomes)] = outcome_coeff
+                outcomes_coeffs[outcomes] = outcome_coeff
 
                 attacks_rv = self.get_attack_outcome_rvs_(outcomes)
-                fh_outcome = self.pick_first_hit_outcome_(outcomes)
+                fh_outcome = self.pick_first_passing_outcome_(outcomes, self.is_not_miss_)
+                if fh_outcome is None:
+                    fh_outcome = HitOutcome.MISS
                 fhd_dmg_rv = self.get_fhd_dmg_rv_(fh_outcome)
                 this_rv = attacks_rv.add_rv(fhd_dmg_rv)
                 this_rv.memoize()
-                outcomes_rvs[tuple(outcomes)] = this_rv
+                outcomes_rvs[outcomes] = this_rv
             def overall_pdf(x):
                 value = 0
                 for outcomes, coeff in outcomes_coeffs.items():
@@ -91,7 +106,10 @@ class MultiAttack(object):
             return Constant(0)
         elif outcome == HitOutcome.HIT:
             if self.resisted_dmg_rv is None:
-                return self.damage_rv
+                if self.damage_rv is None:
+                    return Constant(0)
+                else:
+                    return self.damage_rv
             else:
                 if self.damage_rv is None:
                     return self.resisted_dmg_rv.half_round_down()
@@ -99,7 +117,10 @@ class MultiAttack(object):
                     return self.damage_rv.add_rv(self.resisted_dmg_rv.half_round_down())
         else: # outcome == HitOutcome.CRIT
             if self.resisted_crit_dmg_rv is None:
-                return self.crit_damage_rv
+                if self.crit_damage_rv is None:
+                    return Constant(0)
+                else:
+                    return self.crit_damage_rv
             else:
                 if self.crit_damage_rv is None:
                     return self.resisted_crit_dmg_rv.half_round_down()
@@ -113,23 +134,25 @@ class MultiAttack(object):
             overall_rv = overall_rv.add_rv(self.attacks[i].get_outcome_rv(outcomes[i]))
         return overall_rv
 
-    def pick_first_hit_outcome_(self, outcomes):
+    def is_not_miss_(self, outcome):
+        return outcome != HitOutcome.MISS
+
+    def is_miss_(self, outcome):
+        return outcome == HitOutcome.MISS
+
+    def pick_first_passing_outcome_(self, outcomes, criteria):
         assert(len(outcomes) == len(self.attacks))
         for i in range(len(outcomes)):
-            if outcomes[i] != HitOutcome.MISS:
+            if criteria(outcomes[i]):
                 return outcomes[i]
-        return HitOutcome.MISS
+        return None
 
     def generate_outcomes_product_(self, index = 0):
         if index == len(self.attacks) - 1:
-            return self.attacks[index].get_outcomes()
-        elif index == len(self.attacks) - 2:
-            this_outcomes = self.attacks[index].get_outcomes()
-            later_outcomes = self.generate_outcomes_product_(index+1)
-            return [[o1] + [o2] for o1 in this_outcomes for o2 in later_outcomes]
+            return [(outcome,) for outcome in self.attacks[index].get_outcomes()]
         else:
             this_outcomes = self.attacks[index].get_outcomes()
             later_outcomes = self.generate_outcomes_product_(index+1)
-            return [[o1] + o2 for o1 in this_outcomes for o2 in later_outcomes]
+            return [(o1,) + o2 for o1 in this_outcomes for o2 in later_outcomes]
 
 
