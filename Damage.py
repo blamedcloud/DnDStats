@@ -42,6 +42,9 @@ class Damage(object):
         self.damage_rv = non_static_damage.add_rv(static_dmg)
         self.crit_rv = crit_damage.add_rv(static_dmg)
 
+        self.damage_rv.memoize()
+        self.crit_rv.memoize()
+
     # used to set above and beyond crit bonuses like brutal critical
     def set_crit_bonus(self, dmg_expr):
         if self.crit_rv is None:
@@ -49,6 +52,7 @@ class Damage(object):
         bonus_dmg_dict = self.parse_dmg_expr_(dmg_expr)
         for _, dmg in bonus_dmg_dict.items():
             self.crit_rv = self.crit_rv.add_rv(dmg)
+        self.crit_rv.memoize()
 
     def set_resisted(self, resist):
         self.resisted = resist

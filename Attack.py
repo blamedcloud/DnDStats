@@ -50,6 +50,8 @@ class Attack(Outcomes):
                 self.resisted_crit_dmg_rv = damage.get_crit_damage_rv()
             else:
                 self.resisted_crit_dmg_rv = self.resisted_crit_dmg_rv.add_rv(damage.get_crit_damage_rv())
+            self.resisted_dmg_rv.memoize()
+            self.resisted_crit_dmg_rv.memoize()
         else:
             if self.damage_rv is None:
                 self.damage_rv = damage.get_base_damage_rv()
@@ -59,6 +61,8 @@ class Attack(Outcomes):
                 self.crit_damage_rv = damage.get_crit_damage_rv()
             else:
                 self.crit_damage_rv = self.crit_damage_rv.add_rv(damage.get_crit_damage_rv())
+            self.damage_rv.memoize()
+            self.crit_damage_rv.memoize()
 
     def setup_chances_(self):
         firstD20 = None
