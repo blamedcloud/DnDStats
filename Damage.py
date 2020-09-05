@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 
-from RandomVariable import *
 from Common import *
 
 class Damage(object):

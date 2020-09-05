@@ -1,19 +1,15 @@
 #!/usr/bin/python3
 
-from enum import Enum
-from Outcomes import *
-from Attack import *
+from Common import *
+from HitEnums import *
+from DamageSum import *
 
 class MultiAttack(object):
 
     def __init__(self):
         self.attacks = []
 
-        self.damage_rv = None
-        self.crit_damage_rv = None
-
-        self.resisted_dmg_rv = None
-        self.resisted_crit_dmg_rv = None
+        self.first_hit_damage = DamageSum()
 
         self.damage_max = None
         self.damage_min_ub = None
@@ -45,32 +41,11 @@ class MultiAttack(object):
         _, self.miss_atk_ub = atk.get_bounds()
 
     def add_first_hit_damage(self, damage):
-        if damage.is_resisted():
-            if self.resisted_dmg_rv is None:
-                self.resisted_dmg_rv = damage.get_base_damage_rv()
-            else:
-                self.resisted_dmg_rv = self.resisted_dmg_rv.add_rv(damage.get_base_damage_rv())
-            if self.resisted_crit_dmg_rv is None:
-                self.resisted_crit_dmg_rv = damage.get_crit_damage_rv()
-            else:
-                self.resisted_crit_dmg_rv = self.resisted_crit_dmg_rv.add_rv(damage.get_crit_damage_rv())
-            self.resisted_dmg_rv.memoize()
-            self.resisted_crit_dmg_rv.memoize()
-        else:
-            if self.damage_rv is None:
-                self.damage_rv = damage.get_base_damage_rv()
-            else:
-                self.damage_rv = self.damage_rv.add_rv(damage.get_base_damage_rv())
-            if self.crit_damage_rv is None:
-                self.crit_damage_rv = damage.get_crit_damage_rv()
-            else:
-                self.crit_damage_rv = self.crit_damage_rv.add_rv(damage.get_crit_damage_rv())
-            self.damage_rv.memoize()
-            self.crit_damage_rv.memoize()
+        self.first_hit_damage.add_damage(damage)
 
     def get_dmg_rv(self):
         all_dmg_rv = Constant(0)
-        if self.damage_rv is not None or self.resisted_dmg_rv is not None or self.miss_atk is not None:
+        if self.first_hit_damage.has_damage() or self.miss_atk is not None:
             all_outcomes = self.generate_outcomes_product_()
             outcomes_rvs = {}
             outcomes_coeffs = {}
@@ -129,30 +104,10 @@ class MultiAttack(object):
         return product
 
     def get_fhd_dmg_rv_(self, outcome):
-        if outcome == HitOutcome.MISS:
+        if self.first_hit_damage.has_damage():
+            return self.first_hit_damage.get_outcome_rv(outcome)
+        else:
             return Constant(0)
-        elif outcome == HitOutcome.HIT:
-            if self.resisted_dmg_rv is None:
-                if self.damage_rv is None:
-                    return Constant(0)
-                else:
-                    return self.damage_rv
-            else:
-                if self.damage_rv is None:
-                    return self.resisted_dmg_rv.half_round_down()
-                else:
-                    return self.damage_rv.add_rv(self.resisted_dmg_rv.half_round_down())
-        else: # outcome == HitOutcome.CRIT
-            if self.resisted_crit_dmg_rv is None:
-                if self.crit_damage_rv is None:
-                    return Constant(0)
-                else:
-                    return self.crit_damage_rv
-            else:
-                if self.crit_damage_rv is None:
-                    return self.resisted_crit_dmg_rv.half_round_down()
-                else:
-                    return self.crit_damage_rv.add_rv(self.resisted_crit_dmg_rv.half_round_down())
 
     def get_attack_outcome_rvs_(self, outcomes):
         overall_rv = Constant(0)
@@ -169,7 +124,6 @@ class MultiAttack(object):
         return outcome == HitOutcome.MISS
 
     def pick_first_passing_outcome_(self, outcomes, criteria):
-        assert(len(outcomes) == len(self.attacks))
         for i in range(len(outcomes)):
             if criteria(outcomes[i]):
                 return outcomes[i]

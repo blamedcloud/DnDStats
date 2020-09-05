@@ -1,22 +1,9 @@
 #!/usr/bin/python3
 
 from RandomVariable import *
-from Common import *
-from enum import Enum
 from Outcomes import *
-
-class HitOutcome(Enum):
-    MISS = 0
-    HIT = 1
-    CRIT = 2
-
-
-class HitType(Enum):
-    DISADVANTAGE = 0
-    NORMAL = 1
-    ADVANTAGE = 2
-    SUPER_ADVANTAGE = 3
-
+from HitEnums import *
+from DamageSum import *
 
 class Attack(Outcomes):
 
@@ -32,37 +19,16 @@ class Attack(Outcomes):
         # damage is never negative
         self.set_cap_lb(0)
 
-        self.damage_rv = None
-        self.crit_damage_rv = None
-
-        self.resisted_dmg_rv = None
-        self.resisted_crit_dmg_rv = None
+        self.damage_sum = DamageSum()
 
         self.is_setup_ = False
 
     def add_damage(self, damage):
-        if damage.is_resisted():
-            if self.resisted_dmg_rv is None:
-                self.resisted_dmg_rv = damage.get_base_damage_rv()
-            else:
-                self.resisted_dmg_rv = self.resisted_dmg_rv.add_rv(damage.get_base_damage_rv())
-            if self.resisted_crit_dmg_rv is None:
-                self.resisted_crit_dmg_rv = damage.get_crit_damage_rv()
-            else:
-                self.resisted_crit_dmg_rv = self.resisted_crit_dmg_rv.add_rv(damage.get_crit_damage_rv())
-            self.resisted_dmg_rv.memoize()
-            self.resisted_crit_dmg_rv.memoize()
-        else:
-            if self.damage_rv is None:
-                self.damage_rv = damage.get_base_damage_rv()
-            else:
-                self.damage_rv = self.damage_rv.add_rv(damage.get_base_damage_rv())
-            if self.crit_damage_rv is None:
-                self.crit_damage_rv = damage.get_crit_damage_rv()
-            else:
-                self.crit_damage_rv = self.crit_damage_rv.add_rv(damage.get_crit_damage_rv())
-            self.damage_rv.memoize()
-            self.crit_damage_rv.memoize()
+        self.damage_sum.add_damage(damage)
+
+    def setup_damage_(self):
+        damage_dict = self.damage_sum.get_damage_dict()
+        self.set_outcome_rvs(damage_dict)
 
     def setup_chances_(self):
         firstD20 = None
@@ -103,29 +69,6 @@ class Attack(Outcomes):
             chance_dict[HitOutcome.HIT] = self.hit_chance
             chance_dict[HitOutcome.CRIT] = self.crit_chance
         self.set_outcome_chances(chance_dict)
-
-    def setup_damage_(self):
-        if self.damage_rv is None and self.resisted_dmg_rv is None:
-            raise RuntimeError("damage/resisted dmg RV is not set")
-        damage_dict = {}
-        damage_dict[HitOutcome.MISS] = Constant(0)
-        if self.resisted_dmg_rv is None:
-            damage_dict[HitOutcome.HIT] = self.damage_rv
-        else:
-            if self.damage_rv is None:
-                damage_dict[HitOutcome.HIT] = self.resisted_dmg_rv.half_round_down()
-            else:
-                hit_dmg = self.damage_rv.add_rv(self.resisted_dmg_rv.half_round_down())
-                damage_dict[HitOutcome.HIT] = hit_dmg
-        if self.resisted_crit_dmg_rv is None:
-            damage_dict[HitOutcome.CRIT] = self.crit_damage_rv
-        else:
-            if self.crit_damage_rv is None:
-                damage_dict[HitOutcome.CRIT] = self.resisted_crit_dmg_rv.half_round_down()
-            else:
-                crit_dmg = self.crit_damage_rv.add_rv(self.resisted_crit_dmg_rv.half_round_down())
-                damage_dict[HitOutcome.CRIT] = crit_dmg
-        self.set_outcome_rvs(damage_dict)
 
     def finish_setup(self):
         if not self.is_setup_:
