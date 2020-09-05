@@ -27,6 +27,23 @@ class Outcomes(object):
     def set_cap_ub(self, ub):
         self.cap_ub = ub
 
+    def copy(self):
+        new_chance_dict = self.outcome_chance_dict.copy()
+
+        new_rv_dict = {}
+        for o, rv in self.outcome_rv_dict.items():
+            new_rv_dict[o] = rv.copy()
+
+        new_outcomes = Outcomes()
+        new_outcomes.set_outcome_chances(new_chance_dict)
+        new_outcomes.set_outcome_rvs(new_rv_dict)
+        new_outcomes.set_condense(self.condense_outliers)
+        if self.cap_lb is not None:
+            new_outcomes.set_cap_lb(self.cap_lb)
+        if self.cap_ub is not None:
+            new_outcomes.set_cap_ub(self.cap_ub)
+        return new_outcomes
+
     def get_outcomes(self):
         return list(self.outcome_chance_dict.keys())
 

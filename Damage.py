@@ -14,6 +14,12 @@ class Damage(object):
         if dmg_expr is not None:
             self.set_damage(dmg_expr)
 
+    def copy(self):
+        copy = Damage(resisted = self.resisted)
+        copy.damage_rv = self.damage_rv.copy()
+        copy.crit_rv = self.crit_rv.copy()
+        return copy
+
     def is_resisted(self):
         return self.resisted
 

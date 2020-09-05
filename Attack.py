@@ -23,6 +23,13 @@ class Attack(Outcomes):
 
         self.is_setup_ = False
 
+    def copy(self):
+        atk = Attack(self.bonuses.copy(), self.target, self.hit_type, self.crit_lb, self.halfling_lucky, self.auto_crit)
+        atk.damage_sum = self.damage_sum.copy()
+        if self.is_setup_:
+            atk.finish_setup()
+        return atk
+
     def add_damage(self, damage):
         self.damage_sum.add_damage(damage)
 

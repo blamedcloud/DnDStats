@@ -22,14 +22,12 @@ if __name__ == "__main__":
     attack = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
     attack.add_damage(damage)
 
-    attack2 = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
-    attack2.add_damage(damage)
+    attack2 = attack.copy()
 
     attack3 = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
     attack3.add_damage(bonus_atk_damage)
 
-    attack_miss = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
-    attack_miss.add_damage(damage)
+    attack_miss = attack.copy()
 
     round_dmg = MultiAttack()
     round_dmg.add_attack(attack)
@@ -40,9 +38,9 @@ if __name__ == "__main__":
 
     round_dmg.add_first_hit_damage(sneak_atk_dmg)
 
-    print("calculating round rv...")
+    round_dmg2 = round_dmg.copy()
 
-    dpr = round_dmg.get_dmg_rv()
+    dpr = round_dmg2.get_dmg_rv()
 
     dpr.describe(True)
 

@@ -19,6 +19,16 @@ class MultiAttack(object):
 
         self.debug = False
 
+    def copy(self):
+        multi = MultiAttack()
+        for atk in self.attacks:
+            multi.add_attack(atk.copy())
+        multi.first_hit_damage = self.first_hit_damage.copy()
+        if self.miss_atk is not None:
+            multi.add_miss_extra_attack(self.miss_atk.copy())
+        multi.set_debug(self.debug)
+        return multi
+
     def set_debug(self, debug):
         self.debug = debug
 

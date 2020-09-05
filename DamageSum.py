@@ -12,6 +12,17 @@ class DamageSum(object):
         self.resisted_dmg_rv = None
         self.resisted_crit_dmg_rv = None
 
+    def copy(self):
+        copy = DamageSum()
+        if self.damage_rv is not None:
+            copy.damage_rv = self.damage_rv.copy()
+            copy.crit_damage_rv = self.crit_damage_rv.copy()
+
+        if self.resisted_dmg_rv is not None:
+            copy.resisted_dmg_rv = self.resisted_dmg_rv.copy()
+            copy.resisted_crit_dmg_rv = self.resisted_crit_dmg_rv.copy()
+        return copy
+
     def has_damage(self):
         return self.damage_rv is not None or self.resisted_dmg_rv is not None
 
