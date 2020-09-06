@@ -7,10 +7,12 @@ from Damage import *
 if __name__ == "__main__":
 
     # enemy assumptions
-    armor_class = 17
+    armor_class = 16
     hit_type = HitType.NORMAL
     resisted = False
     auto_crit = False
+
+    turn_one = True
 
     # lvl 11 gloomstalker ranger using longbow, 20 dex, hunter's mark
     damage = Damage("1d8 + 1d6 + 5", resisted)
@@ -21,19 +23,19 @@ if __name__ == "__main__":
     attack = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
     attack.add_damage(damage)
 
-    attack2 = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
-    attack2.add_damage(damage)
+    attack2 = attack.copy()
 
     attack3 = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
     attack3.add_damage(bonus_atk_damage)
 
-    attack_miss = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
-    attack_miss.add_damage(damage)
+    attack_miss = attack.copy()
 
     round_dmg = MultiAttack()
     round_dmg.add_attack(attack)
     round_dmg.add_attack(attack2)
-    round_dmg.add_attack(attack3)
+
+    if turn_one:
+        round_dmg.add_attack(attack3)
 
     round_dmg.add_miss_extra_attack(attack_miss)
 

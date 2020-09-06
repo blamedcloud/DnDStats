@@ -75,10 +75,14 @@ class RandomVariable(object):
             else:
                 print(x,":",self.pdf(x))
 
-    def describe(self, approx = False):
+    def describe(self, approx = True):
         print("PDF:")
         self.show_pdf(approx)
         print("CDF(" + str(self.get_ub()) + ") =", self.cdf(self.get_ub()))
+        self.show_stats(approx)
+
+    def show_stats(self, approx = True):
+        print("Bounds: (" + str(self.lower_bound) + ", " + str(self.upper_bound) + ")")
         mu = self.expected_value()
         if approx:
             print("mu =",mu,"~=",float(mu))
@@ -90,6 +94,7 @@ class RandomVariable(object):
         else:
             print("var=",var)
         print("std.dev~=",math.sqrt(var))
+
 
     def cdf(self, x):
         if self.cdf_ is None:

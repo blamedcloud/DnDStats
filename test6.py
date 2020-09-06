@@ -12,6 +12,8 @@ if __name__ == "__main__":
     resisted = False
     auto_crit = False
 
+    turn_one = True
+
     # lvl 11 gloomstalker ranger, rogue 1 using longbow, 20 dex, hunter's mark, sneak attack
     damage = Damage("1d8 + 1d6 + 5", resisted)
     bonus_atk_damage = Damage("2d8 + 1d6 + 5", resisted)
@@ -32,7 +34,9 @@ if __name__ == "__main__":
     round_dmg = MultiAttack()
     round_dmg.add_attack(attack)
     round_dmg.add_attack(attack2)
-    round_dmg.add_attack(attack3)
+
+    if turn_one:
+        round_dmg.add_attack(attack3)
 
     round_dmg.add_miss_extra_attack(attack_miss)
 
