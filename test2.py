@@ -20,3 +20,11 @@ if __name__ == "__main__":
     damage_gwf = damage_gwf.add_rv(constant)
     damage_gwf.show_pdf()
     print(damage_gwf.expected_value())
+
+    print("---")
+
+    d12 = Dice(12)
+
+    rv = d12.subtract_rv(d6)
+
+    rv.describe()

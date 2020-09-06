@@ -140,6 +140,19 @@ class RandomVariable(object):
         sumVar.set_pdf(convolution(self.pdf, other.pdf, true_lb, true_ub))
         return sumVar
 
+    def subtract_rv(self, other):
+        opp_other = other.opposite_rv()
+        sum_rv = self.add_rv(opp_other)
+        return sum_rv
+
+    def opposite_rv(self):
+        pdf_dict = self.get_pdf_dict()
+        def opp_pdf(x):
+            return pdf_dict[-1*x]
+        opp_rv = RandomVariable(-1*self.upper_bound, -1*self.lower_bound)
+        opp_rv.set_pdf(opp_pdf)
+        return opp_rv
+
     def half_round_down(self):
         lb = math.floor(self.lower_bound/2)
         ub = math.floor(self.upper_bound/2)

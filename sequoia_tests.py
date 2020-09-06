@@ -111,16 +111,25 @@ def describe_combat(lvl, ac, sharpshooter, multitarget, total_rounds):
 
 if __name__ == "__main__":
 
-    armor_class = 15
+    armor_class = 16
     lvl = 8
 
     multitarget = False
 
     combat_rounds = 3
 
-    describe_combat(lvl, armor_class, False, multitarget, combat_rounds)
+    std_dmg = describe_combat(lvl, armor_class, False, multitarget, combat_rounds)
     print()
-    describe_combat(lvl, armor_class, True, multitarget, combat_rounds)
+    ss_dmg  = describe_combat(lvl, armor_class, True, multitarget, combat_rounds)
+
+    dmg_diff = ss_dmg.subtract_rv(std_dmg)
+
+    print()
+    print("Sharpshooter damage - regular damage:")
+
+    dmg_diff.show_stats()
+
+    print("P(X > 0):",float(1-dmg_diff.cdf(0)))
 
 
 
