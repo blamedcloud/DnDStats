@@ -103,6 +103,7 @@ class MultiAttack(object):
                 atk.finish_setup()
                 atk_rv = atk.get_rv()
                 all_dmg_rv = all_dmg_rv.add_rv(atk_rv)
+                all_dmg_rv.memoize()
         all_dmg_rv.memoize()
         return all_dmg_rv
 

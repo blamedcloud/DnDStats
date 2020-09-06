@@ -111,11 +111,10 @@ def describe_combat(lvl, ac, sharpshooter, multitarget, total_rounds):
 
 if __name__ == "__main__":
 
-    armor_class = 16
-    lvl = 8
-
-    multitarget = False
-
+    # assumptions
+    armor_class = 17
+    lvl = 11
+    multitarget = True
     combat_rounds = 3
 
     std_dmg = describe_combat(lvl, armor_class, False, multitarget, combat_rounds)
@@ -130,6 +129,5 @@ if __name__ == "__main__":
     dmg_diff.show_stats()
 
     print("P(X > 0):",float(1-dmg_diff.cdf(0)))
-
 
 
