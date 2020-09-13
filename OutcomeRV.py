@@ -2,7 +2,7 @@
 
 from RandomVariable import *
 
-class Outcomes(object):
+class OutcomeRV(object):
 
     def __init__(self):
         self.outcome_chance_dict = None
@@ -34,7 +34,7 @@ class Outcomes(object):
         for o, rv in self.outcome_rv_dict.items():
             new_rv_dict[o] = rv.copy()
 
-        new_outcomes = Outcomes()
+        new_outcomes = OutcomeRV()
         new_outcomes.set_outcome_chances(new_chance_dict)
         new_outcomes.set_outcome_rvs(new_rv_dict)
         new_outcomes.set_condense(self.condense_outliers)

@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 
 from RandomVariable import *
-from Outcomes import *
+from OutcomeRV import *
 from HitEnums import *
 from DamageSum import *
 
-class Attack(Outcomes):
+class Attack(OutcomeRV):
 
     def __init__(self, bonus_rv, armor_class, hit_type = HitType.NORMAL, crit_lb = 20, halfling_lucky = False, auto_crit = False):
         super().__init__()
@@ -93,7 +93,7 @@ class Attack(Outcomes):
         print("AC:", self.target)
         print("Hit Type:", self.hit_type)
         print()
-        print("Outcomes RV:")
+        print("Outcome RV:")
         self.describe_outcomes(True)
         attack_dmg_rv = self.get_rv()
         print()
