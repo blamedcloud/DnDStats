@@ -2,6 +2,7 @@
 
 from MultiAttack import *
 from Attack import *
+from Enemy import *
 from Damage import *
 
 if __name__ == "__main__":
@@ -19,10 +20,12 @@ if __name__ == "__main__":
 
     hit_bonus = Constant(5) # dex + prof = 3 + 2
 
-    attack = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
+    enemy = Enemy(armor_class, hit_type, auto_crit)
+
+    attack = Attack(hit_bonus, enemy)
     attack.add_damage(damage)
 
-    offhand_atk = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
+    offhand_atk = Attack(hit_bonus, enemy)
     offhand_atk.add_damage(offhand_damage)
 
     round_dmg = MultiAttack()

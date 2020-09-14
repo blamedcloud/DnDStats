@@ -2,6 +2,7 @@
 
 from MultiAttack import *
 from Attack import *
+from Enemy import *
 from Damage import *
 
 if __name__ == "__main__":
@@ -20,7 +21,9 @@ if __name__ == "__main__":
 
     hit_bonus = Constant(9) # str + prof = 5 + 4
 
-    attack = Attack(hit_bonus, armor_class, hit_type, auto_crit = auto_crit)
+    enemy = Enemy(armor_class, hit_type, auto_crit)
+
+    attack = Attack(hit_bonus, enemy)
     attack.add_damage(damage)
 
     attack2 = attack.copy()

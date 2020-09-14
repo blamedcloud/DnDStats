@@ -2,6 +2,7 @@
 
 from MultiAttack import *
 from Attack import *
+from Enemy import *
 from Damage import *
 from enum import Enum
 import math
@@ -15,7 +16,7 @@ class HasteStatus(Enum):
 def proficiency(lvl):
     return math.ceil(lvl/4)+1
 
-def sequoia_damage_haste(lvl, armor_class, sharpshooter = False, multitarget = False, haste_status = HasteStatus.INACTIVE, using_pw = False, hunters_mark_active = True):
+def sequoia_damage_haste(lvl, enemy, sharpshooter = False, multitarget = False, haste_status = HasteStatus.INACTIVE, using_pw = False, hunters_mark_active = True):
 
     # 6 is 20 dex and a +1 longbow
     longbow_hm = Damage("1d8 + 1d6 + 6")
@@ -50,7 +51,7 @@ def sequoia_damage_haste(lvl, armor_class, sharpshooter = False, multitarget = F
     elif haste_status == HasteStatus.DROPPED:
         num_attacks = 0
 
-    attack = Attack(hit_bonus, armor_class, HitType.NORMAL)
+    attack = Attack(hit_bonus, enemy)
     if hunters_mark_active:
         attack.add_damage(longbow_hm)
     else:
@@ -68,37 +69,37 @@ def sequoia_damage_haste(lvl, armor_class, sharpshooter = False, multitarget = F
 
     return dmg
 
-def haste_round(lvl, ac, sharpshooter, multitarget, round_num):
+def haste_round(lvl, enemy, sharpshooter, multitarget, round_num):
     if round_num == 1:
         # cast haste, use planar warrior
-        return sequoia_damage_haste(lvl, ac, sharpshooter, multitarget, HasteStatus.CASTING, True, False)
+        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.CASTING, True, False)
     if round_num == 2:
         # cast hunter's mark (class feature variants, so no concentration)
-        return sequoia_damage_haste(lvl, ac, sharpshooter, multitarget, HasteStatus.ACTIVE, False, True)
+        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.ACTIVE, False, True)
     else:
         # haste, hunter's mark active, using planar warrior
-        return sequoia_damage_haste(lvl, ac, sharpshooter, multitarget, HasteStatus.ACTIVE, True, True)
+        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.ACTIVE, True, True)
 
-def no_haste(lvl, ac, sharpshooter, multitarget, round_num):
+def no_haste(lvl, enemy, sharpshooter, multitarget, round_num):
     if round_num == 1:
         # cast hunter's mark
-        return sequoia_damage_haste(lvl, ac, sharpshooter, multitarget, HasteStatus.INACTIVE, False, True)
+        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.INACTIVE, False, True)
     else:
         # hunter's mark active, using planar warrior
-        return sequoia_damage_haste(lvl, ac, sharpshooter, multitarget, HasteStatus.INACTIVE, True, True)
+        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.INACTIVE, True, True)
 
-def describe_combat(lvl, ac, sharpshooter, multitarget, total_rounds):
+def describe_combat(lvl, enemy, sharpshooter, multitarget, total_rounds):
     dmg_func = no_haste
     if lvl >= 9:
         dmg_func = haste_round
 
     print("Sequoia level:",lvl)
-    print("Enemy AC:",armor_class)
+    print("Enemy AC:",enemy.get_ac())
     print("Sharpshooter:",sharpshooter)
 
     overall = Constant(0)
     for round_num in range(1,combat_rounds+1):
-        round_dmg = dmg_func(lvl, armor_class, sharpshooter, multitarget, round_num)
+        round_dmg = dmg_func(lvl, enemy, sharpshooter, multitarget, round_num)
         print("Damage for round",round_num)
         round_dmg.show_stats()
         overall = overall.add_rv(round_dmg)
@@ -113,13 +114,16 @@ if __name__ == "__main__":
 
     # assumptions
     armor_class = 17
+    hit_type = HitType.NORMAL
     lvl = 11
     multitarget = True
     combat_rounds = 3
 
-    std_dmg = describe_combat(lvl, armor_class, False, multitarget, combat_rounds)
+    enemy = Enemy(armor_class, hit_type)
+
+    std_dmg = describe_combat(lvl, enemy, False, multitarget, combat_rounds)
     print()
-    ss_dmg  = describe_combat(lvl, armor_class, True, multitarget, combat_rounds)
+    ss_dmg  = describe_combat(lvl, enemy, True, multitarget, combat_rounds)
 
     dmg_diff = ss_dmg.subtract_rv(std_dmg)
 

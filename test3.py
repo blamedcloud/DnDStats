@@ -2,6 +2,7 @@
 
 from Common import *
 from Attack import * 
+from Enemy import *
 from Damage import *
 from math import sqrt
 
@@ -14,8 +15,9 @@ if __name__ == "__main__":
     hit_type = HitType.NORMAL
     resisted = False
 
+    enemy = Enemy(armor_class, hit_type)
     damage.set_resisted(resisted)
-    attack = Attack(hit_bonus, armor_class, hit_type)
+    attack = Attack(hit_bonus, enemy)
     attack.add_damage(damage)
     attack.finish_setup()
 

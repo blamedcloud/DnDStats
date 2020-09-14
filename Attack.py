@@ -7,14 +7,12 @@ from DamageSum import *
 
 class Attack(OutcomeRV):
 
-    def __init__(self, bonus_rv, armor_class, hit_type = HitType.NORMAL, crit_lb = 20, halfling_lucky = False, auto_crit = False):
+    def __init__(self, bonus_rv, enemy, crit_lb = 20, halfling_lucky = False):
         super().__init__()
         self.bonuses = bonus_rv
-        self.target = armor_class
-        self.hit_type = hit_type
+        self.enemy = enemy
         self.crit_lb = crit_lb
         self.halfling_lucky = halfling_lucky
-        self.auto_crit = auto_crit
 
         # damage is never negative
         self.set_cap_lb(0)
@@ -24,7 +22,7 @@ class Attack(OutcomeRV):
         self.is_setup_ = False
 
     def copy(self):
-        atk = Attack(self.bonuses.copy(), self.target, self.hit_type, self.crit_lb, self.halfling_lucky, self.auto_crit)
+        atk = Attack(self.bonuses.copy(), self.enemy.copy(), self.crit_lb, self.halfling_lucky)
         atk.damage_sum = self.damage_sum.copy()
         if self.is_setup_:
             atk.finish_setup()
@@ -46,13 +44,13 @@ class Attack(OutcomeRV):
 
         overallD20 = None
 
-        if self.hit_type == HitType.NORMAL:
+        if self.get_hit_type() == HitType.NORMAL:
             overallD20 = firstD20
-        elif self.hit_type == HitType.DISADVANTAGE:
+        elif self.get_hit_type() == HitType.DISADVANTAGE:
             overallD20 = firstD20.min_two_trials()
-        elif self.hit_type == HitType.ADVANTAGE:
+        elif self.get_hit_type() == HitType.ADVANTAGE:
             overallD20 = firstD20.max_two_trials()
-        else: # self.hit_type == HitType.SUPER_ADVANTAGE
+        else: # self.get_hit_type() == HitType.SUPER_ADVANTAGE
             overallD20 = firstD20.max_three_trials()
 
         self.crit_chance = 1 - overallD20.cdf(self.crit_lb-1)
@@ -63,13 +61,13 @@ class Attack(OutcomeRV):
 
         self.hit_miss_rv = hit_miss_d20.add_rv(self.bonuses)
 
-        self.reg_miss_chance = self.hit_miss_rv.cdf(self.target-1)
+        self.reg_miss_chance = self.hit_miss_rv.cdf(self.get_ac()-1)
         # can't use 1 - miss because some of the probability is tied up in crit_chance and auto_miss_chance
-        self.hit_chance = self.hit_miss_rv.cdf(self.hit_miss_rv.get_ub()) - self.hit_miss_rv.cdf(self.target-1)
+        self.hit_chance = self.hit_miss_rv.cdf(self.hit_miss_rv.get_ub()) - self.hit_miss_rv.cdf(self.get_ac()-1)
 
         chance_dict = {}
         chance_dict[HitOutcome.MISS] = self.auto_miss_chance + self.reg_miss_chance
-        if self.auto_crit:
+        if self.enemy.get_auto_crit():
             chance_dict[HitOutcome.HIT] = 0
             chance_dict[HitOutcome.CRIT] = self.hit_chance + self.crit_chance
         else:
@@ -84,14 +82,14 @@ class Attack(OutcomeRV):
             self.is_setup_ = True
 
     def get_ac(self):
-        return self.target
+        return self.enemy.get_ac()
 
     def get_hit_type(self):
-        return self.hit_type
+        return self.enemy.get_hit_type()
 
     def describe_attack(self):
-        print("AC:", self.target)
-        print("Hit Type:", self.hit_type)
+        print("AC:", self.get_ac())
+        print("Hit Type:", self.get_hit_type())
         print()
         print("Outcome RV:")
         self.describe_outcomes(True)
