@@ -39,28 +39,50 @@ def sequoia_damage_haste(lvl, enemy, sharpshooter = False, multitarget = False, 
         hit_bonus = Constant(2 + 1 + prof)
 
     num_attacks = 1
-    if lvl >= 11 and multitarget:
-        num_attacks = 3
-    elif lvl >= 5:
-        num_attacks = 2
-
-    if haste_status == HasteStatus.CASTING:
-        num_attacks = 1
-    elif haste_status == HasteStatus.ACTIVE:
-        num_attacks += 1
-    elif haste_status == HasteStatus.DROPPED:
+    num_hm_attacks = 0
+    if hunters_mark_active:
         num_attacks = 0
+        num_hm_attacks = 1
+        if lvl >= 11 and multitarget:
+            num_attacks = 2
+            num_hm_attacks = 1
+        elif lvl >= 5:
+            num_hm_attacks = 2
+
+        if haste_status == HasteStatus.CASTING:
+            num_attacks = 0
+            num_hm_attacks = 1
+        elif haste_status == HasteStatus.ACTIVE:
+            num_hm_attacks += 1
+        elif haste_status == HasteStatus.DROPPED:
+            num_attacks = 0
+            num_hm_attacks = 0
+    else:
+        if lvl >= 11 and multitarget:
+            num_attacks = 3
+        elif lvl >= 5:
+            num_attacks = 2
+
+        if haste_status == HasteStatus.CASTING:
+            num_attacks = 1
+        elif haste_status == HasteStatus.ACTIVE:
+            num_attacks += 1
+        elif haste_status == HasteStatus.DROPPED:
+            num_attacks = 0
 
     attack = Attack(hit_bonus, enemy)
-    if hunters_mark_active:
-        attack.add_damage(longbow_hm)
-    else:
-        attack.add_damage(longbow)
+    attack.add_damage(longbow)
+
+    attack_hm = Attack(hit_bonus, enemy)
+    attack_hm.add_damage(longbow_hm)
 
     round_dmg = MultiAttack()
 
     for i in range(num_attacks):
         round_dmg.add_attack(attack.copy())
+
+    for i in range(num_hm_attacks):
+        round_dmg.add_attack(attack_hm.copy())
 
     if using_pw:
         round_dmg.add_first_hit_damage(planar_warrior)
