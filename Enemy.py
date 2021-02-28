@@ -18,6 +18,16 @@ class Enemy(object):
     def set_hit_type(self, hit_type):
         self.hit_type = hit_type
 
+    def apply_hit_type(self, new_hit_type):
+        if self.hit_type == HitType.NORMAL:
+            self.hit_type = new_hit_type
+        elif new_hit_type == HitType.NORMAL:
+            pass
+        elif self.hit_type == self.new_hit_type:
+            pass
+        else:
+            self.hit_type = HitType.NORMAL
+
     def get_hit_type(self):
         return self.hit_type
 
