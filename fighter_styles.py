@@ -41,7 +41,7 @@ def max_mod(start_mod, num_asis):
             num_asis = 0
     return (final_mod, num_asis)
 
-def archery_damage(lvl, start_mod, weapon_bonus, enemy):
+def archery_damage(lvl, start_mod, weapon_bonus, enemy, power_atk):
 
     num_asis = get_num_asis(lvl)
     final_mod, num_asis = max_mod(start_mod, num_asis)
@@ -54,12 +54,12 @@ def archery_damage(lvl, start_mod, weapon_bonus, enemy):
 
     damage_mod = final_mod + weapon_bonus
     weapon_dmg = Damage("1d8 + " + str(damage_mod))
-    if sharpshooter:
+    if sharpshooter and power_atk:
         weapon_dmg = Damage("1d8 + " + str(damage_mod + 10))
 
     to_hit = final_mod + 2 + weapon_bonus + prof
     hit_bonus = Constant(to_hit)
-    if sharpshooter:
+    if sharpshooter and power_atk:
         hit_bonus = Constant(to_hit - 5)
 
     attack = Attack(hit_bonus, enemy)
@@ -74,7 +74,7 @@ def archery_damage(lvl, start_mod, weapon_bonus, enemy):
 
     return dmg
 
-def longsword_damage(lvl, start_mod, weapon_bonus, enemy):
+def longsword_damage(lvl, start_mod, weapon_bonus, enemy, power_atk):
 
     num_asis = get_num_asis(lvl)
     final_mod, num_asis = max_mod(start_mod, num_asis)
@@ -105,7 +105,7 @@ def longsword_damage(lvl, start_mod, weapon_bonus, enemy):
 
     return dmg
 
-def greatsword_damage(lvl, start_mod, weapon_bonus, enemy):
+def greatsword_damage(lvl, start_mod, weapon_bonus, enemy, power_atk):
 
     num_asis = get_num_asis(lvl)
     final_mod, num_asis = max_mod(start_mod, num_asis)
@@ -118,12 +118,12 @@ def greatsword_damage(lvl, start_mod, weapon_bonus, enemy):
 
     damage_mod = final_mod + weapon_bonus
     weapon_dmg = Damage("2d6r2 + " + str(damage_mod))
-    if gwm:
+    if gwm and power_atk:
         weapon_dmg = Damage("2d6r2 + " + str(damage_mod + 10))
 
     to_hit = final_mod + weapon_bonus + prof
     hit_bonus = Constant(to_hit)
-    if gwm:
+    if gwm and power_atk:
         hit_bonus = Constant(to_hit - 5)
 
     attack = Attack(hit_bonus, enemy)
@@ -141,7 +141,7 @@ def greatsword_damage(lvl, start_mod, weapon_bonus, enemy):
 
     return dmg
 
-def halberd_damage(lvl, start_mod, weapon_bonus, enemy):
+def halberd_damage(lvl, start_mod, weapon_bonus, enemy, power_atk):
 
     num_asis = get_num_asis(lvl)
     final_mod, num_asis = max_mod(start_mod, num_asis)
@@ -160,13 +160,13 @@ def halberd_damage(lvl, start_mod, weapon_bonus, enemy):
     damage_mod = final_mod + weapon_bonus
     weapon_dmg = Damage("1d10r2 + " + str(damage_mod))
     pommel_dmg = Damage("1d4r2 + " + str(damage_mod))
-    if gwm:
+    if gwm and power_atk:
         weapon_dmg = Damage("1d10r2 + " + str(damage_mod + 10))
         pommel_dmg = Damage("1d4r2 + " + str(damage_mod + 10))
 
     to_hit = final_mod + weapon_bonus + prof
     hit_bonus = Constant(to_hit)
-    if gwm:
+    if gwm and power_atk:
         hit_bonus = Constant(to_hit - 5)
 
     attack = Attack(hit_bonus, enemy)
@@ -194,7 +194,7 @@ def halberd_damage(lvl, start_mod, weapon_bonus, enemy):
 
     return dmg
 
-def dual_wield_damage(lvl, start_mod, weapon_bonus, enemy):
+def dual_wield_damage(lvl, start_mod, weapon_bonus, enemy, power_atk):
 
     num_asis = get_num_asis(lvl)
     final_mod, num_asis = max_mod(start_mod, num_asis)
@@ -230,11 +230,12 @@ def dual_wield_damage(lvl, start_mod, weapon_bonus, enemy):
 if __name__ == "__main__":
 
     # assumptions
-    armor_class = 18
+    armor_class = 13
     hit_type = HitType.NORMAL
-    lvl = 11
+    lvl = 4
     start_mod = 3
-    weapon_mod = 1
+    weapon_mod = 0
+    power_atk = True
 
     enemy = Enemy(armor_class, hit_type)
 
@@ -243,26 +244,26 @@ if __name__ == "__main__":
     print()
 
     print("Archery style:")
-    archery_dmg = archery_damage(lvl, start_mod, weapon_mod, enemy)
+    archery_dmg = archery_damage(lvl, start_mod, weapon_mod, enemy, power_atk)
     archery_dmg.show_stats()
     print()
 
     print("Greatsword style:")
-    greatsword_dmg = greatsword_damage(lvl, start_mod, weapon_mod, enemy)
+    greatsword_dmg = greatsword_damage(lvl, start_mod, weapon_mod, enemy, power_atk)
     greatsword_dmg.show_stats()
     print()
 
     print("Halberd style:")
-    halberd_dmg = halberd_damage(lvl, start_mod, weapon_mod, enemy)
+    halberd_dmg = halberd_damage(lvl, start_mod, weapon_mod, enemy, power_atk)
     halberd_dmg.show_stats()
     print()
 
     print("Sword+Board style:")
-    longsword_dmg = longsword_damage(lvl, start_mod, weapon_mod, enemy)
+    longsword_dmg = longsword_damage(lvl, start_mod, weapon_mod, enemy, power_atk)
     longsword_dmg.show_stats()
     print()
 
     print("Dual Wield style:")
-    dual_wield_dmg = dual_wield_damage(lvl, start_mod, weapon_mod, enemy)
+    dual_wield_dmg = dual_wield_damage(lvl, start_mod, weapon_mod, enemy, power_atk)
     dual_wield_dmg.show_stats()
     print()

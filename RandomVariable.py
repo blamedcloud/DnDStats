@@ -68,16 +68,23 @@ class RandomVariable(object):
             else:
                 raise RuntimeError("PDF not defined")
 
-    def show_pdf(self, approx = False):
+    def show_pdf(self, approx = False, only_approx = False, bound = None):
+        min_prob = 0
+        if bound is not None:
+            min_prob = bound
         for x in range(self.lower_bound, self.upper_bound+1):
-            if approx:
-                print(x,":",self.pdf(x),"~=",float(self.pdf(x)))
-            else:
-                print(x,":",self.pdf(x))
+            pdf_x = self.pdf(x)
+            if pdf_x >= min_prob:
+                if only_approx:
+                    print(x,"~=",float(pdf_x))
+                elif approx:
+                    print(x,":",pdf_x,"~=",float(pdf_x))
+                else:
+                    print(x,":",pdf_x)
 
-    def describe(self, approx = True):
+    def describe(self, approx = True, only_approx = False, bound = None):
         print("PDF:")
-        self.show_pdf(approx)
+        self.show_pdf(approx, only_approx, bound)
         print("CDF(" + str(self.get_ub()) + ") =", self.cdf(self.get_ub()))
         self.show_stats(approx)
 
