@@ -77,6 +77,8 @@ class Damage(object):
     def parse_dmg_expr_(self, expr):
         damage = {}
         static_dmg = 0
+        if '-' in expr:
+            expr = expr.replace('-','+-')
         parts = [part.strip() for part in expr.split('+')]
         for part in parts:
             if 'r' in part:
@@ -95,6 +97,8 @@ class Damage(object):
                 die_size = int(new_parts[1])
                 damage[part] = self.create_die_rv_(num_dice, die_size)
             else:
+                if '-' in part:
+                    part = part.replace(' ','')
                 static_dmg += int(part)
         damage[self.static_dmg_key] = Constant(static_dmg)
         return damage
