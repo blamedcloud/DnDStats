@@ -30,3 +30,10 @@ class Constant(RandomVariable):
     def __init__(self, value):
         super().__init__(value,value)
         self.set_pdf(lambda x: 1)
+
+
+class Uniform(RandomVariable):
+
+    def __init__(self, lb, ub):
+        super().__init__(lb, ub)
+        self.set_pdf(lambda x: Fraction(1, ub-lb+1))

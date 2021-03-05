@@ -116,7 +116,8 @@ def describe_combat(lvl, enemy, sharpshooter, multitarget, total_rounds):
         dmg_func = haste_round
 
     print("Sequoia level:",lvl)
-    print("Enemy AC:",enemy.get_ac())
+    if enemy.get_ac().is_constant():
+        print("Enemy AC:",enemy.get_ac().get_ub())
     print("Sharpshooter:",sharpshooter)
 
     overall = Constant(0)

@@ -60,10 +60,12 @@ class Attack(OutcomeRV):
         hit_miss_d20.set_pdf(overallD20.pdf)
 
         self.hit_miss_rv = hit_miss_d20.add_rv(self.bonuses)
+        self.hit_miss_rv_weight = self.hit_miss_rv.get_weight()
+        self.hit_miss_rv.rescale_pdf()
 
-        self.reg_miss_chance = self.hit_miss_rv.cdf(self.get_ac()-1)
-        # can't use 1 - miss because some of the probability is tied up in crit_chance and auto_miss_chance
-        self.hit_chance = self.hit_miss_rv.cdf(self.hit_miss_rv.get_ub()) - self.hit_miss_rv.cdf(self.get_ac()-1)
+        self.reg_miss_chance = self.get_ac().prob_greater_than(self.hit_miss_rv)
+        self.hit_chance = (1 - self.reg_miss_chance) * self.hit_miss_rv_weight
+        self.reg_miss_chance *= self.hit_miss_rv_weight
 
         chance_dict = {}
         chance_dict[HitOutcome.MISS] = self.auto_miss_chance + self.reg_miss_chance
@@ -88,7 +90,8 @@ class Attack(OutcomeRV):
         return self.enemy.get_hit_type()
 
     def describe_attack(self):
-        print("AC:", self.get_ac())
+        if self.get_ac().is_constant():
+            print("AC:", self.get_ac().get_ub())
         print("Hit Type:", self.get_hit_type())
         print()
         print("Outcome RV:")

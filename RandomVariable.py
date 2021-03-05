@@ -68,6 +68,20 @@ class RandomVariable(object):
             else:
                 raise RuntimeError("PDF not defined")
 
+    def get_weight(self):
+        return self.cdf(self.upper_bound)
+
+    def verify(self):
+        return self.get_weight() == 1
+
+    def rescale_pdf(self):
+        if not self.verify():
+            weight = self.get_weight()
+            pdf_dict = self.get_pdf_dict()
+            def weightPdf(x):
+                return pdf_dict[x]/weight
+            self.set_pdf(weightPdf)
+
     def show_pdf(self, approx = False, only_approx = False, bound = None):
         min_prob = 0
         if bound is not None:
@@ -169,4 +183,7 @@ class RandomVariable(object):
         halfVar.set_pdf(halfPdf)
         return halfVar
 
+    def prob_greater_than(self, other):
+        diff_rv = self.copy().subtract_rv(other.copy())
+        return 1 - diff_rv.cdf(0)
 

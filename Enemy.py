@@ -1,16 +1,28 @@
 #!/usr/bin/python3
 
 from HitEnums import *
+from Common import Constant
+from RandomVariable import RandomVariable
 
 class Enemy(object):
 
     def __init__(self, ac, hit_type = HitType.NORMAL, auto_crit = False):
-        self.ac = ac
         self.hit_type = hit_type
         self.auto_crit = auto_crit
+        if isinstance(ac, int):
+            self.ac = Constant(ac)
+        elif isinstance(ac, RandomVariable):
+            self.ac = ac
+        else:
+            raise RuntimeError("ac should be an int or an RV")
 
     def set_ac(self, ac):
-        self.ac = ac
+        if isinstance(ac, int):
+            self.ac = Constant(ac)
+        elif isinstance(ac, RandomVariable):
+            self.ac = ac
+        else:
+            raise RuntimeError("ac should be an int or an RV")
 
     def get_ac(self):
         return self.ac
@@ -38,6 +50,6 @@ class Enemy(object):
         return self.auto_crit
 
     def copy(self):
-        return Enemy(self.ac, self.hit_type, self.auto_crit)
+        return Enemy(self.ac.copy(), self.hit_type, self.auto_crit)
 
 
