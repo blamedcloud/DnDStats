@@ -35,7 +35,7 @@ class Enemy(object):
             self.hit_type = new_hit_type
         elif new_hit_type == HitType.NORMAL:
             pass
-        elif self.hit_type == self.new_hit_type:
+        elif self.hit_type == new_hit_type:
             pass
         else:
             self.hit_type = HitType.NORMAL

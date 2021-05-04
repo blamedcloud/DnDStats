@@ -91,28 +91,28 @@ def sequoia_damage_haste(lvl, enemy, sharpshooter = False, multitarget = False, 
 
     return dmg
 
-def haste_round(lvl, enemy, sharpshooter, multitarget, round_num):
+def haste_round(lvl, enemy, sharpshooter, multitarget, round_num, use_hm, in_pw_range):
     if round_num == 1:
         # cast haste, use planar warrior
-        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.CASTING, True, False)
-    if round_num == 2:
+        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.CASTING, in_pw_range, False)
+    elif round_num == 2:
         # cast hunter's mark (class feature variants, so no concentration)
-        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.ACTIVE, False, True)
+        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.ACTIVE, (not use_hm) and in_pw_range, use_hm)
     else:
         # haste, hunter's mark active, using planar warrior
-        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.ACTIVE, True, True)
+        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.ACTIVE, in_pw_range, use_hm)
 
-def no_haste(lvl, enemy, sharpshooter, multitarget, round_num):
+def no_haste(lvl, enemy, sharpshooter, multitarget, round_num, use_hm, in_pw_range):
     if round_num == 1:
         # cast hunter's mark
-        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.INACTIVE, False, True)
+        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.INACTIVE, (not use_hm) and in_pw_range, use_hm)
     else:
         # hunter's mark active, using planar warrior
-        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.INACTIVE, True, True)
+        return sequoia_damage_haste(lvl, enemy, sharpshooter, multitarget, HasteStatus.INACTIVE, in_pw_range, use_hm)
 
-def describe_combat(lvl, enemy, sharpshooter, multitarget, total_rounds):
+def describe_combat(lvl, enemy, sharpshooter, multitarget, total_rounds, use_haste = True, use_hm = True, in_pw_range = True):
     dmg_func = no_haste
-    if lvl >= 9:
+    if lvl >= 9 and use_haste:
         dmg_func = haste_round
 
     print("Sequoia level:",lvl)
@@ -121,14 +121,14 @@ def describe_combat(lvl, enemy, sharpshooter, multitarget, total_rounds):
     print("Sharpshooter:",sharpshooter)
 
     overall = Constant(0)
-    for round_num in range(1,combat_rounds+1):
-        round_dmg = dmg_func(lvl, enemy, sharpshooter, multitarget, round_num)
+    for round_num in range(1,total_rounds+1):
+        round_dmg = dmg_func(lvl, enemy, sharpshooter, multitarget, round_num, use_hm, in_pw_range)
         print("Damage for round",round_num)
         round_dmg.show_stats()
         overall = overall.add_rv(round_dmg)
         overall.memoize()
 
-    print("Overall Damage (across " + str(combat_rounds) + " rounds):")
+    print("Overall Damage (across " + str(total_rounds) + " rounds):")
 
     overall.show_stats()
     return overall
@@ -136,17 +136,20 @@ def describe_combat(lvl, enemy, sharpshooter, multitarget, total_rounds):
 if __name__ == "__main__":
 
     # assumptions
-    armor_class = 17
+    armor_class = 18
     hit_type = HitType.NORMAL
-    lvl = 11
-    multitarget = True
+    lvl = 10
+    multitarget = False
     combat_rounds = 3
+    use_haste = False
+    use_hm = True
+    in_pw_range = True
 
     enemy = Enemy(armor_class, hit_type)
 
-    std_dmg = describe_combat(lvl, enemy, False, multitarget, combat_rounds)
+    std_dmg = describe_combat(lvl, enemy, False, multitarget, combat_rounds, use_haste, use_hm, in_pw_range)
     print()
-    ss_dmg  = describe_combat(lvl, enemy, True, multitarget, combat_rounds)
+    ss_dmg  = describe_combat(lvl, enemy, True, multitarget, combat_rounds, use_haste, use_hm, in_pw_range)
 
     dmg_diff = ss_dmg.subtract_rv(std_dmg)
 
