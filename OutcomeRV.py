@@ -74,17 +74,17 @@ class OutcomeRV(object):
 
     def pdf(self, x):
         # normal pdf
-        f = lambda o, x: self.get_outcome_rv(o).pdf(x)
+        f = lambda o, y: self.get_outcome_rv(o).pdf(y)
         if self.cap_lb is not None:
             if x < self.cap_lb:
                 return 0
             elif x == self.cap_lb:
-                f = lambda o, x: self.get_outcome_rv(o).cdf(x)
-        elif self.cap_ub is not None:
+                f = lambda o, y: self.get_outcome_rv(o).cdf(y)
+        if self.cap_ub is not None:
             if x > self.cap_ub:
                 return 0
             elif x == self.cap_ub:
-                f = lambda o, x: (1 - self.get_outcome_rv(o).cdf(x))
+                f = lambda o, y: (1 - self.get_outcome_rv(o).cdf(y))
         return self.outcome_pdf_(f,x)
 
     def get_bounds(self):
