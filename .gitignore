@@ -130,3 +130,6 @@ dmypy.json
 
 # vim swp files
 *.swp
+
+# intellij folder
+.idea/
