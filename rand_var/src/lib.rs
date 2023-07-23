@@ -97,7 +97,7 @@ where
         self.upper_bound
     }
 
-    fn raw_pdf(&self, x: isize) -> T {
+    unsafe fn raw_pdf(&self, x: isize) -> T {
         assert!(self.lower_bound <= x);
         assert!(x <= self.upper_bound);
         let index: usize = (x - self.lower_bound) as usize;
@@ -114,7 +114,6 @@ where
     }
 }
 
-
 pub trait RandVar<P, T>
 where
     P: Ord,
@@ -123,11 +122,13 @@ where
     fn build<F: Fn(P) -> T>(lb: P, ub: P, f: F) -> Self;
     fn lower_bound(&self) -> P;
     fn upper_bound(&self) -> P;
-    fn raw_pdf(&self, p: P) -> T;
+    unsafe fn raw_pdf(&self, p: P) -> T;
 
     fn pdf(&self, p: P) -> T {
         if (self.lower_bound() <= p) && (p <= self.upper_bound()) {
-            self.raw_pdf(p)
+            unsafe {
+                self.raw_pdf(p)
+            }
         } else {
             T::zero()
         }
@@ -192,5 +193,94 @@ where
         let ev = self.expected_value();
         let sq_ev = self.general_expected_value(|p| num::pow(self.convert(p),2));
         sq_ev - num::pow(ev, 2)
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use num::{Rational64, Zero};
+    use super::*;
+
+    #[test]
+    fn test_const() {
+        let rv: RandomVariable<Rational64> = RandomVariable::new_constant(5);
+        assert_eq!(5, rv.lower_bound());
+        assert_eq!(5, rv.upper_bound());
+        assert_eq!(Rational64::zero(), rv.pdf(4));
+        assert_eq!(Rational64::one(), rv.pdf(5));
+        assert_eq!(Rational64::zero(), rv.pdf(6));
+        assert_eq!(Rational64::new(5,1), rv.expected_value());
+        assert_eq!(Rational64::zero(), rv.variance());
+    }
+
+    #[test]
+    fn test_const_neg() {
+        let rv: RandomVariable<Rational64> = RandomVariable::new_constant(-7);
+        assert_eq!(-7, rv.lower_bound());
+        assert_eq!(-7, rv.upper_bound());
+        assert_eq!(Rational64::zero(), rv.pdf(-8));
+        assert_eq!(Rational64::one(), rv.pdf(-7));
+        assert_eq!(Rational64::zero(), rv.pdf(-6));
+        assert_eq!(Rational64::new(-7,1), rv.expected_value());
+        assert_eq!(Rational64::zero(), rv.variance());
+    }
+
+    #[test]
+    fn test_unif() {
+        let rv: RandomVariable<Rational64> = RandomVariable::new_uniform(3,14);
+        assert_eq!(3, rv.lower_bound());
+        assert_eq!(14, rv.upper_bound());
+        assert_eq!(Rational64::zero(), rv.pdf(2));
+        assert_eq!(Rational64::zero(), rv.pdf(15));
+        let mut total = Rational64::zero();
+        for x in 3..=14 {
+            assert_eq!(Rational64::new(1,12), rv.pdf(x));
+            total += rv.pdf(x);
+            assert_eq!(total, rv.cdf(x));
+        }
+        assert_eq!(Rational64::one(), total);
+        assert_eq!(Rational64::new(17,2), rv.expected_value());
+        assert_eq!(Rational64::new(143,12), rv.variance());
+    }
+
+    #[test]
+    fn test_d6() {
+        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(6);
+        assert_eq!(1, rv.lower_bound());
+        assert_eq!(6, rv.upper_bound());
+        assert_eq!(Rational64::zero(), rv.pdf(0));
+        assert_eq!(Rational64::zero(), rv.pdf(7));
+        let mut total = Rational64::zero();
+        for x in 1..=6 {
+            assert_eq!(Rational64::new(1,6), rv.pdf(x));
+            total += rv.pdf(x);
+            assert_eq!(total, rv.cdf(x));
+        }
+        assert_eq!(Rational64::one(), total);
+        assert_eq!(Rational64::new(7,2), rv.expected_value());
+        assert_eq!(Rational64::new(35,12), rv.variance());
+    }
+
+    #[test]
+    fn test_d10r2() {
+        let rv: RandomVariable<Rational64> = RandomVariable::new_dice_reroll(10, 2);
+        assert_eq!(1, rv.lower_bound());
+        assert_eq!(10, rv.upper_bound());
+        assert_eq!(Rational64::zero(), rv.pdf(0));
+        assert_eq!(Rational64::zero(), rv.pdf(11));
+        let mut total = Rational64::zero();
+        for x in 1..=10 {
+            if x < 3 {
+                assert_eq!(Rational64::new(2,100), rv.pdf(x));
+            } else {
+                assert_eq!(Rational64::new(12,100), rv.pdf(x));
+            }
+            total += rv.pdf(x);
+            assert_eq!(total, rv.cdf(x));
+        }
+        assert_eq!(Rational64::one(), total);
+        assert_eq!(Rational64::new(63,10), rv.expected_value());
+        assert_eq!(Rational64::new(601,100), rv.variance());
     }
 }
