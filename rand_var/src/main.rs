@@ -1,5 +1,5 @@
 use num::rational::Rational64;
-use rand_var::{NumRandVar, RandomVariable};
+use rand_var::{NumRandVar, RandomVariable, RandVar};
 
 fn main() {
     let rv: RandomVariable<Rational64> = RandomVariable::new_dice(6);

@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::iter::Sum;
 use num::{FromPrimitive, Integer, Num, One, PrimInt};
 use num::rational::Ratio;
 
@@ -66,7 +67,7 @@ where
 
 impl<T> RandVar<isize, T> for RandomVariable<T>
 where
-    T: Num + Debug + Clone
+    T: Num + Sum + Debug + Clone
 {
     fn build<F>(lb: isize, ub: isize, f: F) -> RandomVariable<T>
     where
@@ -103,11 +104,15 @@ where
         let index: usize = (x - self.lower_bound) as usize;
         self.pdf_vec.get(index).unwrap().clone()
     }
+
+    fn valid_p(&self) -> Box<dyn Iterator<Item=isize>> {
+        Box::new(self.lower_bound..=self.upper_bound)
+    }
 }
 
 impl<T> NumRandVar<isize, T> for RandomVariable<T>
 where
-    T: Num + Debug + Clone + FromPrimitive
+    T: Num + Sum + Debug + Clone + FromPrimitive
 {
     fn convert(&self, p: isize) -> T {
         T::from_isize(p).unwrap()
@@ -117,12 +122,13 @@ where
 pub trait RandVar<P, T>
 where
     P: Ord,
-    T: Num,
+    T: Num + Sum,
 {
     fn build<F: Fn(P) -> T>(lb: P, ub: P, f: F) -> Self;
     fn lower_bound(&self) -> P;
     fn upper_bound(&self) -> P;
     unsafe fn raw_pdf(&self, p: P) -> T;
+    fn valid_p(&self) -> Box<dyn Iterator<Item=P>>;
 
     fn pdf(&self, p: P) -> T {
         if (self.lower_bound() <= p) && (p <= self.upper_bound()) {
@@ -133,45 +139,32 @@ where
             T::zero()
         }
     }
-}
 
-fn summation<P, T, F>(lb: P, ub: P, f: F) -> T
-where
-    P: PrimInt,
-    T: Num,
-    F: Fn(P) -> T,
-{
-    let mut result = T::zero();
-    for p in num::range_inclusive(lb, ub) {
-        result = result + f(p);
+    fn cdf(&self, p: P) -> T {
+        if self.upper_bound() <= p {
+            T::one()
+        } else if self.lower_bound() <= p {
+            self.valid_p().take_while(|x| x <= &p).map(|x| self.pdf(x)).sum()
+        } else {
+            T::zero()
+        }
     }
-    result
 }
 
 fn convolution<P, T, F>(lb: P, ub: P, f1: F, f2: F, x: P) -> T
 where
     P: PrimInt,
-    T: Num,
+    T: Num + Sum,
     F: Fn(P) -> T,
 {
-    summation(lb, ub, |y| f1(x-y)*f2(y))
+    num::range_inclusive(lb, ub).map(|y| f1(x-y)*f2(y)).sum()
 }
 
 pub trait NumRandVar<P, T>: RandVar<P, T>
 where
     P: PrimInt,
-    T: Num + Clone,
+    T: Num + Sum + Clone,
 {
-    fn cdf(&self, p: P) -> T {
-        if self.upper_bound() <= p {
-            T::one()
-        } else if self.lower_bound() <= p {
-            summation(self.lower_bound(), p, |x| self.pdf(x))
-        } else {
-            T::zero()
-        }
-    }
-
     fn convert(&self, p: P) -> T;
 
     fn expected_value(&self) -> T {
