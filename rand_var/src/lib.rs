@@ -1,4 +1,5 @@
-use std::fmt::Debug;
+use std::cmp::{max, min};
+use std::fmt::{Debug, Display};
 use std::iter::Sum;
 use num::{FromPrimitive, Integer, Num, One, PrimInt};
 use num::rational::Ratio;
@@ -11,7 +12,7 @@ pub struct RandomVariable<T: Num> {
 
 impl<T> RandomVariable<Ratio<T>>
 where
-    T: Integer + Debug + Clone + FromPrimitive
+    T: Integer + Debug + Clone + FromPrimitive + Display
 {
     pub fn new_dice(sides: isize) -> Self {
         assert!(sides > 0, "sides must be positive");
@@ -67,7 +68,7 @@ where
 
 impl<T> RandVar<isize, T> for RandomVariable<T>
 where
-    T: Num + Sum + Debug + Clone
+    T: Num + Sum + Debug + Clone + Display
 {
     fn build<F>(lb: isize, ub: isize, f: F) -> RandomVariable<T>
     where
@@ -98,9 +99,9 @@ where
         self.upper_bound
     }
 
-    unsafe fn raw_pdf(&self, x: isize) -> T {
-        assert!(self.lower_bound <= x);
-        assert!(x <= self.upper_bound);
+    unsafe fn raw_pdf(&self, x: &isize) -> T {
+        assert!(self.lower_bound <= *x);
+        assert!(*x <= self.upper_bound);
         let index: usize = (x - self.lower_bound) as usize;
         self.pdf_vec.get(index).unwrap().clone()
     }
@@ -112,7 +113,7 @@ where
 
 impl<T> NumRandVar<isize, T> for RandomVariable<T>
 where
-    T: Num + Sum + Debug + Clone + FromPrimitive
+    T: Num + Sum + Debug + Clone + FromPrimitive + Display
 {
     fn convert(&self, p: isize) -> T {
         T::from_isize(p).unwrap()
@@ -121,17 +122,17 @@ where
 
 pub trait RandVar<P, T>
 where
-    P: Ord,
-    T: Num + Sum,
+    P: Ord + Display,
+    T: Num + Sum + Display,
 {
     fn build<F: Fn(P) -> T>(lb: P, ub: P, f: F) -> Self;
     fn lower_bound(&self) -> P;
     fn upper_bound(&self) -> P;
-    unsafe fn raw_pdf(&self, p: P) -> T;
+    unsafe fn raw_pdf(&self, p: &P) -> T;
     fn valid_p(&self) -> Box<dyn Iterator<Item=P>>;
 
-    fn pdf(&self, p: P) -> T {
-        if (self.lower_bound() <= p) && (p <= self.upper_bound()) {
+    fn pdf_ref(&self, p: &P) -> T {
+        if (&self.lower_bound() <= p) && (p <= &self.upper_bound()) {
             unsafe {
                 self.raw_pdf(p)
             }
@@ -139,31 +140,45 @@ where
             T::zero()
         }
     }
+    fn pdf(&self, p: P) -> T {
+        self.pdf_ref(&p)
+    }
 
-    fn cdf(&self, p: P) -> T {
-        if self.upper_bound() <= p {
+    fn cdf_ref(&self, p: &P) -> T {
+        if &self.upper_bound() <= p {
             T::one()
-        } else if self.lower_bound() <= p {
-            self.valid_p().take_while(|x| x <= &p).map(|x| self.pdf(x)).sum()
+        } else if &self.lower_bound() <= p {
+            self.valid_p().take_while(|x| x <= p).map(|x| self.pdf(x)).sum()
         } else {
             T::zero()
         }
     }
+    fn cdf(&self, p: P) -> T {
+        self.cdf_ref(&p)
+    }
+
+    fn print_distributions(&self) {
+        println!("P:\tpdf\t(cdf)");
+        for p in self.valid_p() {
+            println!("{}:\t{}\t({})", &p, self.pdf_ref(&p), self.cdf_ref(&p));
+        }
+    }
 }
 
-fn convolution<P, T, F>(lb: P, ub: P, f1: F, f2: F, x: P) -> T
+fn convolution<P, T, F1, F2>(lb: P, ub: P, f1: F1, f2: F2, x: P) -> T
 where
     P: PrimInt,
     T: Num + Sum,
-    F: Fn(P) -> T,
+    F1: Fn(P) -> T,
+    F2: Fn(P) -> T,
 {
     num::range_inclusive(lb, ub).map(|y| f1(x-y)*f2(y)).sum()
 }
 
 pub trait NumRandVar<P, T>: RandVar<P, T>
 where
-    P: PrimInt,
-    T: Num + Sum + Clone,
+    P: PrimInt + Display,
+    T: Num + Sum + Clone + Display,
 {
     fn convert(&self, p: P) -> T;
 
@@ -187,12 +202,31 @@ where
         let sq_ev = self.general_expected_value(|p| num::pow(self.convert(p),2));
         sq_ev - num::pow(ev, 2)
     }
+
+    fn add_rv(&self, other: &Self) -> Self
+    where
+        Self: Sized
+    {
+        let new_lb = self.lower_bound() + other.lower_bound();
+        let new_ub = self.upper_bound() + other.upper_bound();
+        let min_lb = min(self.lower_bound(), other.lower_bound());
+        let max_ub = max(self.upper_bound(), other.upper_bound());
+        RandVar::build(
+            new_lb,
+            new_ub,
+            |x| convolution(
+                min_lb,
+                max_ub,
+                |p1| self.pdf(p1),
+                |p2| other.pdf(p2),
+                x))
+    }
 }
 
 
 #[cfg(test)]
 mod tests {
-    use num::{Rational64, Zero};
+    use num::{abs, BigInt, BigRational, Rational64, Zero};
     use super::*;
 
     #[test]
@@ -253,6 +287,32 @@ mod tests {
         assert_eq!(Rational64::one(), total);
         assert_eq!(Rational64::new(7,2), rv.expected_value());
         assert_eq!(Rational64::new(35,12), rv.variance());
+    }
+
+    #[test]
+    fn test_2d6() {
+        let rv1: RandomVariable<BigRational> = RandomVariable::new_dice(6);
+        let rv2: RandomVariable<BigRational> = RandomVariable::new_dice(6);
+        let rv = rv1.add_rv(&rv2);
+        assert_eq!(2, rv.lower_bound());
+        assert_eq!(12, rv.upper_bound());
+        assert_eq!(BigRational::zero(), rv.pdf(1));
+        assert_eq!(BigRational::zero(), rv.pdf(13));
+
+        let mut total = BigRational::zero();
+        for x in 2..=12 {
+            let numerator = 6 - abs(7-x);
+            let pdf_x = BigRational::new(BigInt::from_isize(numerator).unwrap(), BigInt::from_isize(36).unwrap());
+            assert_eq!(pdf_x, rv.pdf(x));
+            total += rv.pdf(x);
+            assert_eq!(total, rv.cdf(x));
+        }
+        assert_eq!(BigRational::one(), total);
+
+        println!("2d6 distributions:");
+        rv.print_distributions();
+
+        assert_eq!(BigRational::from_i32(7).unwrap(), rv.expected_value());
     }
 
     #[test]
