@@ -3,16 +3,21 @@ use std::fmt::Display;
 use std::iter::Sum;
 use num::{Num, PrimInt};
 
+pub trait SeqGen
+{
+    fn gen_seq_p(&self, other: &Self) -> Box<dyn Iterator<Item=Self>>;
+}
+
 pub trait RandVar<P, T>
     where
-        P: Ord + Display,
+        P: Ord + Display + SeqGen,
         T: Num + Sum + Display,
 {
     fn build<F: Fn(P) -> T>(lb: P, ub: P, f: F) -> Self;
     fn lower_bound(&self) -> P;
     fn upper_bound(&self) -> P;
     unsafe fn raw_pdf(&self, p: &P) -> T;
-    fn valid_p(&self) -> Box<dyn Iterator<Item=P>>;
+    fn valid_p(&self) -> Box<dyn Iterator<Item=P> + '_>;
 
     fn pdf_ref(&self, p: &P) -> T {
         if (&self.lower_bound() <= p) && (p <= &self.upper_bound()) {
@@ -149,7 +154,7 @@ fn convolution<P, T, F1, F2>(lb: P, ub: P, f1: F1, f2: F2, x: P) -> T
 
 pub trait NumRandVar<P, T>: RandVar<P, T>
     where
-        P: PrimInt + Display,
+        P: PrimInt + Display + SeqGen,
         T: Num + Sum + Clone + Display,
 {
     fn convert(&self, p: P) -> T;

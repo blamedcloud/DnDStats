@@ -1,8 +1,10 @@
+use std::cmp;
+use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
 use std::iter::Sum;
 use num::{FromPrimitive, Integer, Num, One};
 use num::rational::Ratio;
-use crate::rv_traits::{NumRandVar, RandVar};
+use crate::rv_traits::{NumRandVar, RandVar, SeqGen};
 
 pub mod rv_traits;
 
@@ -68,6 +70,14 @@ where
     }
 }
 
+impl SeqGen for isize {
+    fn gen_seq_p(&self, other: &Self) -> Box<dyn Iterator<Item=Self>> {
+        let first = *cmp::min(self, other);
+        let second = *cmp::max(self, other);
+        Box::new(first..=second)
+    }
+}
+
 impl<T> RandVar<isize, T> for RandomVariable<T>
 where
     T: Num + Sum + Debug + Clone + Display
@@ -80,7 +90,7 @@ where
         let length: usize = (ub - lb + 1) as usize;
         let mut pdf_vec = Vec::with_capacity(length);
         let mut total = T::zero();
-        for i in lb..=ub {
+        for i in SeqGen::gen_seq_p(&lb, &ub) {
             total = total + f(i);
             pdf_vec.push(f(i));
         }
@@ -108,8 +118,8 @@ where
         self.pdf_vec.get(index).unwrap().clone()
     }
 
-    fn valid_p(&self) -> Box<dyn Iterator<Item=isize>> {
-        Box::new(self.lower_bound..=self.upper_bound)
+    fn valid_p(&self) -> Box<dyn Iterator<Item=isize> + '_> {
+        <isize as SeqGen>::gen_seq_p(&self.lower_bound(), &self.upper_bound())
     }
 }
 
@@ -121,6 +131,60 @@ where
         T::from_isize(p).unwrap()
     }
 }
+
+// BEGIN map rand var //
+
+pub struct MapRandVar<P: Ord, T: Num> {
+    lower_bound: P,
+    upper_bound: P,
+    pdf_map: BTreeMap<P,T>,
+}
+
+
+impl<P, T> RandVar<P, T> for MapRandVar<P, T>
+where
+    P: Ord + Clone + Display + SeqGen,
+    T: Num + Sum + Clone + Display + Debug,
+{
+    fn build<F: Fn(P) -> T>(lb: P, ub: P, f: F) -> Self {
+        assert!(lb <= ub, "lower bound must be <= upper bound");
+        let mut pdf_map = BTreeMap::new();
+        let mut total = T::zero();
+        for p in SeqGen::gen_seq_p(&lb, &ub) {
+            let f_p = f(p.clone());
+            total = total + f_p.clone();
+            pdf_map.insert(p, f_p);
+        }
+        assert_eq!(T::one(), total, "cdf(upper bound) must be 1");
+
+        MapRandVar {
+            lower_bound: lb,
+            upper_bound: ub,
+            pdf_map
+        }
+    }
+
+    fn lower_bound(&self) -> P {
+        self.lower_bound.clone()
+    }
+
+    fn upper_bound(&self) -> P {
+        self.upper_bound.clone()
+    }
+
+    unsafe fn raw_pdf(&self, p: &P) -> T {
+        if let Some(t) = self.pdf_map.get(p) {
+            t.clone()
+        } else {
+            T::zero()
+        }
+    }
+
+    fn valid_p(&self) -> Box<dyn Iterator<Item=P> + '_> {
+        Box::new(self.pdf_map.keys().cloned())
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
