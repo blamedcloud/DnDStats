@@ -1,23 +1,74 @@
-use std::cmp;
-use std::fmt::Display;
+use std::{cmp, fmt};
+use std::collections::BTreeSet;
+use std::fmt::{Display, Formatter};
 use std::iter::Sum;
 use num::{Num, PrimInt};
 
-pub trait SeqGen
+#[derive(Clone)]
+pub struct SeqGen<T: Ord + Clone> {
+    pub items: BTreeSet<T>,
+}
+
+impl<T: Ord + Clone> Iterator for SeqGen<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.items.pop_first()
+    }
+}
+
+pub trait Seq
+where
+    Self: Ord + Clone + Sized
 {
-    fn gen_seq_p(&self, other: &Self) -> Box<dyn Iterator<Item=Self>>;
+    fn gen_seq(&self, other: &Self) -> SeqGen<Self>;
+}
+
+impl Seq for isize {
+    fn gen_seq(&self, other: &Self) -> SeqGen<Self> {
+        let first = *cmp::min(self, other);
+        let second = *cmp::max(self, other);
+        let items = BTreeSet::from_iter(first..=second);
+        SeqGen { items }
+    }
+}
+
+#[derive(PartialOrd, Ord, PartialEq, Eq, Clone)]
+pub struct Pair<A: Ord + Clone, B: Ord + Clone>(pub A, pub B);
+
+impl<A, B> Seq for Pair<A, B>
+where
+    A: Seq + Clone,
+    B: Seq + Clone,
+{
+    fn gen_seq(&self, other: &Self) -> SeqGen<Self> {
+        let a_sg = Seq::gen_seq(&self.0, &other.0);
+        let b_sg = Seq::gen_seq(&self.1, &other.1);
+        let ab_set: BTreeSet<Pair<A, B>> = itertools::iproduct!(a_sg, b_sg).map(|(a, b)| Pair(a, b)).collect();
+        SeqGen { items: ab_set }
+    }
+}
+
+impl<A, B> fmt::Display for Pair<A, B>
+where
+    A: Ord + Clone + Display,
+    B: Ord + Clone + Display,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "({}, {})", self.0, self.1)
+    }
 }
 
 pub trait RandVar<P, T>
     where
-        P: Ord + Display + SeqGen,
+        P: Ord + Seq + Display,
         T: Num + Sum + Display,
 {
     fn build<F: Fn(P) -> T>(lb: P, ub: P, f: F) -> Self;
     fn lower_bound(&self) -> P;
     fn upper_bound(&self) -> P;
     unsafe fn raw_pdf(&self, p: &P) -> T;
-    fn valid_p(&self) -> Box<dyn Iterator<Item=P> + '_>;
+    fn valid_p(&self) -> SeqGen<P>;
 
     fn pdf_ref(&self, p: &P) -> T {
         if (&self.lower_bound() <= p) && (p <= &self.upper_bound()) {
@@ -154,7 +205,7 @@ fn convolution<P, T, F1, F2>(lb: P, ub: P, f1: F1, f2: F2, x: P) -> T
 
 pub trait NumRandVar<P, T>: RandVar<P, T>
     where
-        P: PrimInt + Display + SeqGen,
+        P: PrimInt + Seq + Display,
         T: Num + Sum + Clone + Display,
 {
     fn convert(&self, p: P) -> T;
@@ -194,6 +245,8 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
         println!("var = {} ~= {}", self.variance(), f(self.variance()));
     }
 
+    // TODO: consider making other a generic type that implements NumRandVar instead of &Self
+    // TODO: if so, make this change for other methods on this trait with the same property
     fn add_rv(&self, other: &Self) -> Self
         where
             Self: Sized

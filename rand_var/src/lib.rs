@@ -1,10 +1,9 @@
-use std::cmp;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display};
 use std::iter::Sum;
-use num::{FromPrimitive, Integer, Num, One};
+use num::{FromPrimitive, Integer, Num, One, Zero};
 use num::rational::Ratio;
-use crate::rv_traits::{NumRandVar, RandVar, SeqGen};
+use crate::rv_traits::{NumRandVar, Pair, RandVar, Seq, SeqGen};
 
 pub mod rv_traits;
 
@@ -17,8 +16,20 @@ pub struct RandomVariable<T: Num> {
 
 impl<T> RandomVariable<Ratio<T>>
 where
-    T: Integer + Debug + Clone + FromPrimitive + Display
+    T: Integer + Debug + Clone + Display + FromPrimitive
 {
+    pub fn new(lb: isize, ub: isize, v: Vec<Ratio<T>>) -> Self
+    {
+        assert!(lb <= ub, "lower bound must be <= upper bound");
+        assert_eq!(ub-lb+1, v.len() as isize, "vector must be of correct length");
+        assert_eq!(Ratio::one(), v.iter().sum(), "cdf(upper bound) must be 1");
+        RandomVariable {
+            lower_bound: lb,
+            upper_bound: ub,
+            pdf_vec: v
+        }
+    }
+
     pub fn new_dice(sides: isize) -> Self {
         assert!(sides > 0, "sides must be positive");
         <RandomVariable<Ratio<T>> as RandVar<isize, Ratio<T>>>::build(
@@ -68,13 +79,16 @@ where
                 Ratio::new(T::one(), T::from_isize(ub-lb+1).unwrap())
             })
     }
-}
 
-impl SeqGen for isize {
-    fn gen_seq_p(&self, other: &Self) -> Box<dyn Iterator<Item=Self>> {
-        let first = *cmp::min(self, other);
-        let second = *cmp::max(self, other);
-        Box::new(first..=second)
+    pub fn to_map_rv(&self) -> MapRandVar<isize, Ratio<T>>
+    {
+        let mut pdf_map: BTreeMap<isize, Ratio<T>> = BTreeMap::new();
+        for (i, t) in self.pdf_vec.iter().enumerate() {
+            if t > &Ratio::zero() {
+                pdf_map.insert((i as isize)+self.lower_bound, t.clone());
+            }
+        }
+        MapRandVar::from_map(pdf_map)
     }
 }
 
@@ -90,7 +104,7 @@ where
         let length: usize = (ub - lb + 1) as usize;
         let mut pdf_vec = Vec::with_capacity(length);
         let mut total = T::zero();
-        for i in SeqGen::gen_seq_p(&lb, &ub) {
+        for i in Seq::gen_seq(&lb, &ub) {
             total = total + f(i);
             pdf_vec.push(f(i));
         }
@@ -118,14 +132,14 @@ where
         self.pdf_vec.get(index).unwrap().clone()
     }
 
-    fn valid_p(&self) -> Box<dyn Iterator<Item=isize> + '_> {
-        <isize as SeqGen>::gen_seq_p(&self.lower_bound(), &self.upper_bound())
+    fn valid_p(&self) -> SeqGen<isize> {
+        Seq::gen_seq(&self.lower_bound(), &self.upper_bound())
     }
 }
 
 impl<T> NumRandVar<isize, T> for RandomVariable<T>
 where
-    T: Num + Sum + Debug + Clone + FromPrimitive + Display
+    T: Num + Sum + Debug + Clone + Display + FromPrimitive
 {
     fn convert(&self, p: isize) -> T {
         T::from_isize(p).unwrap()
@@ -140,20 +154,91 @@ pub struct MapRandVar<P: Ord, T: Num> {
     pdf_map: BTreeMap<P,T>,
 }
 
+impl<T> MapRandVar<isize, Ratio<T>>
+where
+    T: Integer + Debug + Clone + Display + FromPrimitive,
+{
+    pub fn to_vec_rv(&self) -> RandomVariable<Ratio<T>>
+    {
+        let lb = self.lower_bound;
+        let ub = self.upper_bound;
+        let mut pdf_vec = Vec::with_capacity((ub-lb+1) as usize);
+        for i in Seq::gen_seq(&lb, &ub) {
+            if let Some(t) = self.pdf_map.get(&i) {
+                pdf_vec.push(t.clone());
+            } else {
+                pdf_vec.push(Ratio::zero());
+            }
+        }
+        RandomVariable::new(lb, ub, pdf_vec)
+    }
+}
+
+impl<P, T> MapRandVar<P, T>
+where
+    P: Ord + Clone + Display + Seq,
+    T: Num + Sum + Clone + Display + Debug + PartialOrd<T> + for<'a> Sum<&'a T>,
+{
+    pub fn from_map(m: BTreeMap<P, T>) -> Self {
+        let lb = m.first_key_value().expect("map should be non-empty").0;
+        let ub = m.last_key_value().expect("map should be non-empty").0;
+        assert!(lb <= ub, "lower bound must be <= upper bound");
+        assert_eq!(T::one(), m.values().sum(), "cdf(upper bound) must be 1");
+        MapRandVar {
+            lower_bound: lb.clone(),
+            upper_bound: ub.clone(),
+            pdf_map: m
+        }
+    }
+
+    pub fn independent_trials<Q>(&self, other: &MapRandVar<Q, T>) -> MapRandVar<Pair<P, Q>, T>
+    where
+        Q: Ord + Clone + Display + Seq
+    {
+        let mut new_pdf: BTreeMap<Pair<P, Q>, T> = BTreeMap::new();
+        for p in self.valid_p() {
+            for q in other.valid_p() {
+                let val = self.pdf_ref(&p) * other.pdf_ref(&q);
+                new_pdf.insert(Pair(p.clone(), q), val);
+            }
+        }
+        MapRandVar::from_map(new_pdf)
+    }
+
+    pub fn map_keys<Q, F>(&self, f: F) -> MapRandVar<Q, T>
+    where
+        Q: Ord + Clone + Display + Seq,
+        F: Fn(P) -> Q,
+    {
+        let mut new_pdf: BTreeMap<Q, T> = BTreeMap::new();
+        for p in self.valid_p() {
+            let q = f(p.clone());
+            if new_pdf.contains_key(&q) {
+                let old_t = new_pdf.remove(&q).unwrap();
+                new_pdf.insert(q, old_t + self.pdf_ref(&p));
+            } else {
+                new_pdf.insert(q, self.pdf_ref(&p));
+            }
+        }
+        MapRandVar::from_map(new_pdf)
+    }
+}
 
 impl<P, T> RandVar<P, T> for MapRandVar<P, T>
 where
-    P: Ord + Clone + Display + SeqGen,
-    T: Num + Sum + Clone + Display + Debug,
+    P: Ord + Clone + Display + Seq,
+    T: Num + Sum + Clone + Display + Debug + PartialOrd<T>,
 {
     fn build<F: Fn(P) -> T>(lb: P, ub: P, f: F) -> Self {
         assert!(lb <= ub, "lower bound must be <= upper bound");
         let mut pdf_map = BTreeMap::new();
         let mut total = T::zero();
-        for p in SeqGen::gen_seq_p(&lb, &ub) {
+        for p in Seq::gen_seq(&lb, &ub) {
             let f_p = f(p.clone());
-            total = total + f_p.clone();
-            pdf_map.insert(p, f_p);
+            if f_p > T::zero() {
+                total = total + f_p.clone();
+                pdf_map.insert(p, f_p);
+            }
         }
         assert_eq!(T::one(), total, "cdf(upper bound) must be 1");
 
@@ -180,16 +265,78 @@ where
         }
     }
 
-    fn valid_p(&self) -> Box<dyn Iterator<Item=P> + '_> {
-        Box::new(self.pdf_map.keys().cloned())
+    fn valid_p(&self) -> SeqGen<P> {
+        let items: BTreeSet<P> = self.pdf_map.keys().cloned().collect();
+        SeqGen { items }
     }
 }
 
+impl<T> NumRandVar<isize, T> for MapRandVar<isize, T>
+where
+    T: Num + Sum + Clone + Display + Debug + PartialOrd<T> + FromPrimitive
+{
+    fn convert(&self, p: isize) -> T {
+        T::from_isize(p).unwrap()
+    }
+}
 
 #[cfg(test)]
 mod tests {
+    use std::cmp;
     use num::{Rational64, Zero};
     use super::*;
+
+    #[test]
+    fn test_super_adv_two_ways() {
+        let d20_super_adv: RandomVariable<Rational64> = RandomVariable::new_dice(20).max_three_trials();
+        let other_d20: MapRandVar<isize, Rational64> = RandomVariable::new_dice(20).to_map_rv();
+        let other_d20_super_adv = other_d20
+            .independent_trials(&other_d20)
+            .independent_trials(&other_d20)
+            .map_keys(|pair| cmp::max(cmp::max(pair.0.0, pair.0.1), pair.1))
+            .to_vec_rv();
+        assert_eq!(d20_super_adv, other_d20_super_adv);
+    }
+
+    #[test]
+    fn test_adv_two_ways() {
+        let d20_adv: RandomVariable<Rational64> = RandomVariable::new_dice(20).max_two_trials();
+        let other_d20: MapRandVar<isize, Rational64> = RandomVariable::new_dice(20).to_map_rv();
+        let other_d20_adv = other_d20
+            .independent_trials(&other_d20)
+            .map_keys(|pair| cmp::max(pair.0, pair.1))
+            .to_vec_rv();
+        assert_eq!(d20_adv, other_d20_adv);
+    }
+
+    #[test]
+    fn test_2d6_two_ways() {
+        let two_d6: RandomVariable<Rational64> = RandomVariable::new_dice(6).multiple(2);
+        let other_d6: MapRandVar<isize, Rational64> = RandomVariable::new_dice(6).to_map_rv();
+        let other_2d6 = other_d6
+            .independent_trials(&other_d6)
+            .map_keys(|pair| pair.0 + pair.1)
+            .to_vec_rv();
+        assert_eq!(two_d6, other_2d6);
+    }
+
+    #[test]
+    fn test_ad_hoc() {
+        let mut pdf: BTreeMap<isize, Rational64> = BTreeMap::new();
+        pdf.insert(0, Rational64::new(1, 3));
+        pdf.insert(3, Rational64::new(1, 9));
+        pdf.insert(10, Rational64::new(1, 5));
+        pdf.insert(25, Rational64::new(1, 4));
+        pdf.insert(33, Rational64::new(1, 10));
+        pdf.insert(42, Rational64::new(1, 180));
+
+        let rv = MapRandVar::from_map(pdf);
+        assert_eq!(0, rv.lower_bound());
+        assert_eq!(42, rv.upper_bound());
+        assert_eq!(Rational64::one(), rv.cdf(42));
+        assert_eq!(Rational64::new(179, 180), rv.cdf(37));
+        assert_eq!(Rational64::new(727,60), rv.expected_value());
+    }
 
     #[test]
     fn test_const() {
