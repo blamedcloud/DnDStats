@@ -226,6 +226,25 @@ where
         }
         MapRandVar::from_map(new_pdf)
     }
+
+    pub fn consolidate<Q, RV>(&self, outcomes: BTreeMap<P, RV>) -> MapRandVar<Q, T>
+    where
+        Q: Ord + Seq + Clone + Display,
+        RV: RandVar<Q, T>,
+    {
+        let mut new_pdf: BTreeMap<Q, T> = BTreeMap::new();
+        let lb = outcomes.values().map(|rv| rv.lower_bound()).min().unwrap();
+        let ub = outcomes.values().map(|rv| rv.upper_bound()).max().unwrap();
+        for q in Seq::gen_seq(&lb, &ub) {
+            let mut pdf_q = T::zero();
+            for p in self.valid_p() {
+                let rv = outcomes.get(&p).expect("every valid p must have an outcome!");
+                pdf_q = pdf_q + self.pdf_ref(&p) * rv.pdf_ref(&q);
+            }
+            new_pdf.insert(q, pdf_q);
+        }
+        MapRandVar::from_map(new_pdf)
+    }
 }
 
 impl<P, T> RandVar<P, T> for MapRandVar<P, T>
@@ -289,6 +308,43 @@ mod tests {
     use std::cmp;
     use num::{BigInt, BigRational, Rational64, Zero};
     use super::*;
+
+    #[test]
+    fn test_consolidate() {
+        let d20: RandomVariable<Rational64> = RandomVariable::new_dice(20);
+        let hit_bonus: RandomVariable<Rational64> = RandomVariable::new_constant(8);
+        let attack_check = d20
+            .add_rv(&hit_bonus)
+            .to_map_rv()
+            .map_keys(|to_hit| {
+                // in "real" code, this would return an enum (crit, hit, miss)
+                if to_hit == 28 { // natural 20
+                    2
+                } else if to_hit >= 17 { // AC 17
+                    1
+                } else {
+                    0
+                }
+            });
+        let dmg_bonus: RandomVariable<Rational64> = RandomVariable::new_constant(5);
+        let dmg_dice: RandomVariable<Rational64> = RandomVariable::new_dice(6).multiple(2);
+
+        let hit_dmg = dmg_dice.add_rv(&dmg_bonus);
+        let crit_dmg = dmg_dice.multiple(2).add_rv(&dmg_bonus);
+        let miss_dmg: RandomVariable<Rational64> = RandomVariable::new_constant(0);
+
+        let mut outcomes: BTreeMap<isize, RandomVariable<Rational64>> = BTreeMap::new();
+        outcomes.insert(0, miss_dmg);
+        outcomes.insert(1, hit_dmg);
+        outcomes.insert(2, crit_dmg);
+
+        let attack_dmg = attack_check.consolidate(outcomes);
+        assert_eq!(0, attack_dmg.lower_bound());
+        assert_eq!(29, attack_dmg.upper_bound());
+        assert_eq!(Rational64::new(8, 20), attack_dmg.pdf(0));
+        assert_eq!(Rational64::new(1, 25920), attack_dmg.pdf(29));
+        assert_eq!(Rational64::new(151, 20), attack_dmg.expected_value());
+    }
 
     #[test]
     fn test_mixed_add() {
