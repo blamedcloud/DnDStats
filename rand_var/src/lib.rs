@@ -191,6 +191,10 @@ where
         }
     }
 
+    pub fn independent_trials_self(&self) -> MapRandVar<Pair<P, P>, T> {
+        self.independent_trials(&self)
+    }
+
     pub fn independent_trials<Q>(&self, other: &MapRandVar<Q, T>) -> MapRandVar<Pair<P, Q>, T>
     where
         Q: Ord + Clone + Display + Seq
@@ -283,8 +287,36 @@ where
 #[cfg(test)]
 mod tests {
     use std::cmp;
-    use num::{Rational64, Zero};
+    use num::{BigInt, BigRational, Rational64, Zero};
     use super::*;
+
+    #[test]
+    fn test_mixed_add() {
+        let d8: RandomVariable<Rational64> = RandomVariable::new_dice(8);
+        let const_5: MapRandVar<isize, Rational64> = RandomVariable::new_constant(5).to_map_rv();
+        let d8_plus_5 = d8.add_rv(&const_5);
+        assert_eq!(6, d8_plus_5.lower_bound());
+        assert_eq!(13, d8_plus_5.upper_bound());
+        assert_eq!(Rational64::new(19,2), d8_plus_5.expected_value());
+    }
+
+    #[test]
+    fn test_4d6_drop_lowest() {
+        let d6: RandomVariable<BigRational> = RandomVariable::new_dice(6);
+        let ability_score = d6
+            .to_map_rv()
+            .independent_trials_self()
+            .independent_trials_self()
+            .map_keys(|rolls| {
+                let smallest = cmp::min(
+                    cmp::min(rolls.0.0, rolls.0.1),
+                    cmp::min(rolls.1.0, rolls.1.1));
+                rolls.0.0 + rolls.0.1 + rolls.1.0 + rolls.1.1 - smallest
+            }).to_vec_rv();
+        assert_eq!(3, ability_score.lower_bound());
+        assert_eq!(18, ability_score.upper_bound());
+        assert_eq!(BigRational::new(BigInt::from_isize(15869).unwrap(), BigInt::from_isize(1296).unwrap()), ability_score.expected_value());
+    }
 
     #[test]
     fn test_super_adv_two_ways() {

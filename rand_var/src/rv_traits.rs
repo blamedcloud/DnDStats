@@ -245,9 +245,7 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
         println!("var = {} ~= {}", self.variance(), f(self.variance()));
     }
 
-    // TODO: consider making other a generic type that implements NumRandVar instead of &Self
-    // TODO: if so, make this change for other methods on this trait with the same property
-    fn add_rv(&self, other: &Self) -> Self
+    fn add_rv(&self, other: &impl NumRandVar<P,T>) -> Self
         where
             Self: Sized
     {
@@ -279,9 +277,9 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
         }
         let is_neg = num_times < 0;
         let pos_num = num::abs(num_times);
-        let mut rv = self.add_rv(&self);
+        let mut rv = self.add_rv(self);
         for _ in 2..pos_num {
-            rv = rv.add_rv(&self);
+            rv = rv.add_rv(self);
         }
         if is_neg {
             rv.opposite_rv()
@@ -290,7 +288,7 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
         }
     }
 
-    fn minus_rv(&self, other: &Self) -> Self
+    fn minus_rv(&self, other: &impl NumRandVar<P,T>) -> Self
         where
             Self: Sized
     {
@@ -307,6 +305,7 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
             |p| self.pdf(P::zero()-p))
     }
 
+    // This only works on P's that are integer-like. Floats or rationals won't work.
     fn half(&self) -> Self
         where
             Self: Sized
@@ -325,28 +324,28 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
         })
     }
 
-    fn prob_lt(&self, other: &Self) -> T
+    fn prob_lt(&self, other: &impl NumRandVar<P,T>) -> T
         where
             Self: Sized
     {
         self.minus_rv(other).cdf_exclusive(P::zero())
     }
 
-    fn prob_le(&self, other: &Self) -> T
+    fn prob_le(&self, other: &impl NumRandVar<P,T>) -> T
         where
             Self: Sized
     {
         self.minus_rv(other).cdf(P::zero())
     }
 
-    fn prob_eq(&self, other: &Self) -> T
+    fn prob_eq(&self, other: &impl NumRandVar<P,T>) -> T
         where
             Self: Sized
     {
         self.minus_rv(other).pdf(P::zero())
     }
 
-    fn prob_gt(&self, other: &Self) -> T
+    fn prob_gt(&self, other: &impl NumRandVar<P,T>) -> T
         where
             Self: Sized
     {
@@ -354,7 +353,7 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
         T::one() - diff_rv.cdf(P::zero())
     }
 
-    fn prob_ge(&self, other: &Self) -> T
+    fn prob_ge(&self, other: &impl NumRandVar<P,T>) -> T
         where
             Self: Sized
     {
