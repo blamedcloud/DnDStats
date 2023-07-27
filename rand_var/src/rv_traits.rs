@@ -49,7 +49,7 @@ where
     }
 }
 
-impl<A, B> fmt::Display for Pair<A, B>
+impl<A, B> Display for Pair<A, B>
 where
     A: Ord + Clone + Display,
     B: Ord + Clone + Display,
@@ -59,12 +59,21 @@ where
     }
 }
 
+#[derive(Debug)]
+pub enum RVError {
+    InvalidBounds,
+    CDFNotOne,
+    NegProb,
+    NoRound,
+    Other(String),
+}
+
 pub trait RandVar<P, T>
     where
         P: Ord + Seq + Display,
         T: Num + Sum + Display,
 {
-    fn build<F: Fn(P) -> T>(lb: P, ub: P, f: F) -> Self;
+    fn build<F: Fn(P) -> T>(lb: P, ub: P, f: F) -> Result<Self, RVError> where Self: Sized;
     fn lower_bound(&self) -> P;
     fn upper_bound(&self) -> P;
     unsafe fn raw_pdf(&self, p: &P) -> T;
@@ -109,12 +118,11 @@ pub trait RandVar<P, T>
         self.cdf_exclusive_ref(&p)
     }
 
-    fn cap_lb(&self, lb: P) -> Self
+    fn cap_lb(&self, lb: P) -> Result<Self, RVError>
         where
             P: Copy,
             Self: Sized
     {
-        // will panic if lb > ub
         RandVar::build(lb, self.upper_bound(), |p| {
             if p == lb {
                 self.cdf(lb)
@@ -124,7 +132,7 @@ pub trait RandVar<P, T>
         })
     }
 
-    fn cap_ub(&self, ub: P) -> Self
+    fn cap_ub(&self, ub: P) -> Result<Self, RVError>
         where
             P: Copy,
             Self: Sized
@@ -146,7 +154,8 @@ pub trait RandVar<P, T>
         let max_pdf = |p| {
             (T::one()+T::one()) * self.pdf_ref(&p) * self.cdf_exclusive_ref(&p) + num::pow(self.pdf_ref(&p), 2)
         };
-        RandVar::build(self.lower_bound(), self.upper_bound(), max_pdf)
+        // .unwrap() is fine here, because if self is a valid RV, then this also will be.
+        RandVar::build(self.lower_bound(), self.upper_bound(), max_pdf).unwrap()
     }
 
     fn min_two_trials(&self) -> Self
@@ -158,7 +167,8 @@ pub trait RandVar<P, T>
             let max_pdf = (T::one()+T::one()) * self.pdf_ref(&p) * self.cdf_exclusive_ref(&p) + num::pow(self.pdf_ref(&p), 2);
             (T::one()+T::one()) * self.pdf_ref(&p) - max_pdf
         };
-        RandVar::build(self.lower_bound(), self.upper_bound(), min_pdf)
+        // .unwrap() is fine here, because if self is a valid RV, then this also will be.
+        RandVar::build(self.lower_bound(), self.upper_bound(), min_pdf).unwrap()
     }
 
     fn max_three_trials(&self) -> Self
@@ -171,7 +181,8 @@ pub trait RandVar<P, T>
             let y = (T::one() + T::one() + T::one()) * num::pow(self.pdf_ref(&p), 2) * self.cdf_exclusive_ref(&p);
             x + y + num::pow(self.pdf_ref(&p), 3)
         };
-        RandVar::build(self.lower_bound(), self.upper_bound(), max_pdf)
+        // .unwrap() is fine here, because if self is a valid RV, then this also will be.
+        RandVar::build(self.lower_bound(), self.upper_bound(), max_pdf).unwrap()
     }
 
     fn print_distributions(&self) {
@@ -253,6 +264,7 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
         let new_ub = self.upper_bound() + other.upper_bound();
         let min_lb = cmp::min(self.lower_bound(), other.lower_bound());
         let max_ub = cmp::max(self.upper_bound(), other.upper_bound());
+        // .unwrap() is fine here, because if self and other are valid RVs, then this also will be.
         RandVar::build(
             new_lb,
             new_ub,
@@ -261,7 +273,7 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
                 max_ub,
                 |p1| self.pdf(p1),
                 |p2| other.pdf(p2),
-                x))
+                x)).unwrap()
     }
 
     fn multiple(&self, num_times: i32) -> Self
@@ -269,7 +281,7 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
             Self: Sized + Clone
     {
         if num_times == 0 {
-            return RandVar::build(P::zero(), P::zero(), |_| T::one());
+            return RandVar::build(P::zero(), P::zero(), |_| T::one()).unwrap();
         } else if num_times == 1 {
             return self.clone();
         } else if num_times == -1 {
@@ -299,18 +311,24 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
         where
             Self: Sized
     {
+        // .unwrap() is fine here, because if self is a valid RV, then this also will be.
         RandVar::build(
             P::zero()-self.upper_bound(),
             P::zero()-self.lower_bound(),
-            |p| self.pdf(P::zero()-p))
+            |p| self.pdf(P::zero()-p)).unwrap()
     }
 
     // This only works on P's that are integer-like. Floats or rationals won't work.
-    fn half(&self) -> Self
+    fn half(&self) -> Result<Self, RVError>
         where
             Self: Sized
     {
         let two = P::one() + P::one();
+        // P requires PrimInt for this trait, so this should never
+        // happen, but check for rounding anyway.
+        if P::one()/two != P::zero() {
+            return Err(RVError::NoRound);
+        }
         let lb = self.lower_bound()/two;
         let ub = self.upper_bound()/two;
         RandVar::build(lb, ub, |p| {
@@ -371,7 +389,7 @@ mod tests {
 
     #[test]
     fn test_minus_d4() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(4).opposite_rv();
+        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(4).unwrap().opposite_rv();
         assert_eq!(-4, rv.lower_bound());
         assert_eq!(-1, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(0));
@@ -389,9 +407,9 @@ mod tests {
 
     #[test]
     fn test_d20_minus_5_cap_lb() {
-        let rv1: RandomVariable<Rational64> = RandomVariable::new_dice(20);
-        let rv2: RandomVariable<Rational64> = RandomVariable::new_constant(5);
-        let rv = rv1.minus_rv(&rv2).cap_lb(0);
+        let rv1: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap();
+        let rv2: RandomVariable<Rational64> = RandomVariable::new_constant(5).unwrap();
+        let rv = rv1.minus_rv(&rv2).cap_lb(0).unwrap();
         assert_eq!(0, rv.lower_bound());
         assert_eq!(15, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(-1));
@@ -413,9 +431,9 @@ mod tests {
 
     #[test]
     fn test_d11_plus_3_cap_ub() {
-        let rv1: RandomVariable<Rational64> = RandomVariable::new_dice(11);
-        let rv2: RandomVariable<Rational64> = RandomVariable::new_constant(3);
-        let rv = rv1.add_rv(&rv2).cap_ub(10);
+        let rv1: RandomVariable<Rational64> = RandomVariable::new_dice(11).unwrap();
+        let rv2: RandomVariable<Rational64> = RandomVariable::new_constant(3).unwrap();
+        let rv = rv1.add_rv(&rv2).cap_ub(10).unwrap();
         assert_eq!(4, rv.lower_bound());
         assert_eq!(10, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(3));
@@ -437,8 +455,8 @@ mod tests {
 
     #[test]
     fn test_d12_minus_d8() {
-        let rv1: RandomVariable<Rational64> = RandomVariable::new_dice(12);
-        let rv2: RandomVariable<Rational64> = RandomVariable::new_dice(8);
+        let rv1: RandomVariable<Rational64> = RandomVariable::new_dice(12).unwrap();
+        let rv2: RandomVariable<Rational64> = RandomVariable::new_dice(8).unwrap();
         let rv = rv1.minus_rv(&rv2);
         assert_eq!(-7, rv.lower_bound());
         assert_eq!(11, rv.upper_bound());
@@ -456,8 +474,8 @@ mod tests {
 
     #[test]
     fn test_2d6() {
-        let rv1: RandomVariable<BigRational> = RandomVariable::new_dice(6);
-        let rv2: RandomVariable<BigRational> = RandomVariable::new_dice(6);
+        let rv1: RandomVariable<BigRational> = RandomVariable::new_dice(6).unwrap();
+        let rv2: RandomVariable<BigRational> = RandomVariable::new_dice(6).unwrap();
         let rv = rv1.add_rv(&rv2);
         assert_eq!(2, rv.lower_bound());
         assert_eq!(12, rv.upper_bound());
@@ -477,7 +495,7 @@ mod tests {
 
     #[test]
     fn test_multiple() {
-        let rv1: RandomVariable<BigRational> = RandomVariable::new_dice(6);
+        let rv1: RandomVariable<BigRational> = RandomVariable::new_dice(6).unwrap();
         let rv = rv1.add_rv(&rv1);
         let other_rv = rv1.multiple(2);
         assert_eq!(rv, other_rv);
@@ -489,13 +507,13 @@ mod tests {
 
     #[test]
     fn test_fireball() {
-        let d6: RandomVariable<BigRational> = RandomVariable::new_dice(6);
+        let d6: RandomVariable<BigRational> = RandomVariable::new_dice(6).unwrap();
         let fireball = d6.multiple(8);
         assert_eq!(8, fireball.lower_bound());
         assert_eq!(48, fireball.upper_bound());
         assert_eq!(BigRational::from_i32(28).unwrap(), fireball.expected_value());
 
-        let fireball_resist = fireball.half();
+        let fireball_resist = fireball.half().unwrap();
         assert_eq!(4, fireball_resist.lower_bound());
         assert_eq!(24, fireball_resist.upper_bound());
         let mut total = BigRational::zero();
@@ -511,7 +529,7 @@ mod tests {
 
     #[test]
     fn test_half() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_uniform(-3,7).half();
+        let rv: RandomVariable<Rational64> = RandomVariable::new_uniform(-3,7).unwrap().half().unwrap();
         assert_eq!(-1, rv.lower_bound());
         assert_eq!(3, rv.upper_bound());
 
@@ -530,7 +548,7 @@ mod tests {
 
     #[test]
     fn test_d20_adv() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(20).max_two_trials();
+        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap().max_two_trials();
         assert_eq!(1, rv.lower_bound());
         assert_eq!(20, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(0));
@@ -548,7 +566,7 @@ mod tests {
 
     #[test]
     fn test_d20_disadv() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(20).min_two_trials();
+        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap().min_two_trials();
         assert_eq!(1, rv.lower_bound());
         assert_eq!(20, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(0));
@@ -566,7 +584,7 @@ mod tests {
 
     #[test]
     fn test_d20_super_adv() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(20).max_three_trials();
+        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap().max_three_trials();
         assert_eq!(1, rv.lower_bound());
         assert_eq!(20, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(0));
@@ -583,14 +601,14 @@ mod tests {
 
     #[test]
     fn test_cmp_rv() {
-        let d6: RandomVariable<Rational64> = RandomVariable::new_dice(6);
+        let d6: RandomVariable<Rational64> = RandomVariable::new_dice(6).unwrap();
         assert_eq!(Rational64::new(5,12), d6.prob_gt(&d6));
         assert_eq!(Rational64::new(7,12), d6.prob_ge(&d6));
         assert_eq!(Rational64::new(1,6), d6.prob_eq(&d6));
         assert_eq!(Rational64::new(7,12), d6.prob_le(&d6));
         assert_eq!(Rational64::new(5,12), d6.prob_gt(&d6));
 
-        let d20: RandomVariable<Rational64> = RandomVariable::new_dice(20);
+        let d20: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap();
         let d20_adv = d20.max_two_trials();
         assert_eq!(Rational64::one(), d20_adv.prob_ge(&d20) + d20_adv.prob_lt(&d20));
         assert_eq!(Rational64::one(), d20_adv.prob_gt(&d20) + d20_adv.prob_lt(&d20) + d20_adv.prob_eq(&d20));
