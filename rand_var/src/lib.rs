@@ -3,7 +3,7 @@ use std::fmt::{Debug, Display};
 use std::iter::Sum;
 use num::{FromPrimitive, Integer, Num, One, Zero};
 use num::rational::Ratio;
-use crate::rv_traits::{NumRandVar, Pair, RandVar, Seq, SeqGen};
+use crate::rv_traits::{NumRandVar, Pair, RandVar, RVError, Seq, SeqGen};
 
 pub mod rv_traits;
 
@@ -18,20 +18,31 @@ impl<T> RandomVariable<Ratio<T>>
 where
     T: Integer + Debug + Clone + Display + FromPrimitive
 {
-    pub fn new(lb: isize, ub: isize, v: Vec<Ratio<T>>) -> Self
+    pub fn new(lb: isize, ub: isize, v: Vec<Ratio<T>>) -> Result<Self, RVError>
     {
-        assert!(lb <= ub, "lower bound must be <= upper bound");
-        assert_eq!(ub-lb+1, v.len() as isize, "vector must be of correct length");
-        assert_eq!(Ratio::one(), v.iter().sum(), "cdf(upper bound) must be 1");
-        RandomVariable {
+        if lb > ub {
+            return Err(RVError::InvalidBounds);
+        }
+        if (ub-lb+1) != (v.len() as isize) {
+            return Err(RVError::Other(String::from("vector must be of correct length")));
+        }
+        if Ratio::one() != v.iter().sum() {
+            return Err(RVError::CDFNotOne);
+        }
+        if v.iter().min().unwrap() < &Ratio::zero() {
+            return Err(RVError::NegProb);
+        }
+        Ok(RandomVariable {
             lower_bound: lb,
             upper_bound: ub,
             pdf_vec: v
-        }
+        })
     }
 
-    pub fn new_dice(sides: isize) -> Self {
-        assert!(sides > 0, "sides must be positive");
+    pub fn new_dice(sides: isize) -> Result<Self, RVError> {
+        if sides < 1 {
+            return Err(RVError::InvalidBounds);
+        }
         <RandomVariable<Ratio<T>> as RandVar<isize, Ratio<T>>>::build(
             1,
             sides,
@@ -40,10 +51,16 @@ where
             })
     }
 
-    pub fn new_dice_reroll(sides: isize, reroll_max: isize) -> Self {
-        assert!(sides > 0, "sides must be positive");
-        assert!(reroll_max > 0, "reroll_max must be positive");
-        assert!(sides > reroll_max, "sides must be larger than reroll_max");
+    pub fn new_dice_reroll(sides: isize, reroll_max: isize) -> Result<Self, RVError> {
+        if sides < 1 {
+            return Err(RVError::InvalidBounds);
+        }
+        if reroll_max < 1 {
+            return Err(RVError::Other(String::from("reroll_max must be positive")));
+        }
+        if sides <= reroll_max {
+            return Err(RVError::Other(String::from("sides must be larger than reroll_max")));
+        }
         let one_over_sides = Ratio::new(
             T::one(),
             T::from_isize(sides).unwrap());
@@ -64,14 +81,14 @@ where
             })
     }
 
-    pub fn new_constant(value: isize) -> Self {
+    pub fn new_constant(value: isize) -> Result<Self, RVError> {
         <RandomVariable<Ratio<T>> as RandVar<isize, Ratio<T>>>::build(
             value,
             value,
             |_| Ratio::one())
     }
 
-    pub fn new_uniform(lb: isize, ub: isize) -> Self {
+    pub fn new_uniform(lb: isize, ub: isize) -> Result<Self, RVError> {
         <RandomVariable<Ratio<T>> as RandVar<isize, Ratio<T>>>::build(
             lb,
             ub,
@@ -88,33 +105,42 @@ where
                 pdf_map.insert((i as isize)+self.lower_bound, t.clone());
             }
         }
-        MapRandVar::from_map(pdf_map)
+        // .unwrap() is fine here, because if self is a valid RV, then this also will be.
+        MapRandVar::from_map(pdf_map).unwrap()
     }
 }
 
 impl<T> RandVar<isize, T> for RandomVariable<T>
 where
-    T: Num + Sum + Debug + Clone + Display
+    T: Num + Sum + Debug + Clone + Display + PartialOrd<T>
 {
-    fn build<F>(lb: isize, ub: isize, f: F) -> RandomVariable<T>
+    fn build<F>(lb: isize, ub: isize, f: F) -> Result<RandomVariable<T>, RVError>
     where
         F: Fn(isize) -> T
     {
-        assert!(lb <= ub, "lower bound must be <= upper bound");
+        if lb > ub {
+            return Err(RVError::InvalidBounds);
+        }
         let length: usize = (ub - lb + 1) as usize;
         let mut pdf_vec = Vec::with_capacity(length);
         let mut total = T::zero();
         for i in Seq::gen_seq(&lb, &ub) {
-            total = total + f(i);
-            pdf_vec.push(f(i));
+            let f_i = f(i);
+            if f_i < T::zero() {
+                return Err(RVError::NegProb);
+            }
+            total = total + f_i.clone();
+            pdf_vec.push(f_i);
         }
-        assert_eq!(T::one(), total, "cdf(upper bound) must be 1");
+        if T::one() != total {
+            return Err(RVError::CDFNotOne);
+        }
 
-        RandomVariable {
+        Ok(RandomVariable {
             lower_bound: lb,
             upper_bound: ub,
             pdf_vec
-        }
+        })
     }
 
     fn lower_bound(&self) -> isize {
@@ -139,7 +165,7 @@ where
 
 impl<T> NumRandVar<isize, T> for RandomVariable<T>
 where
-    T: Num + Sum + Debug + Clone + Display + FromPrimitive
+    T: Num + Sum + Debug + Clone + Display + FromPrimitive + PartialOrd<T>
 {
     fn convert(&self, p: isize) -> T {
         T::from_isize(p).unwrap()
@@ -170,7 +196,8 @@ where
                 pdf_vec.push(Ratio::zero());
             }
         }
-        RandomVariable::new(lb, ub, pdf_vec)
+        // .unwrap() is fine here, because if self is a valid RV, then this also will be.
+        RandomVariable::new(lb, ub, pdf_vec).unwrap()
     }
 }
 
@@ -179,16 +206,26 @@ where
     P: Ord + Clone + Display + Seq,
     T: Num + Sum + Clone + Display + Debug + PartialOrd<T> + for<'a> Sum<&'a T>,
 {
-    pub fn from_map(m: BTreeMap<P, T>) -> Self {
-        let lb = m.first_key_value().expect("map should be non-empty").0;
-        let ub = m.last_key_value().expect("map should be non-empty").0;
-        assert!(lb <= ub, "lower bound must be <= upper bound");
-        assert_eq!(T::one(), m.values().sum(), "cdf(upper bound) must be 1");
-        MapRandVar {
+    pub fn from_map(m: BTreeMap<P, T>) -> Result<Self, RVError> {
+        if m.len() == 0 {
+            return Err(RVError::Other(String::from("map should be non-empty")));
+        }
+        let lb = m.first_key_value().unwrap().0;
+        let ub = m.last_key_value().unwrap().0;
+        if lb > ub {
+            return Err(RVError::InvalidBounds);
+        }
+        if m.values().sum::<T>() != T::one() {
+            return Err(RVError::CDFNotOne);
+        }
+        if m.values().any(|t| t < &T::zero()) {
+            return Err(RVError::NegProb);
+        }
+        Ok(MapRandVar {
             lower_bound: lb.clone(),
             upper_bound: ub.clone(),
             pdf_map: m
-        }
+        })
     }
 
     pub fn independent_trials_self(&self) -> MapRandVar<Pair<P, P>, T> {
@@ -206,7 +243,8 @@ where
                 new_pdf.insert(Pair(p.clone(), q), val);
             }
         }
-        MapRandVar::from_map(new_pdf)
+        // .unwrap() is fine here, because if self is a valid RV, then this also will be.
+        MapRandVar::from_map(new_pdf).unwrap()
     }
 
     pub fn map_keys<Q, F>(&self, f: F) -> MapRandVar<Q, T>
@@ -224,10 +262,11 @@ where
                 new_pdf.insert(q, self.pdf_ref(&p));
             }
         }
-        MapRandVar::from_map(new_pdf)
+        // .unwrap() is fine here, because if self is a valid RV, then this also will be.
+        MapRandVar::from_map(new_pdf).unwrap()
     }
 
-    pub fn consolidate<Q, RV>(&self, outcomes: BTreeMap<P, RV>) -> MapRandVar<Q, T>
+    pub fn consolidate<Q, RV>(&self, outcomes: BTreeMap<P, RV>) -> Result<MapRandVar<Q, T>, RVError>
     where
         Q: Ord + Seq + Clone + Display,
         RV: RandVar<Q, T>,
@@ -238,10 +277,15 @@ where
         for q in Seq::gen_seq(&lb, &ub) {
             let mut pdf_q = T::zero();
             for p in self.valid_p() {
-                let rv = outcomes.get(&p).expect("every valid p must have an outcome!");
-                pdf_q = pdf_q + self.pdf_ref(&p) * rv.pdf_ref(&q);
+                if let Some(rv) = outcomes.get(&p) {
+                    pdf_q = pdf_q + self.pdf_ref(&p) * rv.pdf_ref(&q);
+                } else {
+                    return Err(RVError::Other(String::from("every valid p must have an outcome!")));
+                }
             }
-            new_pdf.insert(q, pdf_q);
+            if pdf_q > T::zero() {
+                new_pdf.insert(q, pdf_q);
+            }
         }
         MapRandVar::from_map(new_pdf)
     }
@@ -252,24 +296,31 @@ where
     P: Ord + Clone + Display + Seq,
     T: Num + Sum + Clone + Display + Debug + PartialOrd<T>,
 {
-    fn build<F: Fn(P) -> T>(lb: P, ub: P, f: F) -> Self {
-        assert!(lb <= ub, "lower bound must be <= upper bound");
+    fn build<F: Fn(P) -> T>(lb: P, ub: P, f: F) -> Result<Self, RVError> {
+        if lb > ub {
+            return Err(RVError::InvalidBounds);
+        }
         let mut pdf_map = BTreeMap::new();
         let mut total = T::zero();
         for p in Seq::gen_seq(&lb, &ub) {
             let f_p = f(p.clone());
+            if f_p < T::zero() {
+                return Err(RVError::NegProb);
+            }
             if f_p > T::zero() {
                 total = total + f_p.clone();
                 pdf_map.insert(p, f_p);
             }
         }
-        assert_eq!(T::one(), total, "cdf(upper bound) must be 1");
+        if T::one() != total {
+            return Err(RVError::CDFNotOne);
+        }
 
-        MapRandVar {
+        Ok(MapRandVar {
             lower_bound: lb,
             upper_bound: ub,
             pdf_map
-        }
+        })
     }
 
     fn lower_bound(&self) -> P {
@@ -311,8 +362,8 @@ mod tests {
 
     #[test]
     fn test_consolidate() {
-        let d20: RandomVariable<Rational64> = RandomVariable::new_dice(20);
-        let hit_bonus: RandomVariable<Rational64> = RandomVariable::new_constant(8);
+        let d20: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap();
+        let hit_bonus: RandomVariable<Rational64> = RandomVariable::new_constant(8).unwrap();
         let attack_check = d20
             .add_rv(&hit_bonus)
             .to_map_rv()
@@ -326,19 +377,19 @@ mod tests {
                     0
                 }
             });
-        let dmg_bonus: RandomVariable<Rational64> = RandomVariable::new_constant(5);
-        let dmg_dice: RandomVariable<Rational64> = RandomVariable::new_dice(6).multiple(2);
+        let dmg_bonus: RandomVariable<Rational64> = RandomVariable::new_constant(5).unwrap();
+        let dmg_dice: RandomVariable<Rational64> = RandomVariable::new_dice(6).unwrap().multiple(2);
 
         let hit_dmg = dmg_dice.add_rv(&dmg_bonus);
         let crit_dmg = dmg_dice.multiple(2).add_rv(&dmg_bonus);
-        let miss_dmg: RandomVariable<Rational64> = RandomVariable::new_constant(0);
+        let miss_dmg: RandomVariable<Rational64> = RandomVariable::new_constant(0).unwrap();
 
         let mut outcomes: BTreeMap<isize, RandomVariable<Rational64>> = BTreeMap::new();
         outcomes.insert(0, miss_dmg);
         outcomes.insert(1, hit_dmg);
         outcomes.insert(2, crit_dmg);
 
-        let attack_dmg = attack_check.consolidate(outcomes);
+        let attack_dmg = attack_check.consolidate(outcomes).unwrap();
         assert_eq!(0, attack_dmg.lower_bound());
         assert_eq!(29, attack_dmg.upper_bound());
         assert_eq!(Rational64::new(8, 20), attack_dmg.pdf(0));
@@ -348,8 +399,8 @@ mod tests {
 
     #[test]
     fn test_mixed_add() {
-        let d8: RandomVariable<Rational64> = RandomVariable::new_dice(8);
-        let const_5: MapRandVar<isize, Rational64> = RandomVariable::new_constant(5).to_map_rv();
+        let d8: RandomVariable<Rational64> = RandomVariable::new_dice(8).unwrap();
+        let const_5: MapRandVar<isize, Rational64> = RandomVariable::new_constant(5).unwrap().to_map_rv();
         let d8_plus_5 = d8.add_rv(&const_5);
         assert_eq!(6, d8_plus_5.lower_bound());
         assert_eq!(13, d8_plus_5.upper_bound());
@@ -358,7 +409,7 @@ mod tests {
 
     #[test]
     fn test_4d6_drop_lowest() {
-        let d6: RandomVariable<BigRational> = RandomVariable::new_dice(6);
+        let d6: RandomVariable<BigRational> = RandomVariable::new_dice(6).unwrap();
         let ability_score = d6
             .to_map_rv()
             .independent_trials_self()
@@ -376,8 +427,8 @@ mod tests {
 
     #[test]
     fn test_super_adv_two_ways() {
-        let d20_super_adv: RandomVariable<Rational64> = RandomVariable::new_dice(20).max_three_trials();
-        let other_d20: MapRandVar<isize, Rational64> = RandomVariable::new_dice(20).to_map_rv();
+        let d20_super_adv: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap().max_three_trials();
+        let other_d20: MapRandVar<isize, Rational64> = RandomVariable::new_dice(20).unwrap().to_map_rv();
         let other_d20_super_adv = other_d20
             .independent_trials(&other_d20)
             .independent_trials(&other_d20)
@@ -388,8 +439,8 @@ mod tests {
 
     #[test]
     fn test_adv_two_ways() {
-        let d20_adv: RandomVariable<Rational64> = RandomVariable::new_dice(20).max_two_trials();
-        let other_d20: MapRandVar<isize, Rational64> = RandomVariable::new_dice(20).to_map_rv();
+        let d20_adv: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap().max_two_trials();
+        let other_d20: MapRandVar<isize, Rational64> = RandomVariable::new_dice(20).unwrap().to_map_rv();
         let other_d20_adv = other_d20
             .independent_trials(&other_d20)
             .map_keys(|pair| cmp::max(pair.0, pair.1))
@@ -399,8 +450,8 @@ mod tests {
 
     #[test]
     fn test_2d6_two_ways() {
-        let two_d6: RandomVariable<Rational64> = RandomVariable::new_dice(6).multiple(2);
-        let other_d6: MapRandVar<isize, Rational64> = RandomVariable::new_dice(6).to_map_rv();
+        let two_d6: RandomVariable<Rational64> = RandomVariable::new_dice(6).unwrap().multiple(2);
+        let other_d6: MapRandVar<isize, Rational64> = RandomVariable::new_dice(6).unwrap().to_map_rv();
         let other_2d6 = other_d6
             .independent_trials(&other_d6)
             .map_keys(|pair| pair.0 + pair.1)
@@ -418,7 +469,7 @@ mod tests {
         pdf.insert(33, Rational64::new(1, 10));
         pdf.insert(42, Rational64::new(1, 180));
 
-        let rv = MapRandVar::from_map(pdf);
+        let rv = MapRandVar::from_map(pdf).unwrap();
         assert_eq!(0, rv.lower_bound());
         assert_eq!(42, rv.upper_bound());
         assert_eq!(Rational64::one(), rv.cdf(42));
@@ -428,7 +479,7 @@ mod tests {
 
     #[test]
     fn test_const() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_constant(5);
+        let rv: RandomVariable<Rational64> = RandomVariable::new_constant(5).unwrap();
         assert_eq!(5, rv.lower_bound());
         assert_eq!(5, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(4));
@@ -440,7 +491,7 @@ mod tests {
 
     #[test]
     fn test_const_neg() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_constant(-7);
+        let rv: RandomVariable<Rational64> = RandomVariable::new_constant(-7).unwrap();
         assert_eq!(-7, rv.lower_bound());
         assert_eq!(-7, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(-8));
@@ -452,7 +503,7 @@ mod tests {
 
     #[test]
     fn test_unif() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_uniform(3,14);
+        let rv: RandomVariable<Rational64> = RandomVariable::new_uniform(3,14).unwrap();
         assert_eq!(3, rv.lower_bound());
         assert_eq!(14, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(2));
@@ -470,7 +521,7 @@ mod tests {
 
     #[test]
     fn test_d6() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(6);
+        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(6).unwrap();
         assert_eq!(1, rv.lower_bound());
         assert_eq!(6, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(0));
@@ -488,7 +539,7 @@ mod tests {
 
     #[test]
     fn test_d10r2() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_dice_reroll(10, 2);
+        let rv: RandomVariable<Rational64> = RandomVariable::new_dice_reroll(10, 2).unwrap();
         assert_eq!(1, rv.lower_bound());
         assert_eq!(10, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(0));
