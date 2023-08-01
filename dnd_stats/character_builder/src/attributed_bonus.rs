@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 use crate::ability_scores::Ability;
 use crate::Character;
 
-type CharacterDependant = Box<dyn Fn(&Character) -> i32>;
+pub type CharacterDependant = Box<dyn Fn(&Character) -> i32>;
 
 pub enum BonusType {
     Constant(i32),
@@ -61,6 +61,16 @@ impl BonusTerm {
     pub fn get_bonus(&self) -> &BonusType {
         &self.bonus
     }
+
+    pub fn get_value(&self, character: &Character) -> i32 {
+        let value = match &self.bonus {
+            BonusType::Constant(c) => *c,
+            BonusType::Modifier(a) => character.get_ability_scores().get_score(a).get_mod() as i32,
+            BonusType::Proficiency => character.get_prof_bonus() as i32,
+            BonusType::Dependant(f) => f(character),
+        };
+        value
+    }
 }
 
 impl Display for BonusTerm {
@@ -85,28 +95,40 @@ impl Display for BonusTerm {
 }
 
 pub struct AttributedBonus {
-    name: String,
-    terms: Vec<BonusTerm>
+    name: String, // TODO: rather than use a string, this might be better as an enum eventually?
+    terms: Vec<BonusTerm>,
+    temp_terms: Vec<BonusTerm>,
 }
 
 impl AttributedBonus {
     pub fn new(name: String) -> Self {
-        AttributedBonus { name, terms: Vec::new() }
+        AttributedBonus { name, terms: Vec::new(), temp_terms: Vec::new() }
+    }
+
+    pub fn reset(&mut self) {
+        self.terms.clear();
+        self.temp_terms.clear();
     }
 
     pub fn add_term(&mut self, term: BonusTerm) {
         self.terms.push(term);
     }
 
+    pub fn add_temp_term(&mut self, term: BonusTerm) {
+        self.temp_terms.push(term);
+    }
+
+    pub fn clear_temp_terms(&mut self) {
+        self.temp_terms.clear();
+    }
+
     pub fn get_value(&self, character: &Character) -> i32 {
         let mut bonus = 0;
         for term in self.terms.iter() {
-            match term.get_bonus() {
-                BonusType::Constant(c) => bonus += c,
-                BonusType::Modifier(a) => bonus += character.get_ability_scores().get_score(a).get_mod() as i32,
-                BonusType::Proficiency => bonus += character.get_prof_bonus() as i32,
-                BonusType::Dependant(f) => bonus += f(character),
-            };
+            bonus += term.get_value(character);
+        }
+        for term in self.temp_terms.iter() {
+            bonus += term.get_value(character);
         }
         bonus
     }
@@ -115,6 +137,8 @@ impl AttributedBonus {
 impl Display for AttributedBonus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} = ", self.name)?;
+
+        // write each term, careful about the first one (no leading '+')
         if self.terms.len() > 0 {
             write!(f, "{}", self.terms.get(0).unwrap())?;
         }
@@ -123,6 +147,12 @@ impl Display for AttributedBonus {
         for term in iter {
             write!(f, " + {}", term)?;
         }
+
+        // write any temporary terms
+        for term in self.temp_terms.iter() {
+            write!(f, " + {}", term)?;
+        }
+
         Ok(())
     }
 }

@@ -386,12 +386,18 @@ impl Equipment {
     pub fn get_armor_mut(&mut self) -> &mut Armor {
         &mut self.armor
     }
+    pub fn set_armor(&mut self, new_armor: Armor) {
+        self.armor = new_armor;
+    }
 
     pub fn get_primary_weapon(&self) -> &Weapon {
         &self.main_hand
     }
     pub fn get_primary_weapon_mut(&mut self) -> &mut Weapon {
         &mut self.main_hand
+    }
+    pub fn set_primary_weapon(&mut self, weapon: Weapon) {
+        self.main_hand = weapon;
     }
 
     pub fn get_primary_dmg_dice(&self) -> &DamageDice {
@@ -409,6 +415,9 @@ impl Equipment {
     }
     pub fn get_off_hand_mut(&mut self) -> &mut OffHand {
         &mut self.off_hand
+    }
+    pub fn set_off_hand(&mut self, off: OffHand) {
+        self.off_hand = off;
     }
 
     pub fn get_secondary_weapon(&self) -> Option<&Weapon> {
