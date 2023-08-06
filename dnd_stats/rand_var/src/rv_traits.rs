@@ -146,6 +146,30 @@ pub trait RandVar<P, T>
         })
     }
 
+    fn reroll_once_on<F>(&self, pred: F) -> Self
+    where
+        F: Fn(&P) -> bool,
+        Self: Sized,
+        T: Clone,
+    {
+        let mut reroll_chance = T::zero();
+        for p in self.valid_p() {
+            if pred(&p) {
+                reroll_chance = reroll_chance + self.pdf(p);
+            }
+        }
+
+        let reroll_pdf = |p| {
+            if pred(&p) {
+                reroll_chance.clone() * self.pdf(p)
+            } else {
+                (T::one() + reroll_chance.clone()) * self.pdf(p)
+            }
+        };
+        // .unwrap() is fine here, because if self is a valid RV, then this also will be.
+        RandVar::build(self.lower_bound(), self.upper_bound(), reroll_pdf).unwrap()
+    }
+
     fn max_two_trials(&self) -> Self
         where
             T: Clone,
@@ -386,6 +410,17 @@ mod tests {
     use num::{BigInt, BigRational, One, Rational64, FromPrimitive, Zero};
     use crate::RandomVariable;
     use super::*;
+
+    #[test]
+    fn test_reroll() {
+        let rv1: RandomVariable<Rational64> = RandomVariable::new_dice_reroll(10,2).unwrap();
+        let rv2: RandomVariable<Rational64> = RandomVariable::new_dice(10).unwrap().reroll_once_on(|p| *p <= 2);
+        assert_eq!(rv1, rv2);
+
+        let rv3: RandomVariable<Rational64> = RandomVariable::new_dice_reroll(20,1).unwrap();
+        let rv4: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap().reroll_once_on(|p| *p <= 1);
+        assert_eq!(rv3, rv4);
+    }
 
     #[test]
     fn test_minus_d4() {

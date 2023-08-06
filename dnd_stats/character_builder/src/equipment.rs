@@ -148,7 +148,6 @@ pub struct ACSource {
 }
 
 impl ACSource {
-
     pub fn shield() -> Self {
         ACSource { base_ac: 2, magic_bonus_ac: None }
     }
