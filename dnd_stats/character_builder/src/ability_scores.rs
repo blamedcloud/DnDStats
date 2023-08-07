@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
 
+#[derive(Debug, Copy, Clone)]
 pub enum Ability {
     STR,
     DEX,
@@ -19,7 +20,7 @@ impl Display for Ability {
             Ability::INT => s.push_str("INT"),
             Ability::WIS => s.push_str("WIS"),
             Ability::CHA => s.push_str("CHA"),
-        }
+        };
         write!(f, "{}", s)
     }
 }

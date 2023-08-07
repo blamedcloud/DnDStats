@@ -98,11 +98,12 @@ pub struct AttributedBonus {
     name: String, // TODO: rather than use a string, this might be better as an enum eventually?
     terms: Vec<BonusTerm>,
     temp_terms: Vec<BonusTerm>,
+    cached_value: Option<i32>,
 }
 
 impl AttributedBonus {
     pub fn new(name: String) -> Self {
-        AttributedBonus { name, terms: Vec::new(), temp_terms: Vec::new() }
+        AttributedBonus { name, terms: Vec::new(), temp_terms: Vec::new(), cached_value: None }
     }
 
     pub fn reset(&mut self) {
@@ -131,6 +132,18 @@ impl AttributedBonus {
             bonus += term.get_value(character);
         }
         bonus
+    }
+
+    pub fn save_value(&mut self, character: &Character) {
+        self.cached_value = Some(self.get_value(character));
+    }
+
+    pub fn clear_saved_value(&mut self) {
+        self.cached_value = None;
+    }
+
+    pub fn get_saved_value(&self) -> Option<i32> {
+        self.cached_value
     }
 }
 

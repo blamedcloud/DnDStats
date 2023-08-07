@@ -174,6 +174,7 @@ where
 
 // BEGIN map rand var //
 
+#[derive(PartialEq, Debug)]
 pub struct MapRandVar<P: Ord, T: Num> {
     lower_bound: P,
     upper_bound: P,
@@ -363,9 +364,9 @@ mod tests {
     #[test]
     fn test_consolidate() {
         let d20: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap();
-        let hit_bonus: RandomVariable<Rational64> = RandomVariable::new_constant(8).unwrap();
+        let hit_bonus= 8;
         let attack_check = d20
-            .add_rv(&hit_bonus)
+            .add_const(hit_bonus)
             .to_map_rv()
             .map_keys(|to_hit| {
                 // in "real" code, this would return an enum (crit, hit, miss)
@@ -377,11 +378,11 @@ mod tests {
                     0
                 }
             });
-        let dmg_bonus: RandomVariable<Rational64> = RandomVariable::new_constant(5).unwrap();
+        let dmg_bonus = 5;
         let dmg_dice: RandomVariable<Rational64> = RandomVariable::new_dice(6).unwrap().multiple(2);
 
-        let hit_dmg = dmg_dice.add_rv(&dmg_bonus);
-        let crit_dmg = dmg_dice.multiple(2).add_rv(&dmg_bonus);
+        let hit_dmg = dmg_dice.add_const(dmg_bonus);
+        let crit_dmg = dmg_dice.multiple(2).add_const(dmg_bonus);
         let miss_dmg: RandomVariable<Rational64> = RandomVariable::new_constant(0).unwrap();
 
         let mut outcomes: BTreeMap<isize, RandomVariable<Rational64>> = BTreeMap::new();
@@ -405,6 +406,7 @@ mod tests {
         assert_eq!(6, d8_plus_5.lower_bound());
         assert_eq!(13, d8_plus_5.upper_bound());
         assert_eq!(Rational64::new(19,2), d8_plus_5.expected_value());
+        assert_eq!(d8_plus_5, d8.add_const(5));
     }
 
     #[test]

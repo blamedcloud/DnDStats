@@ -33,7 +33,7 @@ impl Seq for isize {
     }
 }
 
-#[derive(PartialOrd, Ord, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone)]
 pub struct Pair<A: Ord + Clone, B: Ord + Clone>(pub A, pub B);
 
 impl<A, B> Seq for Pair<A, B>
@@ -280,9 +280,21 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
         println!("var = {} ~= {}", self.variance(), f(self.variance()));
     }
 
+    fn add_const(&self, p: P) -> Self
+    where
+        Self: Sized
+    {
+        // .unwrap() is fine here, because if self is a valid RV, then this also will be.
+        RandVar::build(
+            self.lower_bound() + p,
+            self.upper_bound() + p,
+            |x| self.pdf(x-p)
+        ).unwrap()
+    }
+
     fn add_rv(&self, other: &impl NumRandVar<P,T>) -> Self
-        where
-            Self: Sized
+    where
+        Self: Sized
     {
         let new_lb = self.lower_bound() + other.lower_bound();
         let new_ub = self.upper_bound() + other.upper_bound();
@@ -486,6 +498,9 @@ mod tests {
         assert_eq!(Rational64::one(), total);
         assert_eq!(Rational64::new(89,11), rv.expected_value());
         assert_eq!(Rational64::new(560,121), rv.variance());
+
+        let rv3 = rv1.add_const(3).cap_ub(10).unwrap();
+        assert_eq!(rv, rv3);
     }
 
     #[test]

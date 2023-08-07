@@ -169,7 +169,7 @@ impl ACSource {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum WeaponType {
     SimpleMelee,
     SimpleRanged,
@@ -177,7 +177,7 @@ pub enum WeaponType {
     MartialRanged,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum WeaponProperty {
     Ammunition,
     Finesse,
@@ -199,7 +199,7 @@ pub enum WeaponRange {
     Thrown(Feet, Feet, Feet),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Weapon {
     name: String,
     weapon_type: WeaponType,
@@ -316,6 +316,10 @@ impl Weapon { // TODO: implement the rest of the weapon constructors
 
     pub fn get_properties(&self) -> &Vec<WeaponProperty> {
         &self.properties
+    }
+
+    pub fn has_property(&self, prop: &WeaponProperty) -> bool {
+        self.properties.contains(prop)
     }
 
     pub fn get_magic_bonus(&self) -> Option<u8> {

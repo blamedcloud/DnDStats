@@ -1,5 +1,6 @@
 use std::cmp::min;
 use std::ops::Add;
+use rand_var::rv_traits::RVError;
 use crate::ability_scores::AbilityScores;
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType, CharacterDependant};
 use crate::equipment::{ArmorType, Equipment};
@@ -8,6 +9,25 @@ pub mod ability_scores;
 pub mod attributed_bonus;
 pub mod damage;
 pub mod equipment;
+pub mod combat;
+
+#[derive(Debug)]
+pub enum CBError {
+    NoCache,
+    Other(String),
+}
+
+use std::fmt::Write as _;
+use crate::combat::attack::WeaponAttack;
+
+impl From<RVError> for CBError {
+
+    fn from(value: RVError) -> Self {
+        let mut s = String::new();
+        write!(&mut s, "{:?}", value).unwrap();
+        CBError::Other(s)
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Feet(i32);
@@ -140,6 +160,12 @@ impl Character {
 
     pub fn get_ac(&self) -> i32 {
         self.armor_class.get_value(&self)
+    }
+
+    pub fn get_primary_attack(&self) -> WeaponAttack {
+        let mut attack = WeaponAttack::new(self.equipment.get_primary_weapon());
+        attack.cache_char_vals(self);
+        attack
     }
 }
 

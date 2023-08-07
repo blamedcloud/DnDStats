@@ -133,3 +133,6 @@ dmypy.json
 
 # intellij folder
 .idea/
+
+# build output text files
+buildOutput/

@@ -1,9 +1,12 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Debug, Display};
 use num::{FromPrimitive, Integer};
 use num::rational::Ratio;
 use rand_var::RandomVariable;
 use rand_var::rv_traits::NumRandVar;
+use crate::attributed_bonus::{AttributedBonus, BonusTerm};
+use crate::{CBError, Character};
+use crate::combat::attack::AttackResult;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum DamageDice {
@@ -82,6 +85,7 @@ impl DamageTerm {
 pub struct DamageSum {
     dmg_dice: Vec<DamageDice>,
     dmg_const: isize,
+    char_dmg: Option<AttributedBonus>,
 }
 
 impl DamageSum {
@@ -89,12 +93,19 @@ impl DamageSum {
         DamageSum {
             dmg_dice: Vec::new(),
             dmg_const: 0,
+            char_dmg: None,
         }
     }
 
     pub fn from(dmg: DamageInstance) -> Self {
         let mut ds = DamageSum::new();
         ds.add_dmg(dmg);
+        ds
+    }
+
+    pub fn from_char(dmg: BonusTerm) -> Self {
+        let mut ds = DamageSum::new();
+        ds.add_char_dmg(dmg);
         ds
     }
 
@@ -110,8 +121,34 @@ impl DamageSum {
         };
     }
 
+    pub fn add_char_dmg(&mut self, dmg: BonusTerm) {
+        if let None = self.char_dmg {
+            self.char_dmg = Some(AttributedBonus::new(String::from("damage const")));
+        }
+        self.char_dmg.as_mut().unwrap().add_term(dmg);
+    }
+
+    pub fn cache_char_dmg(&mut self, character: &Character) {
+        self.char_dmg.as_mut().map(|ab| ab.save_value(character));
+    }
+
+    pub fn get_cached_char_dmg(&self) -> Result<isize, CBError> {
+        if let Some(ab) = &self.char_dmg {
+            match ab.get_saved_value() {
+                None => Err(CBError::NoCache),
+                Some(c) => Ok(c as isize),
+            }
+        } else {
+            Ok(0)
+        }
+    }
+
     pub fn get_dmg_const(&self) -> isize {
         self.dmg_const
+    }
+
+    pub fn get_total_const(&self) -> Result<isize, CBError> {
+        self.get_cached_char_dmg().map(|c| c + self.dmg_const)
     }
 
     pub fn get_dmg_dice_rv<T>(&self) -> RandomVariable<Ratio<T>>
@@ -144,101 +181,127 @@ impl DamageManager {
         }
     }
 
-    pub fn add_base_dmg(&mut self, dmg: DamageTerm) {
-        self.base_dmg.entry(*dmg.get_dmg_type())
+    fn add_dmg_term(de: &mut DamageExpression, dmg: DamageTerm) {
+        de.entry(*dmg.get_dmg_type())
             .and_modify(|ds| ds.add_dmg(*dmg.get_dmg()))
             .or_insert(DamageSum::from(*dmg.get_dmg()));
+    }
+
+    fn add_char_dmg_term(de: &mut DamageExpression, dmg_type: DamageType, dmg: BonusTerm) {
+        // can't use the fancy entry API because BonusTerm isn't cloneable
+        // and (as of this writing), rustc isn't smart enough to figure out
+        // that only one of and_modify or or_insert will be called.
+        if de.contains_key(&dmg_type) {
+            de.get_mut(&dmg_type).unwrap().add_char_dmg(dmg);
+        } else {
+            de.insert(dmg_type, DamageSum::from_char(dmg));
+        }
+    }
+
+    pub fn add_base_dmg(&mut self, dmg: DamageTerm) {
+        DamageManager::add_dmg_term(&mut self.base_dmg, dmg);
+    }
+    pub fn add_base_char_dmg(&mut self, dmg_type: DamageType, dmg: BonusTerm) {
+        DamageManager::add_char_dmg_term(&mut self.base_dmg, dmg_type, dmg);
     }
 
     pub fn add_bonus_crit_dmg(&mut self, dmg: DamageTerm) {
-        self.bonus_crit_dmg.entry(*dmg.get_dmg_type())
-            .and_modify(|ds| ds.add_dmg(*dmg.get_dmg()))
-            .or_insert(DamageSum::from(*dmg.get_dmg()));
+        DamageManager::add_dmg_term(&mut self.bonus_crit_dmg, dmg);
+    }
+    pub fn add_crit_char_dmg(&mut self, dmg_type: DamageType, dmg: BonusTerm) {
+        DamageManager::add_char_dmg_term(&mut self.bonus_crit_dmg, dmg_type, dmg);
     }
 
     pub fn add_miss_dmg(&mut self, dmg: DamageTerm) {
-        self.miss_dmg.entry(*dmg.get_dmg_type())
-            .and_modify(|ds| ds.add_dmg(*dmg.get_dmg()))
-            .or_insert(DamageSum::from(*dmg.get_dmg()));
+        DamageManager::add_dmg_term(&mut self.miss_dmg, dmg);
+    }
+    pub fn add_miss_char_dmg(&mut self, dmg_type: DamageType, dmg: BonusTerm) {
+        DamageManager::add_char_dmg_term(&mut self.miss_dmg, dmg_type, dmg);
     }
 
-    pub fn get_base_dmg<T>(&self, resistances: &HashSet<DamageType>) -> RandomVariable<Ratio<T>>
+    pub fn cache_char_dmg(&mut self, character: &Character) {
+        for (_, ds) in self.base_dmg.iter_mut() {
+            ds.cache_char_dmg(character);
+        }
+        for (_, ds) in self.bonus_crit_dmg.iter_mut() {
+            ds.cache_char_dmg(character);
+        }
+        for (_, ds) in self.miss_dmg.iter_mut() {
+            ds.cache_char_dmg(character);
+        }
+    }
+
+    fn get_total_dmg<T>(de: &DamageExpression, resistances: &HashSet<DamageType>, double_dice: bool) -> Result<RandomVariable<Ratio<T>>, CBError>
     where
         T: Integer + Debug + Clone + Display + FromPrimitive,
         Ratio<T>: FromPrimitive
     {
         let mut rv = RandomVariable::new_constant(0).unwrap();
-        for (k, ds) in self.base_dmg.iter() {
-            let type_rv = ds.get_dmg_dice_rv();
-            let const_rv = RandomVariable::new_constant(ds.get_dmg_const()).unwrap();
-            let type_rv = type_rv.add_rv(&const_rv);
+        for (k, ds) in de.iter() {
+            let type_rv;
+            if double_dice {
+                type_rv = ds.get_dmg_dice_rv().multiple(2);
+            } else {
+                type_rv = ds.get_dmg_dice_rv();
+            }
+            let type_rv = type_rv.add_const(ds.get_total_const()?);
             if resistances.contains(k) {
                 rv = rv.add_rv(&type_rv.half().unwrap());
             } else {
                 rv = rv.add_rv(&type_rv);
             }
         }
-        rv
+        Ok(rv)
     }
 
-    pub fn get_crit_dmg<T>(&self, resistances: &HashSet<DamageType>) -> RandomVariable<Ratio<T>>
+    pub fn get_base_dmg<T>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<Ratio<T>>, CBError>
     where
         T: Integer + Debug + Clone + Display + FromPrimitive,
         Ratio<T>: FromPrimitive
     {
-        let mut rv = RandomVariable::new_constant(0).unwrap();
+        DamageManager::get_total_dmg(&self.base_dmg, resistances, false)
+    }
+
+    pub fn get_crit_dmg<T>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<Ratio<T>>, CBError>
+    where
+        T: Integer + Debug + Clone + Display + FromPrimitive,
+        Ratio<T>: FromPrimitive
+    {
         // double base dice + base const
-        for (k, ds) in self.base_dmg.iter() {
-            let type_rv = ds.get_dmg_dice_rv().multiple(2);
-            let const_rv = RandomVariable::new_constant(ds.get_dmg_const()).unwrap();
-            let type_rv = type_rv.add_rv(&const_rv);
-            if resistances.contains(k) {
-                rv = rv.add_rv(&type_rv.half().unwrap());
-            } else {
-                rv = rv.add_rv(&type_rv);
-            }
-        }
+        let mut rv = DamageManager::get_total_dmg(&self.base_dmg, resistances, true)?;
         // bonus crit dmg
-        for (k, ds) in self.bonus_crit_dmg.iter() {
-            let type_rv = ds.get_dmg_dice_rv();
-            let const_rv = RandomVariable::new_constant(ds.get_dmg_const()).unwrap();
-            let type_rv = type_rv.add_rv(&const_rv);
-            if resistances.contains(k) {
-                rv = rv.add_rv(&type_rv.half().unwrap());
-            } else {
-                rv = rv.add_rv(&type_rv);
-            }
-        }
-        rv
+        rv = rv.add_rv(&DamageManager::get_total_dmg(&self.bonus_crit_dmg, resistances, false)?);
+        Ok(rv)
     }
 
-    pub fn get_miss_dmg<T>(&self, resistances: &HashSet<DamageType>) -> RandomVariable<Ratio<T>>
+    pub fn get_miss_dmg<T>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<Ratio<T>>, CBError>
     where
         T: Integer + Debug + Clone + Display + FromPrimitive,
         Ratio<T>: FromPrimitive
     {
-        let mut rv = RandomVariable::new_constant(0).unwrap();
-        for (k, ds) in self.miss_dmg.iter() {
-            let type_rv = ds.get_dmg_dice_rv();
-            let const_rv = RandomVariable::new_constant(ds.get_dmg_const()).unwrap();
-            let type_rv = type_rv.add_rv(&const_rv);
-            if resistances.contains(k) {
-                rv = rv.add_rv(&type_rv.half().unwrap());
-            } else {
-                rv = rv.add_rv(&type_rv);
-            }
-        }
-        rv
+        DamageManager::get_total_dmg(&self.miss_dmg, resistances, false)
     }
 
     // this is often easier for "half dmg on save" than building
     // an actual miss_dmg DamageExpression
-    pub fn get_half_base_dmg<T>(&self, resistances: &HashSet<DamageType>) -> RandomVariable<Ratio<T>>
+    pub fn get_half_base_dmg<T>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<Ratio<T>>, CBError>
     where
         T: Integer + Debug + Clone + Display + FromPrimitive,
         Ratio<T>: FromPrimitive
     {
-        self.get_base_dmg(resistances).half().unwrap()
+        Ok(self.get_base_dmg(resistances)?.half().unwrap())
+    }
+
+    pub fn get_attack_dmg_map<T>(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<Ratio<T>>>, CBError>
+    where
+        T: Integer + Debug + Clone + Display + FromPrimitive,
+        Ratio<T>: FromPrimitive
+    {
+        let mut map = BTreeMap::new();
+        map.insert(AttackResult::Miss, self.get_miss_dmg(resistances)?);
+        map.insert(AttackResult::Hit, self.get_base_dmg(resistances)?);
+        map.insert(AttackResult::Crit, self.get_crit_dmg(resistances)?);
+        Ok(map)
     }
 }
 
@@ -252,16 +315,16 @@ mod tests {
         let mut dmg = DamageManager::new();
         dmg.add_base_dmg(DamageTerm::new(DamageInstance::Die(DamageDice::D6), DamageType::Bludgeoning));
         dmg.add_base_dmg(DamageTerm::new(DamageInstance::Const(3), DamageType::Bludgeoning));
-        let rv1: RandomVariable<Rational64> = dmg.get_base_dmg(&HashSet::new());
+        let rv1: RandomVariable<Rational64> = dmg.get_base_dmg(&HashSet::new()).unwrap();
 
         let rv2: RandomVariable<Rational64> = RandomVariable::new_dice(6).unwrap();
-        let rv2 = rv2.add_rv(&RandomVariable::new_constant(3).unwrap());
+        let rv2 = rv2.add_const(3);
         assert_eq!(rv1, rv2);
 
-        let rv3: RandomVariable<Rational64> = dmg.get_crit_dmg(&HashSet::new());
+        let rv3: RandomVariable<Rational64> = dmg.get_crit_dmg(&HashSet::new()).unwrap();
 
         let rv4: RandomVariable<Rational64> = RandomVariable::new_dice(6).unwrap().multiple(2);
-        let rv4 = rv4.add_rv(&RandomVariable::new_constant(3).unwrap());
+        let rv4 = rv4.add_const(3);
         assert_eq!(rv3, rv4);
     }
 
@@ -272,15 +335,15 @@ mod tests {
         dmg.add_base_dmg(d12_sl);
         dmg.add_base_dmg(DamageTerm::new(DamageInstance::Const(5), DamageType::Slashing));
         dmg.add_bonus_crit_dmg(d12_sl);
-        let rv1: RandomVariable<Rational64> = dmg.get_base_dmg(&HashSet::new());
+        let rv1: RandomVariable<Rational64> = dmg.get_base_dmg(&HashSet::new()).unwrap();
 
         let d12: RandomVariable<Rational64> = RandomVariable::new_dice(12).unwrap();
-        let const_rv: RandomVariable<Rational64> = RandomVariable::new_constant(5).unwrap();
-        let base_dmg = d12.add_rv(&const_rv);
+        let const_dmg = 5;
+        let base_dmg = d12.add_const(const_dmg);
         assert_eq!(rv1, base_dmg);
 
-        let rv2: RandomVariable<Rational64> = dmg.get_crit_dmg(&HashSet::new());
-        let crit_dmg = d12.multiple(3).add_rv(&const_rv);
+        let rv2: RandomVariable<Rational64> = dmg.get_crit_dmg(&HashSet::new()).unwrap();
+        let crit_dmg = d12.multiple(3).add_const(const_dmg);
         assert_eq!(rv2, crit_dmg);
     }
 
@@ -289,8 +352,8 @@ mod tests {
         let mut dmg = DamageManager::new();
         dmg.add_base_dmg(DamageTerm::new(DamageInstance::Dice(4,DamageDice::D6), DamageType::Fire));
         dmg.add_base_dmg(DamageTerm::new(DamageInstance::Dice(4,DamageDice::D6), DamageType::Radiant));
-        let rv1: RandomVariable<Rational64> = dmg.get_base_dmg(&HashSet::new());
-        let rv2: RandomVariable<Rational64> = dmg.get_half_base_dmg(&HashSet::new());
+        let rv1: RandomVariable<Rational64> = dmg.get_base_dmg(&HashSet::new()).unwrap();
+        let rv2: RandomVariable<Rational64> = dmg.get_half_base_dmg(&HashSet::new()).unwrap();
 
         let eight_d6: RandomVariable<Rational64> = RandomVariable::new_dice(6).unwrap().multiple(8);
         assert_eq!(rv1, eight_d6);
@@ -299,12 +362,12 @@ mod tests {
 
         let resist_fire = HashSet::from([DamageType::Fire]);
 
-        let rv3: RandomVariable<Rational64> = dmg.get_base_dmg(&resist_fire);
+        let rv3: RandomVariable<Rational64> = dmg.get_base_dmg(&resist_fire).unwrap();
         let four_d6: RandomVariable<Rational64> = RandomVariable::new_dice(6).unwrap().multiple(4);
         let resist_dmg = four_d6.add_rv(&four_d6.half().unwrap());
         assert_eq!(rv3, resist_dmg);
 
-        let rv4: RandomVariable<Rational64> = dmg.get_half_base_dmg(&resist_fire);
+        let rv4: RandomVariable<Rational64> = dmg.get_half_base_dmg(&resist_fire).unwrap();
         let resist_save_dmg = resist_dmg.half().unwrap();
         assert_eq!(rv4, resist_save_dmg);
     }
