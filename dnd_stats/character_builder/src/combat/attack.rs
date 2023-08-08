@@ -182,10 +182,16 @@ impl WeaponAttack {
         Ok(hit_rv.map_keys(|hit| AttackResult::from(hit, target_ac, self.crit_lb)))
     }
 
-    pub fn get_attack_rv(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<BigRational>, CBError> {
+    pub fn get_attack_dmg_rv(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<BigRational>, CBError> {
         let attack_result_rv = self.get_attack_result_rv(hit_type, target_ac)?;
         let dmg_map = self.damage.get_attack_dmg_map(resistances)?;
-        Ok(attack_result_rv.consolidate(dmg_map)?.to_vec_rv().cap_lb(0).unwrap())
+        Ok(attack_result_rv.consolidate(&dmg_map)?.to_vec_rv())
+    }
+
+    pub fn get_attack_outcome_rv(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<MapRandVar<Pair<AttackResult, isize>, BigRational>, CBError> {
+        let attack_result_rv = self.get_attack_result_rv(hit_type, target_ac)?;
+        let dmg_map = self.damage.get_attack_dmg_map(resistances)?;
+        Ok(attack_result_rv.projection(&dmg_map)?)
     }
 }
 
@@ -193,6 +199,7 @@ impl WeaponAttack {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use num::FromPrimitive;
     use rand_var::rv_traits::NumRandVar;
     use crate::tests::get_test_fighter;
     use super::*;
@@ -228,8 +235,8 @@ mod tests {
         assert_eq!(normal_hit, attack.get_accuracy_rv(AttackHitType::Normal).unwrap());
         let target_ac = 13;
         let normal_result = normal_hit.map_keys(|hit| AttackResult::from(hit, target_ac, 20));
-        let normal_dmg = normal_result.consolidate(dmg_map).unwrap().to_vec_rv();
-        assert_eq!(normal_dmg, attack.get_attack_rv(AttackHitType::Normal, target_ac, &no_resist).unwrap());
+        let normal_dmg = normal_result.consolidate(&dmg_map).unwrap().to_vec_rv();
+        assert_eq!(normal_dmg, attack.get_attack_dmg_rv(AttackHitType::Normal, target_ac, &no_resist).unwrap());
     }
 
     #[test]
@@ -240,7 +247,7 @@ mod tests {
         let ac = 13;
         // greatsword attack: d20 + 5 vs 13 @ 2d6 + 3
         let result_rv = attack.get_attack_result_rv(AttackHitType::Normal, ac).unwrap();
-        let dmg_rv = attack.get_attack_rv(AttackHitType::Normal, ac, &no_resist).unwrap();
+        let dmg_rv = attack.get_attack_dmg_rv(AttackHitType::Normal, ac, &no_resist).unwrap();
         assert_eq!(0, dmg_rv.lower_bound());
         assert_eq!(27, dmg_rv.upper_bound());
         assert_eq!(result_rv.pdf(AttackResult::Miss), dmg_rv.pdf(0));
@@ -249,6 +256,10 @@ mod tests {
         let crit_ev: BigRational = dmg.get_crit_dmg(&no_resist).unwrap().expected_value();
         let ev = result_rv.pdf(AttackResult::Hit) * hit_ev + result_rv.pdf(AttackResult::Crit) * crit_ev;
         assert_eq!(ev, dmg_rv.expected_value());
+        let attack_rv = attack.get_attack_outcome_rv(AttackHitType::Normal, ac, &no_resist).unwrap();
+        assert_eq!(Pair(AttackResult::Miss, 0), attack_rv.lower_bound());
+        assert_eq!(Pair(AttackResult::Crit,27), attack_rv.upper_bound());
+        assert_eq!(ev, attack_rv.general_expected_value(|pair| BigRational::from_isize(pair.1).unwrap()))
     }
 
 }

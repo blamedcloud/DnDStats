@@ -3,7 +3,7 @@ use std::fmt::{Debug, Display};
 use num::{FromPrimitive, Integer};
 use num::rational::Ratio;
 use rand_var::RandomVariable;
-use rand_var::rv_traits::NumRandVar;
+use rand_var::rv_traits::{NumRandVar, RandVar};
 use crate::attributed_bonus::{AttributedBonus, BonusTerm};
 use crate::{CBError, Character};
 use crate::combat::attack::AttackResult;
@@ -251,6 +251,8 @@ impl DamageManager {
                 rv = rv.add_rv(&type_rv);
             }
         }
+        // damage is never negative
+        rv = rv.cap_lb(0).unwrap();
         Ok(rv)
     }
 

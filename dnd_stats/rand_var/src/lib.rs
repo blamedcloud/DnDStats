@@ -267,7 +267,7 @@ where
         MapRandVar::from_map(new_pdf).unwrap()
     }
 
-    pub fn consolidate<Q, RV>(&self, outcomes: BTreeMap<P, RV>) -> Result<MapRandVar<Q, T>, RVError>
+    pub fn consolidate<Q, RV>(&self, outcomes: &BTreeMap<P, RV>) -> Result<MapRandVar<Q, T>, RVError>
     where
         Q: Ord + Seq + Clone + Display,
         RV: RandVar<Q, T>,
@@ -290,6 +290,29 @@ where
         }
         MapRandVar::from_map(new_pdf)
     }
+
+    pub fn projection<Q, RV>(&self, outcomes: &BTreeMap<P, RV>) -> Result<MapRandVar<Pair<P,Q>, T>, RVError>
+    where
+        Q: Ord + Seq + Clone + Display,
+        RV: RandVar<Q, T>,
+    {
+        let mut new_pdf: BTreeMap<Pair<P, Q>, T> = BTreeMap::new();
+        for p in self.valid_p() {
+            match outcomes.get(&p) {
+                None => return Err(RVError::Other(String::from("every valid p must have an outcome!"))),
+                Some(rv) => {
+                    for q in rv.valid_p() {
+                        let pdf_pq = self.pdf_ref(&p) * rv.pdf_ref(&q);
+                        if pdf_pq > T::zero() {
+                            new_pdf.insert(Pair(p.clone(), q), pdf_pq);
+                        }
+                    }
+                }
+            }
+        }
+        MapRandVar::from_map(new_pdf)
+    }
+
 }
 
 impl<P, T> RandVar<P, T> for MapRandVar<P, T>
@@ -361,8 +384,7 @@ mod tests {
     use num::{BigInt, BigRational, Rational64, Zero};
     use super::*;
 
-    #[test]
-    fn test_consolidate() {
+    fn get_attack_setup() -> (MapRandVar<isize, Rational64>, BTreeMap<isize, RandomVariable<Rational64>>) {
         let d20: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap();
         let hit_bonus= 8;
         let attack_check = d20
@@ -389,13 +411,32 @@ mod tests {
         outcomes.insert(0, miss_dmg);
         outcomes.insert(1, hit_dmg);
         outcomes.insert(2, crit_dmg);
+        (attack_check, outcomes)
+    }
 
-        let attack_dmg = attack_check.consolidate(outcomes).unwrap();
+    #[test]
+    fn test_consolidate() {
+        let (attack_check, outcomes) = get_attack_setup();
+        let attack_dmg = attack_check.consolidate(&outcomes).unwrap();
         assert_eq!(0, attack_dmg.lower_bound());
         assert_eq!(29, attack_dmg.upper_bound());
         assert_eq!(Rational64::new(8, 20), attack_dmg.pdf(0));
         assert_eq!(Rational64::new(1, 25920), attack_dmg.pdf(29));
         assert_eq!(Rational64::new(151, 20), attack_dmg.expected_value());
+    }
+
+    #[test]
+    fn test_projection() {
+        let (attack_check, outcomes) = get_attack_setup();
+        let attack_outcome = attack_check.projection(&outcomes).unwrap();
+        assert_eq!(Pair(0,0), attack_outcome.lower_bound());
+        assert_eq!(Pair(2, 29), attack_outcome.upper_bound());
+        assert_eq!(Rational64::new(8, 20), attack_outcome.pdf(Pair(0,0)));
+        assert_eq!(Rational64::new(1, 25920), attack_outcome.pdf(Pair(2, 29)));
+        assert_eq!(Rational64::new(151, 20), attack_outcome.general_expected_value(|pair| Rational64::from_isize(pair.1).unwrap()));
+
+        let attack_dmg = attack_check.consolidate(&outcomes).unwrap();
+        assert_eq!(attack_dmg, attack_outcome.map_keys(|pair| pair.1));
     }
 
     #[test]

@@ -118,32 +118,51 @@ pub trait RandVar<P, T>
         self.cdf_exclusive_ref(&p)
     }
 
-    fn cap_lb(&self, lb: P) -> Result<Self, RVError>
-        where
-            P: Copy,
-            Self: Sized
+    fn general_expected_value<F>(&self, f: F) -> T
+    where
+        F: Fn(P) -> T
     {
-        RandVar::build(lb, self.upper_bound(), |p| {
-            if p == lb {
-                self.cdf(lb)
-            } else {
-                self.pdf(p)
-            }
-        })
+        let mut result = T::zero();
+        for p in self.valid_p() {
+            result = result + self.pdf_ref(&p) * f(p);
+        }
+        result
+    }
+
+    fn cap_lb(&self, lb: P) -> Result<Self, RVError>
+    where
+        P: Copy,
+        Self: Sized + Clone,
+    {
+        if lb > self.lower_bound() {
+            RandVar::build(lb, self.upper_bound(), |p| {
+                if p == lb {
+                    self.cdf(lb)
+                } else {
+                    self.pdf(p)
+                }
+            })
+        } else {
+            Ok(self.clone())
+        }
     }
 
     fn cap_ub(&self, ub: P) -> Result<Self, RVError>
-        where
-            P: Copy,
-            Self: Sized
+    where
+        P: Copy,
+        Self: Sized + Clone,
     {
-        RandVar::build(self.lower_bound(), ub, |p| {
-            if p < ub {
-                self.pdf(p)
-            } else { // p == ub
-                T::one() - self.cdf_exclusive(ub)
-            }
-        })
+        if ub < self.upper_bound() {
+            RandVar::build(self.lower_bound(), ub, |p| {
+                if p < ub {
+                    self.pdf(p)
+                } else { // p == ub
+                    T::one() - self.cdf_exclusive(ub)
+                }
+            })
+        } else {
+            Ok(self.clone())
+        }
     }
 
     fn reroll_once_on<F>(&self, pred: F) -> Self
@@ -171,9 +190,9 @@ pub trait RandVar<P, T>
     }
 
     fn max_two_trials(&self) -> Self
-        where
-            T: Clone,
-            Self: Sized
+    where
+        T: Clone,
+        Self: Sized
     {
         let max_pdf = |p| {
             (T::one()+T::one()) * self.pdf_ref(&p) * self.cdf_exclusive_ref(&p) + num::pow(self.pdf_ref(&p), 2)
@@ -183,9 +202,9 @@ pub trait RandVar<P, T>
     }
 
     fn min_two_trials(&self) -> Self
-        where
-            T: Clone,
-            Self: Sized
+    where
+        T: Clone,
+        Self: Sized
     {
         let min_pdf = |p| {
             let max_pdf = (T::one()+T::one()) * self.pdf_ref(&p) * self.cdf_exclusive_ref(&p) + num::pow(self.pdf_ref(&p), 2);
@@ -196,9 +215,9 @@ pub trait RandVar<P, T>
     }
 
     fn max_three_trials(&self) -> Self
-        where
-            T: Clone,
-            Self: Sized
+    where
+        T: Clone,
+        Self: Sized
     {
         let max_pdf = |p| {
             let x = (T::one() + T::one() + T::one()) * self.pdf_ref(&p) * num::pow(self.cdf_exclusive_ref(&p), 2);
@@ -217,9 +236,9 @@ pub trait RandVar<P, T>
     }
 
     fn print_pdf<F, T2>(&self, f: F)
-        where
-            F: Fn(T) -> T2,
-            T2: Display,
+    where
+        F: Fn(T) -> T2,
+        T2: Display,
     {
         println!("P\tpdf\t~pdf");
         for p in self.valid_p() {
@@ -229,35 +248,24 @@ pub trait RandVar<P, T>
 }
 
 fn convolution<P, T, F1, F2>(lb: P, ub: P, f1: F1, f2: F2, x: P) -> T
-    where
-        P: PrimInt,
-        T: Num + Sum,
-        F1: Fn(P) -> T,
-        F2: Fn(P) -> T,
+where
+    P: PrimInt,
+    T: Num + Sum,
+    F1: Fn(P) -> T,
+    F2: Fn(P) -> T,
 {
     num::range_inclusive(lb, ub).map(|y| f1(x-y)*f2(y)).sum()
 }
 
 pub trait NumRandVar<P, T>: RandVar<P, T>
-    where
-        P: PrimInt + Seq + Display,
-        T: Num + Sum + Clone + Display,
+where
+    P: PrimInt + Seq + Display,
+    T: Num + Sum + Clone + Display,
 {
     fn convert(&self, p: P) -> T;
 
     fn expected_value(&self) -> T {
         self.general_expected_value(|p| self.convert(p))
-    }
-
-    fn general_expected_value<F>(&self, f: F) -> T
-        where
-            F: Fn(P) -> T
-    {
-        let mut result = T::zero();
-        for p in self.valid_p() {
-            result = result + f(p) * self.pdf(p);
-        }
-        result
     }
 
     fn variance(&self) -> T {
@@ -272,9 +280,9 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
     }
 
     fn print_stats_convert<F,T2>(&self, f: F)
-        where
-            F: Fn(T) -> T2,
-            T2: Display
+    where
+        F: Fn(T) -> T2,
+        T2: Display
     {
         println!("ev  = {} ~= {}", self.expected_value(), f(self.expected_value()));
         println!("var = {} ~= {}", self.variance(), f(self.variance()));
@@ -313,8 +321,8 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
     }
 
     fn multiple(&self, num_times: i32) -> Self
-        where
-            Self: Sized + Clone
+    where
+        Self: Sized + Clone
     {
         if num_times == 0 {
             return RandVar::build(P::zero(), P::zero(), |_| T::one()).unwrap();
@@ -337,15 +345,15 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
     }
 
     fn minus_rv(&self, other: &impl NumRandVar<P,T>) -> Self
-        where
-            Self: Sized
+    where
+        Self: Sized
     {
         self.add_rv(&other.opposite_rv())
     }
 
     fn opposite_rv(&self) -> Self
-        where
-            Self: Sized
+    where
+        Self: Sized
     {
         // .unwrap() is fine here, because if self is a valid RV, then this also will be.
         RandVar::build(
@@ -356,8 +364,8 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
 
     // This only works on P's that are integer-like. Floats or rationals won't work.
     fn half(&self) -> Result<Self, RVError>
-        where
-            Self: Sized
+    where
+        Self: Sized
     {
         let two = P::one() + P::one();
         // P requires PrimInt for this trait, so this should never
@@ -379,37 +387,37 @@ pub trait NumRandVar<P, T>: RandVar<P, T>
     }
 
     fn prob_lt(&self, other: &impl NumRandVar<P,T>) -> T
-        where
-            Self: Sized
+    where
+        Self: Sized
     {
         self.minus_rv(other).cdf_exclusive(P::zero())
     }
 
     fn prob_le(&self, other: &impl NumRandVar<P,T>) -> T
-        where
-            Self: Sized
+    where
+        Self: Sized
     {
         self.minus_rv(other).cdf(P::zero())
     }
 
     fn prob_eq(&self, other: &impl NumRandVar<P,T>) -> T
-        where
-            Self: Sized
+    where
+        Self: Sized
     {
         self.minus_rv(other).pdf(P::zero())
     }
 
     fn prob_gt(&self, other: &impl NumRandVar<P,T>) -> T
-        where
-            Self: Sized
+    where
+        Self: Sized
     {
         let diff_rv = self.minus_rv(other);
         T::one() - diff_rv.cdf(P::zero())
     }
 
     fn prob_ge(&self, other: &impl NumRandVar<P,T>) -> T
-        where
-            Self: Sized
+    where
+        Self: Sized
     {
         let diff_rv = self.minus_rv(other);
         T::one() - diff_rv.cdf_exclusive(P::zero())
