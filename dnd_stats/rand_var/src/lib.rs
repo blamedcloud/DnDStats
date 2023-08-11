@@ -1,14 +1,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display};
 use std::iter::Sum;
-use num::{FromPrimitive, Integer, Num, One, Zero};
+use std::ops::{Add, Mul, Sub};
+use num::{FromPrimitive, Integer, One, Zero};
 use num::rational::Ratio;
-use crate::rv_traits::{NumRandVar, Pair, RandVar, RVError, Seq, SeqGen};
+use crate::rv_traits::{NumRandVar, RandVar, RVError};
+use crate::rv_traits::sequential::{Pair, Seq, SeqIter};
 
 pub mod rv_traits;
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct RandomVariable<T: Num> {
+pub struct RandomVariable<T: Clone> {
     lower_bound: isize,
     upper_bound: isize,
     pdf_vec: Vec<T>,
@@ -43,9 +45,8 @@ where
         if sides < 1 {
             return Err(RVError::InvalidBounds);
         }
-        <RandomVariable<Ratio<T>> as RandVar<isize, Ratio<T>>>::build(
-            1,
-            sides,
+        RandVar::build(
+            Seq::gen_seq(&1, &sides),
             |_| {
                 Ratio::new(T::one(), T::from_isize(sides).unwrap())
             })
@@ -69,9 +70,8 @@ where
             T::from_isize(sides).unwrap());
         let reroll_only = reroll_over_sides * one_over_sides.clone();
         let possible_reroll = one_over_sides + reroll_only.clone();
-        <RandomVariable<Ratio<T>> as RandVar<isize, Ratio<T>>>::build(
-            1,
-            sides,
+        RandVar::build(
+            Seq::gen_seq(&1, &sides),
             |x| {
                 if x > reroll_max {
                     possible_reroll.clone()
@@ -82,16 +82,14 @@ where
     }
 
     pub fn new_constant(value: isize) -> Result<Self, RVError> {
-        <RandomVariable<Ratio<T>> as RandVar<isize, Ratio<T>>>::build(
-            value,
-            value,
+        RandVar::build(
+            Seq::gen_seq(&value, &value),
             |_| Ratio::one())
     }
 
     pub fn new_uniform(lb: isize, ub: isize) -> Result<Self, RVError> {
-        <RandomVariable<Ratio<T>> as RandVar<isize, Ratio<T>>>::build(
-            lb,
-            ub,
+        RandVar::build(
+            Seq::gen_seq(&lb, &ub),
             |_| {
                 Ratio::new(T::one(), T::from_isize(ub-lb+1).unwrap())
             })
@@ -112,19 +110,21 @@ where
 
 impl<T> RandVar<isize, T> for RandomVariable<T>
 where
-    T: Num + Sum + Debug + Clone + Display + PartialOrd<T>
+    T: Zero + One + Sum + Add<T, Output=T> + Sub<T, Output=T> + Mul<T, Output=T> + Clone + PartialOrd<T>
 {
-    fn build<F>(lb: isize, ub: isize, f: F) -> Result<RandomVariable<T>, RVError>
+    fn build<F>(seq_iter: SeqIter<isize>, f: F) -> Result<RandomVariable<T>, RVError>
     where
         F: Fn(isize) -> T
     {
-        if lb > ub {
+        if seq_iter.items.len() == 0 {
             return Err(RVError::InvalidBounds);
         }
-        let length: usize = (ub - lb + 1) as usize;
+        let length = seq_iter.items.len();
+        let lb = seq_iter.items.first().unwrap().clone();
+        let ub = seq_iter.items.last().unwrap().clone();
         let mut pdf_vec = Vec::with_capacity(length);
         let mut total = T::zero();
-        for i in Seq::gen_seq(&lb, &ub) {
+        for i in seq_iter {
             let f_i = f(i);
             if f_i < T::zero() {
                 return Err(RVError::NegProb);
@@ -158,24 +158,24 @@ where
         self.pdf_vec.get(index).unwrap().clone()
     }
 
-    fn valid_p(&self) -> SeqGen<isize> {
+    fn valid_p(&self) -> SeqIter<isize> {
         Seq::gen_seq(&self.lower_bound(), &self.upper_bound())
     }
 }
 
 impl<T> NumRandVar<isize, T> for RandomVariable<T>
 where
-    T: Num + Sum + Debug + Clone + Display + FromPrimitive + PartialOrd<T>
+    T: Zero + One + Sum + Add<T, Output=T> + Sub<T, Output=T> + Mul<T, Output=T> + Clone + FromPrimitive + PartialOrd<T>
 {
     fn convert(&self, p: isize) -> T {
         T::from_isize(p).unwrap()
     }
 }
 
-// BEGIN map rand var //
+// Begin MapRandVar //
 
 #[derive(PartialEq, Debug)]
-pub struct MapRandVar<P: Ord, T: Num> {
+pub struct MapRandVar<P: Ord + Clone, T: Clone> {
     lower_bound: P,
     upper_bound: P,
     pdf_map: BTreeMap<P,T>,
@@ -204,8 +204,8 @@ where
 
 impl<P, T> MapRandVar<P, T>
 where
-    P: Ord + Clone + Display + Seq,
-    T: Num + Sum + Clone + Display + Debug + PartialOrd<T> + for<'a> Sum<&'a T>,
+    P: Ord + Clone,
+    T: Zero + One + Sum + Add<T, Output=T> + Sub<T, Output=T> + Mul<T, Output=T> + Clone + PartialOrd<T> + for<'a> Sum<&'a T>,
 {
     pub fn from_map(m: BTreeMap<P, T>) -> Result<Self, RVError> {
         if m.len() == 0 {
@@ -235,7 +235,7 @@ where
 
     pub fn independent_trials<Q>(&self, other: &MapRandVar<Q, T>) -> MapRandVar<Pair<P, Q>, T>
     where
-        Q: Ord + Clone + Display + Seq
+        Q: Ord + Clone
     {
         let mut new_pdf: BTreeMap<Pair<P, Q>, T> = BTreeMap::new();
         for p in self.valid_p() {
@@ -250,7 +250,7 @@ where
 
     pub fn map_keys<Q, F>(&self, f: F) -> MapRandVar<Q, T>
     where
-        Q: Ord + Clone + Display + Seq,
+        Q: Ord + Clone,
         F: Fn(P) -> Q,
     {
         let mut new_pdf: BTreeMap<Q, T> = BTreeMap::new();
@@ -269,23 +269,23 @@ where
 
     pub fn consolidate<Q, RV>(&self, outcomes: &BTreeMap<P, RV>) -> Result<MapRandVar<Q, T>, RVError>
     where
-        Q: Ord + Seq + Clone + Display,
+        Q: Ord + Clone,
         RV: RandVar<Q, T>,
     {
         let mut new_pdf: BTreeMap<Q, T> = BTreeMap::new();
-        let lb = outcomes.values().map(|rv| rv.lower_bound()).min().unwrap();
-        let ub = outcomes.values().map(|rv| rv.upper_bound()).max().unwrap();
-        for q in Seq::gen_seq(&lb, &ub) {
-            let mut pdf_q = T::zero();
-            for p in self.valid_p() {
-                if let Some(rv) = outcomes.get(&p) {
-                    pdf_q = pdf_q + self.pdf_ref(&p) * rv.pdf_ref(&q);
-                } else {
-                    return Err(RVError::Other(String::from("every valid p must have an outcome!")));
+        for p in self.valid_p() {
+            match outcomes.get(&p) {
+                None => return Err(RVError::Other(String::from("every valid p must have an outcome"))),
+                Some(rv) => {
+                   for q in rv.valid_p() {
+                       let pdf_pq = self.pdf_ref(&p) * rv.pdf_ref(&q);
+                       if pdf_pq > T::zero() {
+                           new_pdf.entry(q)
+                               .and_modify(|t| *t = t.clone() + pdf_pq.clone())
+                               .or_insert(pdf_pq);
+                       }
+                   }
                 }
-            }
-            if pdf_q > T::zero() {
-                new_pdf.insert(q, pdf_q);
             }
         }
         MapRandVar::from_map(new_pdf)
@@ -293,7 +293,7 @@ where
 
     pub fn projection<Q, RV>(&self, outcomes: &BTreeMap<P, RV>) -> Result<MapRandVar<Pair<P,Q>, T>, RVError>
     where
-        Q: Ord + Seq + Clone + Display,
+        Q: Ord + Clone,
         RV: RandVar<Q, T>,
     {
         let mut new_pdf: BTreeMap<Pair<P, Q>, T> = BTreeMap::new();
@@ -317,16 +317,18 @@ where
 
 impl<P, T> RandVar<P, T> for MapRandVar<P, T>
 where
-    P: Ord + Clone + Display + Seq,
-    T: Num + Sum + Clone + Display + Debug + PartialOrd<T>,
+    P: Ord + Clone,
+    T: Zero + One + Sum + Add<T, Output=T> + Sub<T, Output=T> + Mul<T, Output=T> + Clone + PartialOrd<T>,
 {
-    fn build<F: Fn(P) -> T>(lb: P, ub: P, f: F) -> Result<Self, RVError> {
-        if lb > ub {
+    fn build<F: Fn(P) -> T>(seq_iter: SeqIter<P>, f: F) -> Result<Self, RVError> {
+        if seq_iter.items.len() == 0 {
             return Err(RVError::InvalidBounds);
         }
+        let lb = seq_iter.items.first().unwrap().clone();
+        let ub = seq_iter.items.last().unwrap().clone();
         let mut pdf_map = BTreeMap::new();
         let mut total = T::zero();
-        for p in Seq::gen_seq(&lb, &ub) {
+        for p in seq_iter {
             let f_p = f(p.clone());
             if f_p < T::zero() {
                 return Err(RVError::NegProb);
@@ -363,15 +365,15 @@ where
         }
     }
 
-    fn valid_p(&self) -> SeqGen<P> {
+    fn valid_p(&self) -> SeqIter<P> {
         let items: BTreeSet<P> = self.pdf_map.keys().cloned().collect();
-        SeqGen { items }
+        SeqIter { items }
     }
 }
 
 impl<T> NumRandVar<isize, T> for MapRandVar<isize, T>
 where
-    T: Num + Sum + Clone + Display + Debug + PartialOrd<T> + FromPrimitive
+    T: Zero + One + Sum + Add<T, Output=T> + Sub<T, Output=T> + Mul<T, Output=T> + Clone + PartialOrd<T> + FromPrimitive
 {
     fn convert(&self, p: isize) -> T {
         T::from_isize(p).unwrap()

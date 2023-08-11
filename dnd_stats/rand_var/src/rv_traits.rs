@@ -1,63 +1,12 @@
-use std::{cmp, fmt};
+use std::cmp;
 use std::collections::BTreeSet;
-use std::fmt::{Display, Formatter};
+use std::fmt::Display;
 use std::iter::Sum;
-use num::{Num, PrimInt};
+use std::ops::{Add, Div, Mul, Sub};
+use num::{One, Zero};
+use crate::rv_traits::sequential::{Seq, SeqIter};
 
-#[derive(Clone)]
-pub struct SeqGen<T: Ord + Clone> {
-    pub items: BTreeSet<T>,
-}
-
-impl<T: Ord + Clone> Iterator for SeqGen<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.items.pop_first()
-    }
-}
-
-pub trait Seq
-where
-    Self: Ord + Clone + Sized
-{
-    fn gen_seq(&self, other: &Self) -> SeqGen<Self>;
-}
-
-impl Seq for isize {
-    fn gen_seq(&self, other: &Self) -> SeqGen<Self> {
-        let first = *cmp::min(self, other);
-        let second = *cmp::max(self, other);
-        let items = BTreeSet::from_iter(first..=second);
-        SeqGen { items }
-    }
-}
-
-#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone)]
-pub struct Pair<A: Ord + Clone, B: Ord + Clone>(pub A, pub B);
-
-impl<A, B> Seq for Pair<A, B>
-where
-    A: Seq + Clone,
-    B: Seq + Clone,
-{
-    fn gen_seq(&self, other: &Self) -> SeqGen<Self> {
-        let a_sg = Seq::gen_seq(&self.0, &other.0);
-        let b_sg = Seq::gen_seq(&self.1, &other.1);
-        let ab_set: BTreeSet<Pair<A, B>> = itertools::iproduct!(a_sg, b_sg).map(|(a, b)| Pair(a, b)).collect();
-        SeqGen { items: ab_set }
-    }
-}
-
-impl<A, B> Display for Pair<A, B>
-where
-    A: Ord + Clone + Display,
-    B: Ord + Clone + Display,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "({}, {})", self.0, self.1)
-    }
-}
+pub mod sequential;
 
 #[derive(Debug)]
 pub enum RVError {
@@ -70,14 +19,14 @@ pub enum RVError {
 
 pub trait RandVar<P, T>
     where
-        P: Ord + Seq + Display,
-        T: Num + Sum + Display,
+        P: Ord + Clone,
+        T: Zero + One + Sum + Add<T, Output=T> + Sub<T, Output=T> + Mul<T, Output=T> + Clone,
 {
-    fn build<F: Fn(P) -> T>(lb: P, ub: P, f: F) -> Result<Self, RVError> where Self: Sized;
+    fn build<F: Fn(P) -> T>(seq_iter: SeqIter<P>, f: F) -> Result<Self, RVError> where Self: Sized;
     fn lower_bound(&self) -> P;
     fn upper_bound(&self) -> P;
     unsafe fn raw_pdf(&self, p: &P) -> T;
-    fn valid_p(&self) -> SeqGen<P>;
+    fn valid_p(&self) -> SeqIter<P>;
 
     fn pdf_ref(&self, p: &P) -> T {
         if (&self.lower_bound() <= p) && (p <= &self.upper_bound()) {
@@ -131,13 +80,13 @@ pub trait RandVar<P, T>
 
     fn cap_lb(&self, lb: P) -> Result<Self, RVError>
     where
-        P: Copy,
         Self: Sized + Clone,
     {
         if lb > self.lower_bound() {
-            RandVar::build(lb, self.upper_bound(), |p| {
+            let seq_iter = SeqIter { items: self.valid_p().filter(|p| *p >= lb).collect() };
+            RandVar::build(seq_iter, |p| {
                 if p == lb {
-                    self.cdf(lb)
+                    self.cdf_ref(&lb)
                 } else {
                     self.pdf(p)
                 }
@@ -149,15 +98,15 @@ pub trait RandVar<P, T>
 
     fn cap_ub(&self, ub: P) -> Result<Self, RVError>
     where
-        P: Copy,
         Self: Sized + Clone,
     {
         if ub < self.upper_bound() {
-            RandVar::build(self.lower_bound(), ub, |p| {
+            let seq_iter = SeqIter { items: self.valid_p().filter(|p| *p <= ub).collect() };
+            RandVar::build(seq_iter, |p| {
                 if p < ub {
                     self.pdf(p)
                 } else { // p == ub
-                    T::one() - self.cdf_exclusive(ub)
+                    T::one() - self.cdf_exclusive_ref(&ub)
                 }
             })
         } else {
@@ -169,7 +118,6 @@ pub trait RandVar<P, T>
     where
         F: Fn(&P) -> bool,
         Self: Sized,
-        T: Clone,
     {
         let mut reroll_chance = T::zero();
         for p in self.valid_p() {
@@ -186,24 +134,22 @@ pub trait RandVar<P, T>
             }
         };
         // .unwrap() is fine here, because if self is a valid RV, then this also will be.
-        RandVar::build(self.lower_bound(), self.upper_bound(), reroll_pdf).unwrap()
+        RandVar::build(self.valid_p(), reroll_pdf).unwrap()
     }
 
     fn max_two_trials(&self) -> Self
     where
-        T: Clone,
         Self: Sized
     {
         let max_pdf = |p| {
             (T::one()+T::one()) * self.pdf_ref(&p) * self.cdf_exclusive_ref(&p) + num::pow(self.pdf_ref(&p), 2)
         };
         // .unwrap() is fine here, because if self is a valid RV, then this also will be.
-        RandVar::build(self.lower_bound(), self.upper_bound(), max_pdf).unwrap()
+        RandVar::build(self.valid_p(), max_pdf).unwrap()
     }
 
     fn min_two_trials(&self) -> Self
     where
-        T: Clone,
         Self: Sized
     {
         let min_pdf = |p| {
@@ -211,12 +157,11 @@ pub trait RandVar<P, T>
             (T::one()+T::one()) * self.pdf_ref(&p) - max_pdf
         };
         // .unwrap() is fine here, because if self is a valid RV, then this also will be.
-        RandVar::build(self.lower_bound(), self.upper_bound(), min_pdf).unwrap()
+        RandVar::build(self.valid_p(), min_pdf).unwrap()
     }
 
     fn max_three_trials(&self) -> Self
     where
-        T: Clone,
         Self: Sized
     {
         let max_pdf = |p| {
@@ -225,10 +170,14 @@ pub trait RandVar<P, T>
             x + y + num::pow(self.pdf_ref(&p), 3)
         };
         // .unwrap() is fine here, because if self is a valid RV, then this also will be.
-        RandVar::build(self.lower_bound(), self.upper_bound(), max_pdf).unwrap()
+        RandVar::build(self.valid_p(), max_pdf).unwrap()
     }
 
-    fn print_distributions(&self) {
+    fn print_distributions(&self)
+    where
+        P: Display,
+        T: Display,
+    {
         println!("P:\tpdf\t(cdf)");
         for p in self.valid_p() {
             println!("{}:\t{}\t({})", &p, self.pdf_ref(&p), self.cdf_ref(&p));
@@ -237,6 +186,8 @@ pub trait RandVar<P, T>
 
     fn print_pdf<F, T2>(&self, f: F)
     where
+        P: Display,
+        T: Display,
         F: Fn(T) -> T2,
         T2: Display,
     {
@@ -247,20 +198,33 @@ pub trait RandVar<P, T>
     }
 }
 
+// any sane numeric type ought to have 1/10 + 2/10 == 3/10
+fn sanity_check<P>() -> bool
+where
+    P: One + Add<P, Output=P> + Div<P, Output=P> + Clone + PartialEq
+{
+    let two = P::one() + P::one();
+    let three = P::one() + P::one() + P::one();
+    let ten = three.clone() + three.clone() + three.clone() + P::one();
+    let left = (P::one()/ten.clone()) + (two/ten.clone());
+    let right = three/ten;
+    left == right
+}
+
 fn convolution<P, T, F1, F2>(lb: P, ub: P, f1: F1, f2: F2, x: P) -> T
 where
-    P: PrimInt,
-    T: Num + Sum,
+    P: Seq + Sub<P,Output=P>,
+    T: Mul<T, Output=T> + Sum,
     F1: Fn(P) -> T,
     F2: Fn(P) -> T,
 {
-    num::range_inclusive(lb, ub).map(|y| f1(x-y)*f2(y)).sum()
+    Seq::gen_seq(&lb, &ub).map(|y| f1(x.clone()-y.clone())*f2(y)).sum()
 }
 
 pub trait NumRandVar<P, T>: RandVar<P, T>
 where
-    P: PrimInt + Seq + Display,
-    T: Num + Sum + Clone + Display,
+    P: Seq + Zero + Add<P, Output=P> + Sub<P, Output=P>,
+    T: Zero + One + Sum + Add<T, Output=T> + Sub<T, Output=T> + Mul<T, Output=T> + Clone,
 {
     fn convert(&self, p: P) -> T;
 
@@ -274,15 +238,19 @@ where
         sq_ev - num::pow(ev, 2)
     }
 
-    fn print_stats(&self) {
+    fn print_stats(&self)
+    where
+        T: Display,
+    {
         println!("ev  = {}", self.expected_value());
         println!("var = {}", self.variance());
     }
 
     fn print_stats_convert<F,T2>(&self, f: F)
     where
+        T: Display,
         F: Fn(T) -> T2,
-        T2: Display
+        T2: Display,
     {
         println!("ev  = {} ~= {}", self.expected_value(), f(self.expected_value()));
         println!("var = {} ~= {}", self.variance(), f(self.variance()));
@@ -290,31 +258,52 @@ where
 
     fn add_const(&self, p: P) -> Self
     where
-        Self: Sized
+        Self: Sized,
     {
         // .unwrap() is fine here, because if self is a valid RV, then this also will be.
         RandVar::build(
-            self.lower_bound() + p,
-            self.upper_bound() + p,
-            |x| self.pdf(x-p)
+            SeqIter { items: self.valid_p().map(|x| x + p.clone()).collect() },
+            |x| self.pdf(x-p.clone())
         ).unwrap()
+    }
+
+    fn convex_bounds(&self) -> (P, P) {
+        if P::always_convex() {
+            (self.lower_bound(), self.upper_bound())
+        } else {
+            P::convex_bounds(self.valid_p()).unwrap()
+        }
     }
 
     fn add_rv(&self, other: &impl NumRandVar<P,T>) -> Self
     where
         Self: Sized
     {
-        let new_lb = self.lower_bound() + other.lower_bound();
-        let new_ub = self.upper_bound() + other.upper_bound();
-        let min_lb = cmp::min(self.lower_bound(), other.lower_bound());
-        let max_ub = cmp::max(self.upper_bound(), other.upper_bound());
+        // care must be taken here that the bounds are convex for both RVs
+        let (self_clb, self_cub) = self.convex_bounds();
+        let (other_clb, other_cub) = other.convex_bounds();
+        let new_lb = self_clb.clone() + other_clb.clone();
+        let new_ub = self_cub.clone() + other_cub.clone();
+        // this is only valid if '+' preserves convexity
+        // which I think it should for sane '+' implementations
+        let seq_iter = P::gen_seq(&new_lb, &new_ub);
+        let min_lb;
+        let max_ub;
+        if P::always_convex() {
+            min_lb = cmp::min(self_clb, other_clb);
+            max_ub = cmp::max(self_cub, other_cub);
+        } else {
+            let set = BTreeSet::from([self_clb, other_clb, self_cub, other_cub]);
+            let (lb, ub) = P::convex_bounds(SeqIter { items: set }).unwrap();
+            min_lb = lb;
+            max_ub = ub;
+        }
         // .unwrap() is fine here, because if self and other are valid RVs, then this also will be.
         RandVar::build(
-            new_lb,
-            new_ub,
+            seq_iter,
             |x| convolution(
-                min_lb,
-                max_ub,
+                min_lb.clone(),
+                max_ub.clone(),
                 |p1| self.pdf(p1),
                 |p2| other.pdf(p2),
                 x)).unwrap()
@@ -325,7 +314,8 @@ where
         Self: Sized + Clone
     {
         if num_times == 0 {
-            return RandVar::build(P::zero(), P::zero(), |_| T::one()).unwrap();
+            let seq_iter = SeqIter { items: BTreeSet::from([P::zero()]) };
+            return RandVar::build(seq_iter, |_| T::one()).unwrap();
         } else if num_times == 1 {
             return self.clone();
         } else if num_times == -1 {
@@ -355,35 +345,39 @@ where
     where
         Self: Sized
     {
+        let seq_iter = SeqIter { items: self.valid_p().map(|p| P::zero() - p).collect() };
         // .unwrap() is fine here, because if self is a valid RV, then this also will be.
         RandVar::build(
-            P::zero()-self.upper_bound(),
-            P::zero()-self.lower_bound(),
+            seq_iter,
             |p| self.pdf(P::zero()-p)).unwrap()
     }
 
-    // This only works on P's that are integer-like. Floats or rationals won't work.
     fn half(&self) -> Result<Self, RVError>
     where
+        P: One + Mul<P, Output=P> + Div<P, Output=P>,
         Self: Sized
     {
         let two = P::one() + P::one();
-        // P requires PrimInt for this trait, so this should never
-        // happen, but check for rounding anyway.
-        if P::one()/two != P::zero() {
+        let seq_iter = SeqIter { items: self.valid_p().map(|p| p/two.clone()).collect() };
+        // check the way rounding works.
+        if P::one()/two.clone() == P::zero() {
+            // division truncates, so handle all collisions (i.e.: 2/2 == 3/2 == 1)
+            RandVar::build(seq_iter, |p| {
+                if p > P::zero() {
+                    self.pdf(two.clone()*p.clone()) + self.pdf(two.clone()*p + P::one())
+                } else if p == P::zero() {
+                    self.pdf(P::zero()-P::one()) + self.pdf(P::zero()) + self.pdf(P::one())
+                } else {
+                    self.pdf(two.clone()*p.clone()) + self.pdf(two.clone()*p - P::one())
+                }
+            })
+        } else if sanity_check::<P>() {
+            // division is "rational-like", so there are no collisions.
+            RandVar::build(seq_iter, |p| self.pdf(two.clone()*p))
+        } else {
+            // Your numbers are garbage. It's your own fault for using a type like that.
             return Err(RVError::NoRound);
         }
-        let lb = self.lower_bound()/two;
-        let ub = self.upper_bound()/two;
-        RandVar::build(lb, ub, |p| {
-            if p > P::zero() {
-                self.pdf(two*p) + self.pdf(two*p + P::one())
-            } else if p == P::zero() {
-                self.pdf(P::zero()-P::one()) + self.pdf(P::zero()) + self.pdf(P::one())
-            } else {
-                self.pdf(two*p) + self.pdf(two*p - P::one())
-            }
-        })
     }
 
     fn prob_lt(&self, other: &impl NumRandVar<P,T>) -> T

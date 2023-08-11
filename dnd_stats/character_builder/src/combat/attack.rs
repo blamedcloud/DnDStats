@@ -5,8 +5,9 @@ use num::BigRational;
 
 use crate::ability_scores::Ability;
 use crate::attributed_bonus::{BonusTerm, BonusType};
-use rand_var::rv_traits::{Pair, RandVar, Seq, SeqGen};
+use rand_var::rv_traits::RandVar;
 use rand_var::{MapRandVar, RandomVariable};
+use rand_var::rv_traits::sequential::{Pair, Seq, SeqIter};
 
 use crate::damage::{DamageInstance, DamageManager, DamageTerm, DamageType};
 use crate::equipment::{Weapon, WeaponProperty, WeaponRange};
@@ -77,13 +78,25 @@ impl Display for AttackResult {
 
 impl Seq for AttackResult {
     // I'm sure there's a better way to do this, but idk
-    fn gen_seq(&self, other: &Self) -> SeqGen<Self> {
+    fn gen_seq(&self, other: &Self) -> SeqIter<Self> {
         let first = *cmp::min(self, other);
         let second = *cmp::max(self, other);
         let arr = [AttackResult::Miss, AttackResult::Hit, AttackResult::Crit];
         let iter= arr.iter().filter(|ar| (*ar >= &first) && (*ar <= &second));
         let items: BTreeSet<AttackResult> = iter.copied().collect();
-        SeqGen { items }
+        SeqIter { items }
+    }
+
+    fn always_convex() -> bool {
+        true
+    }
+
+    fn convex_bounds(iter: SeqIter<Self>) -> Option<(Self, Self)> {
+        if iter.items.len() == 0 {
+            None
+        } else {
+            Some((*iter.items.first().unwrap(), *iter.items.last().unwrap()))
+        }
     }
 }
 
