@@ -25,20 +25,25 @@ impl Display for Ability {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct AbilityScore {
     score: u8,
+    cap: u8,
     prof_save: bool,
     save_bonus: i8,
 }
 
 impl AbilityScore {
     pub fn new(score: u8) -> Self {
-        AbilityScore { score, prof_save: false, save_bonus: 0 }
+        AbilityScore { score, cap: 20, prof_save: false, save_bonus: 0 }
     }
 
     pub fn get_score(&self) -> u8 {
         self.score
+    }
+
+    pub fn get_cap(&self) -> u8 {
+        self.cap
     }
 
     pub fn get_mod(&self) -> i8 {
@@ -46,7 +51,13 @@ impl AbilityScore {
     }
 
     pub fn increase(&mut self) {
-        self.score += 1;
+        if self.score < self.cap {
+            self.score += 1;
+        }
+    }
+
+    pub fn increase_cap(&mut self) {
+        self.cap += 1;
     }
 
     pub fn is_prof_save(&self) -> bool {
@@ -66,7 +77,7 @@ impl AbilityScore {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct AbilityScores {
     pub strength: AbilityScore,
     pub dexterity: AbilityScore,
@@ -120,20 +131,22 @@ mod tests {
 
     #[test]
     fn basic_ability_test() {
-        let ability = AbilityScore { score: 1, prof_save: false, save_bonus: 0 };
+        let ability = AbilityScore::new(1);
         assert_eq!(ability.get_mod(), -5);
-        let ability = AbilityScore { score: 10, prof_save: false, save_bonus: 0 };
+        let ability = AbilityScore::new(10);
         assert_eq!(ability.get_mod(), 0);
-        let ability = AbilityScore { score: 13, prof_save: false, save_bonus: 0 };
+        let ability = AbilityScore::new(13);
         assert_eq!(ability.get_mod(), 1);
-        let mut ability = AbilityScore { score: 16, prof_save: false, save_bonus: 0 };
+        let mut ability = AbilityScore::new(16);
         assert_eq!(ability.get_mod(), 3);
         ability.increase(); // 17
         assert_eq!(ability.get_mod(), 3);
         ability.increase(); // 18
         assert_eq!(ability.get_mod(), 4);
-        let ability = AbilityScore { score: 20, prof_save: false, save_bonus: 0 };
+        ability = AbilityScore::new(20);
         assert_eq!(ability.get_mod(), 5);
+        ability.increase(); // doesn't work because cap is 20
+        assert_eq!(20, ability.get_score());
     }
 
     #[test]

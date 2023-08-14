@@ -1,7 +1,7 @@
 use crate::damage::{DamageDice, DamageType};
 use crate::Feet;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum ArmorType {
     NoArmor,
     LightArmor,
@@ -9,6 +9,7 @@ pub enum ArmorType {
     HeavyArmor,
 }
 
+#[derive(Clone)]
 pub struct Armor {
     armor_type: ArmorType,
     name: String,
@@ -141,7 +142,7 @@ impl Armor {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub struct ACSource {
     base_ac: u8,
     magic_bonus_ac: Option<u8>,
@@ -175,6 +176,20 @@ pub enum WeaponType {
     SimpleRanged,
     MartialMelee,
     MartialRanged,
+}
+
+impl WeaponType {
+    pub fn is_ranged(&self) -> bool {
+        match self {
+            WeaponType::SimpleMelee => false,
+            WeaponType::SimpleRanged => true,
+            WeaponType::MartialMelee => false,
+            WeaponType::MartialRanged => true,
+        }
+    }
+    pub fn is_melee(&self) -> bool {
+        !self.is_ranged()
+    }
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -361,13 +376,14 @@ impl Weapon { // TODO: implement the rest of the weapon constructors
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum OffHand {
     Weapon(Weapon),
     Shield(ACSource),
     Free,
 }
 
+#[derive(Clone)]
 pub struct Equipment {
     armor: Armor,
     main_hand: Weapon,

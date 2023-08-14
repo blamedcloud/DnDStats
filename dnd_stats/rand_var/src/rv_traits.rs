@@ -114,18 +114,19 @@ pub trait RandVar<P, T>
         }
     }
 
+    fn pdf_on<F>(&self, pred: F) -> T
+    where
+        F: Fn(&P) -> bool,
+    {
+        self.valid_p().filter(pred).map(|p| self.pdf(p)).sum()
+    }
+
     fn reroll_once_on<F>(&self, pred: F) -> Self
     where
         F: Fn(&P) -> bool,
         Self: Sized,
     {
-        let mut reroll_chance = T::zero();
-        for p in self.valid_p() {
-            if pred(&p) {
-                reroll_chance = reroll_chance + self.pdf(p);
-            }
-        }
-
+        let reroll_chance = self.pdf_on(&pred);
         let reroll_pdf = |p| {
             if pred(&p) {
                 reroll_chance.clone() * self.pdf(p)

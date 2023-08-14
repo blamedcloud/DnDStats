@@ -5,12 +5,12 @@ use num::BigRational;
 
 use crate::ability_scores::Ability;
 use crate::attributed_bonus::{BonusTerm, BonusType};
-use rand_var::rv_traits::RandVar;
+use rand_var::rv_traits::{RandVar, sequential};
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::sequential::{Pair, Seq, SeqIter};
 
 use crate::damage::{DamageInstance, DamageManager, DamageTerm, DamageType};
-use crate::equipment::{Weapon, WeaponProperty, WeaponRange};
+use crate::equipment::{OffHand, Weapon, WeaponProperty, WeaponRange};
 use crate::{AttributedBonus, CBError, Character};
 
 #[derive(Debug, Copy, Clone)]
@@ -40,7 +40,7 @@ pub enum AttackResult {
 }
 
 // RollPair = Pair<roll, roll + bonus>
-type RollPair = Pair<isize, isize>;
+pub type RollPair = Pair<isize, isize>;
 
 impl AttackResult {
     pub fn from(roll_pair: RollPair, ac: isize, crit_lb: isize) -> Self {
@@ -92,16 +92,28 @@ impl Seq for AttackResult {
     }
 
     fn convex_bounds(iter: SeqIter<Self>) -> Option<(Self, Self)> {
-        if iter.items.len() == 0 {
-            None
-        } else {
-            Some((*iter.items.first().unwrap(), *iter.items.last().unwrap()))
-        }
+        sequential::always_convex_bounds(iter)
     }
 }
 
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub enum NumHands {
+    OneHand,
+    TwoHand,
+}
+
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub enum HandType {
+    MainHand,
+    OffHand,
+}
+
+#[derive(Clone)]
 pub struct WeaponAttack {
     weapon: Weapon,
+    num_hands: NumHands,
+    hand_type: HandType,
+    ability: Ability,
     hit_bonus: AttributedBonus,
     damage: DamageManager,
     crit_lb: isize,
@@ -109,7 +121,28 @@ pub struct WeaponAttack {
 }
 
 impl WeaponAttack {
-    pub fn new(weapon: &Weapon) -> Self {
+    pub fn primary_weapon(character: &Character) -> Self {
+        let weapon = character.get_equipment().get_primary_weapon();
+        let mut hands = NumHands::OneHand;
+        if character.get_equipment().get_off_hand() == &OffHand::Free {
+            if weapon.has_property(&WeaponProperty::TwoHanded) || weapon.is_versatile().is_some() {
+                hands = NumHands::TwoHand;
+            }
+        }
+        let mut attack = WeaponAttack::new(weapon, HandType::MainHand, hands);
+        attack.cache_char_vals(character);
+        attack
+    }
+
+    pub fn offhand_weapon(character: &Character) -> Option<Self> {
+        character.get_equipment().get_secondary_weapon().map(|w| {
+            let mut attack = WeaponAttack::new(w, HandType::OffHand, NumHands::OneHand);
+            attack.cache_char_vals(character);
+            attack
+        })
+    }
+
+    pub fn new(weapon: &Weapon, hand_type: HandType, num_hands: NumHands) -> Self {
         let mut hit_bonus = AttributedBonus::new(String::from("Hit Bonus"));
         // for now, assumes you have proficiency in the weapons you use TODO: check this
         hit_bonus.add_term(BonusTerm::new(BonusType::Proficiency));
@@ -126,14 +159,23 @@ impl WeaponAttack {
         hit_bonus.add_term(BonusTerm::new(BonusType::Modifier(ability)));
 
         let mut damage = DamageManager::new();
-        damage.add_base_dmg(DamageTerm::new(
-            DamageInstance::Die(*weapon.get_dice()),
-            *weapon.get_dmg_type(),
-        ));
-        damage.add_base_char_dmg(
-            *weapon.get_dmg_type(),
-            BonusTerm::new(BonusType::Modifier(ability)),
-        );
+        if num_hands == NumHands::TwoHand && weapon.is_versatile().is_some() {
+            damage.add_base_dmg(DamageTerm::new(
+                DamageInstance::Die(*weapon.is_versatile().unwrap()),
+                *weapon.get_dmg_type()
+            ));
+        } else {
+            damage.add_base_dmg(DamageTerm::new(
+                DamageInstance::Die(*weapon.get_dice()),
+                *weapon.get_dmg_type(),
+            ));
+        }
+        if hand_type == HandType::MainHand {
+            damage.add_base_char_dmg(
+                *weapon.get_dmg_type(),
+                BonusTerm::new(BonusType::Modifier(ability)),
+            );
+        }
 
         if let Some(b) = weapon.get_magic_bonus() {
             hit_bonus.add_term(BonusTerm::new_attr(
@@ -148,7 +190,10 @@ impl WeaponAttack {
 
         WeaponAttack {
             weapon: weapon.clone(),
+            num_hands,
+            hand_type,
             hit_bonus,
+            ability,
             damage,
             crit_lb: 20,
             d20_rv: RandomVariable::new_dice(20).unwrap(),
@@ -160,8 +205,24 @@ impl WeaponAttack {
         self.damage.cache_char_dmg(character);
     }
 
+    pub fn add_accuracy_bonus(&mut self, term: BonusTerm) {
+        self.hit_bonus.add_term(term);
+    }
+
     pub fn get_weapon(&self) -> &Weapon {
         &self.weapon
+    }
+
+    pub fn get_num_hands(&self) -> &NumHands {
+        &self.num_hands
+    }
+
+    pub fn get_hand_type(&self) -> &HandType {
+        &self.hand_type
+    }
+
+    pub fn get_ability(&self) -> &Ability {
+        &self.ability
     }
 
     pub fn set_crit_lb(&mut self, crit: isize) {
@@ -175,6 +236,9 @@ impl WeaponAttack {
 
     pub fn get_damage(&self) -> &DamageManager {
         &self.damage
+    }
+    pub fn get_damage_mut(&mut self) -> &mut DamageManager {
+        &mut self.damage
     }
 
     pub fn set_halfling_lucky(&mut self) {
@@ -223,7 +287,7 @@ mod tests {
         assert_eq!(3, fighter.get_ability_scores().strength.get_mod());
         let no_resist = HashSet::new();
 
-        let mut attack = WeaponAttack::new(fighter.get_equipment().get_primary_weapon());
+        let mut attack = WeaponAttack::new(fighter.get_equipment().get_primary_weapon(), HandType::MainHand, NumHands::TwoHand);
         attack.cache_char_vals(&fighter);
         assert_eq!(&Weapon::greatsword(), attack.get_weapon());
         assert_eq!(20, attack.get_crit_lb());
@@ -255,7 +319,7 @@ mod tests {
     #[test]
     fn validate_basic_atk() {
         let fighter = get_test_fighter();
-        let attack = fighter.get_primary_attack();
+        let attack = fighter.get_basic_attack().unwrap();
         let no_resist = HashSet::new();
         let ac = 13;
         // greatsword attack: d20 + 5 vs 13 @ 2d6 + 3

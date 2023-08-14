@@ -24,6 +24,17 @@ where
     fn convex_bounds(iter: SeqIter<Self>) -> Option<(Self, Self)>;
 }
 
+pub fn always_convex_bounds<T>(iter: SeqIter<T>) -> Option<(T, T)>
+where
+    T: Ord + Clone
+{
+    if iter.items.len() == 0 {
+        None
+    } else {
+        Some((iter.items.first().unwrap().clone(), iter.items.last().unwrap().clone()))
+    }
+}
+
 impl Seq for isize {
     fn gen_seq(&self, other: &Self) -> SeqIter<Self> {
         let first = *cmp::min(self, other);
@@ -37,11 +48,7 @@ impl Seq for isize {
     }
 
     fn convex_bounds(iter: SeqIter<Self>) -> Option<(Self, Self)> {
-        if iter.items.len() == 0 {
-            None
-        } else {
-            Some((*iter.items.first().unwrap(), *iter.items.last().unwrap()))
-        }
+        always_convex_bounds(iter)
     }
 }
 

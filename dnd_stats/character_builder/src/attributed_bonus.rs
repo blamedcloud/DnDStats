@@ -1,9 +1,11 @@
 use std::fmt::{Display, Formatter};
+use std::rc::Rc;
 use crate::ability_scores::Ability;
 use crate::Character;
 
-pub type CharacterDependant = Box<dyn Fn(&Character) -> i32>;
+pub type CharacterDependant = Rc<dyn Fn(&Character) -> i32>;
 
+#[derive(Clone)]
 pub enum BonusType {
     Constant(i32),
     Modifier(Ability),
@@ -11,6 +13,7 @@ pub enum BonusType {
     Dependant(CharacterDependant),
 }
 
+#[derive(Clone)]
 pub struct BonusTerm {
     bonus: BonusType,
     name: Option<String>,
@@ -94,6 +97,7 @@ impl Display for BonusTerm {
     }
 }
 
+#[derive(Clone)]
 pub struct AttributedBonus {
     name: String, // TODO: rather than use a string, this might be better as an enum eventually?
     terms: Vec<BonusTerm>,
@@ -180,9 +184,9 @@ mod tests {
         let fighter = get_test_fighter();
 
         let mut to_hit = AttributedBonus::new(String::from("To Hit Bonus"));
-        let str_mod: CharacterDependant = Box::new(|chr| chr.get_ability_scores().strength.get_mod() as i32);
+        let str_mod: CharacterDependant = Rc::new(|chr| chr.get_ability_scores().strength.get_mod() as i32);
         to_hit.add_term(BonusTerm::new_name(BonusType::Dependant(str_mod), String::from("str_mod")));
-        let prof: CharacterDependant = Box::new(|chr| chr.get_prof_bonus() as i32);
+        let prof: CharacterDependant = Rc::new(|chr| chr.get_prof_bonus() as i32);
         to_hit.add_term(BonusTerm::new_name(BonusType::Dependant(prof), String::from("prof")));
         assert_eq!(5, to_hit.get_value(&fighter));
         assert_eq!("To Hit Bonus = str_mod + prof", to_hit.to_string());
@@ -192,6 +196,15 @@ mod tests {
         to_hit2.add_term(BonusTerm::new(BonusType::Proficiency));
         assert_eq!(5, to_hit2.get_value(&fighter));
         assert_eq!("To Hit Bonus = STRmod + prof", to_hit2.to_string());
+    }
+
+    #[test]
+    fn attributed_bonus_clone_test() {
+        let fighter = get_test_fighter();
+        let ac = &fighter.armor_class;
+        let ac_clone = ac.clone();
+        assert_eq!(ac.get_value(&fighter), ac_clone.get_value(&fighter));
+        assert_eq!(ac.to_string(), ac_clone.to_string())
     }
 
 }

@@ -33,6 +33,26 @@ impl DamageDice {
             DamageDice::TwoD6 => RandomVariable::new_dice(6).unwrap().multiple(2)
         }
     }
+
+    pub fn get_rv_gwf<T>(&self) -> RandomVariable<Ratio<T>>
+    where
+        T: Integer + Debug + Clone + Display + FromPrimitive,
+        Ratio<T>: FromPrimitive
+    {
+        match self {
+            DamageDice::D4 => RandomVariable::new_dice_reroll(4, 2).unwrap(),
+            DamageDice::D6 => RandomVariable::new_dice_reroll(6, 2).unwrap(),
+            DamageDice::D8 => RandomVariable::new_dice_reroll(8, 2).unwrap(),
+            DamageDice::D10 => RandomVariable::new_dice_reroll(10, 2).unwrap(),
+            DamageDice::D12 => RandomVariable::new_dice_reroll(12, 2).unwrap(),
+            DamageDice::TwoD6 => RandomVariable::new_dice_reroll(6, 2).unwrap().multiple(2)
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
+pub enum DamageFeature {
+    GWF,
 }
 
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
@@ -82,6 +102,7 @@ impl DamageTerm {
     }
 }
 
+#[derive(Clone)]
 pub struct DamageSum {
     dmg_dice: Vec<DamageDice>,
     dmg_const: isize,
@@ -151,14 +172,19 @@ impl DamageSum {
         self.get_cached_char_dmg().map(|c| c + self.dmg_const)
     }
 
-    pub fn get_dmg_dice_rv<T>(&self) -> RandomVariable<Ratio<T>>
+    pub fn get_dmg_dice_rv<T>(&self, dmg_feats: &HashSet<DamageFeature>) -> RandomVariable<Ratio<T>>
     where
         T: Integer + Debug + Clone + Display + FromPrimitive,
         Ratio<T>: FromPrimitive
     {
+        let gwf = dmg_feats.contains(&DamageFeature::GWF);
         let mut rv = RandomVariable::new_constant(0).unwrap();
         for dice in self.dmg_dice.iter() {
-            rv = rv.add_rv(&dice.get_rv());
+            if gwf {
+                rv = rv.add_rv(&dice.get_rv_gwf());
+            } else {
+                rv = rv.add_rv(&dice.get_rv());
+            }
         }
         rv
     }
@@ -166,10 +192,12 @@ impl DamageSum {
 
 type DamageExpression = HashMap<DamageType, DamageSum>;
 
+#[derive(Clone)]
 pub struct DamageManager {
     base_dmg: DamageExpression,
     bonus_crit_dmg: DamageExpression,
     miss_dmg: DamageExpression,
+    damage_features: HashSet<DamageFeature>,
 }
 
 impl DamageManager {
@@ -178,6 +206,7 @@ impl DamageManager {
             base_dmg: HashMap::new(),
             bonus_crit_dmg: HashMap::new(),
             miss_dmg: HashMap::new(),
+            damage_features: HashSet::new(),
         }
     }
 
@@ -219,6 +248,10 @@ impl DamageManager {
         DamageManager::add_char_dmg_term(&mut self.miss_dmg, dmg_type, dmg);
     }
 
+    pub fn add_damage_feature(&mut self, dmg_feat: DamageFeature) {
+        self.damage_features.insert(dmg_feat);
+    }
+
     pub fn cache_char_dmg(&mut self, character: &Character) {
         for (_, ds) in self.base_dmg.iter_mut() {
             ds.cache_char_dmg(character);
@@ -231,7 +264,7 @@ impl DamageManager {
         }
     }
 
-    fn get_total_dmg<T>(de: &DamageExpression, resistances: &HashSet<DamageType>, double_dice: bool) -> Result<RandomVariable<Ratio<T>>, CBError>
+    fn get_total_dmg<T>(de: &DamageExpression, df: &HashSet<DamageFeature>, resistances: &HashSet<DamageType>, double_dice: bool) -> Result<RandomVariable<Ratio<T>>, CBError>
     where
         T: Integer + Debug + Clone + Display + FromPrimitive,
         Ratio<T>: FromPrimitive
@@ -240,9 +273,9 @@ impl DamageManager {
         for (k, ds) in de.iter() {
             let type_rv;
             if double_dice {
-                type_rv = ds.get_dmg_dice_rv().multiple(2);
+                type_rv = ds.get_dmg_dice_rv(df).multiple(2);
             } else {
-                type_rv = ds.get_dmg_dice_rv();
+                type_rv = ds.get_dmg_dice_rv(df);
             }
             let type_rv = type_rv.add_const(ds.get_total_const()?);
             if resistances.contains(k) {
@@ -261,7 +294,7 @@ impl DamageManager {
         T: Integer + Debug + Clone + Display + FromPrimitive,
         Ratio<T>: FromPrimitive
     {
-        DamageManager::get_total_dmg(&self.base_dmg, resistances, false)
+        DamageManager::get_total_dmg(&self.base_dmg, &self.damage_features, resistances, false)
     }
 
     pub fn get_crit_dmg<T>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<Ratio<T>>, CBError>
@@ -270,9 +303,9 @@ impl DamageManager {
         Ratio<T>: FromPrimitive
     {
         // double base dice + base const
-        let mut rv = DamageManager::get_total_dmg(&self.base_dmg, resistances, true)?;
+        let mut rv = DamageManager::get_total_dmg(&self.base_dmg, &self.damage_features, resistances, true)?;
         // bonus crit dmg
-        rv = rv.add_rv(&DamageManager::get_total_dmg(&self.bonus_crit_dmg, resistances, false)?);
+        rv = rv.add_rv(&DamageManager::get_total_dmg(&self.bonus_crit_dmg, &self.damage_features, resistances, false)?);
         Ok(rv)
     }
 
@@ -281,7 +314,7 @@ impl DamageManager {
         T: Integer + Debug + Clone + Display + FromPrimitive,
         Ratio<T>: FromPrimitive
     {
-        DamageManager::get_total_dmg(&self.miss_dmg, resistances, false)
+        DamageManager::get_total_dmg(&self.miss_dmg, &self.damage_features, resistances, false)
     }
 
     // this is often easier for "half dmg on save" than building
