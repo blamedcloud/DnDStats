@@ -7,6 +7,7 @@ pub mod attack;
 #[derive(Copy, Clone)]
 pub enum ActionType {
     Action,
+    SingleAttack,
     BonusAction,
     Reaction,
     Movement,
@@ -19,12 +20,21 @@ pub enum CombatAction {
     Hide,
     Dash,
     Disengage,
+    AdditionalAttacks(u8),
 }
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
-pub enum ActionNames {
-    BasicAttack,
-    OffhandAttack,
+pub enum AttackType {
+    Normal,
+    GreatWeaponMaster,
+}
+
+#[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+pub enum ActionName {
+    PrimaryAttack(AttackType),
+    OffhandAttack(AttackType),
+    AttackAction,
+    BonusGWMAttack,
 }
 
 #[derive(Clone)]
@@ -33,22 +43,36 @@ pub struct CombatOption {
     pub action: CombatAction,
 }
 
+impl CombatOption {
+    pub fn new(at: ActionType, ca: CombatAction) -> Self {
+        CombatOption {
+            action_type: at,
+            action: ca,
+        }
+    }
+}
+
+impl From<(ActionType, CombatAction)> for CombatOption {
+    fn from(value: (ActionType, CombatAction)) -> Self {
+        CombatOption {
+            action_type: value.0,
+            action: value.1,
+        }
+    }
+}
+
 // this will probably be replaced with a struct eventually
-pub type ActionManager = HashMap<ActionNames, CombatOption>;
+pub type ActionManager = HashMap<ActionName, CombatOption>;
 
 pub fn create_action_manager(character: &Character) -> ActionManager {
     let mut am = ActionManager::new();
-    am.insert(ActionNames::BasicAttack,
-              CombatOption {
-                  action_type: ActionType::Action,
-                  action: CombatAction::Attack(WeaponAttack::primary_weapon(character))
-              });
+    am.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CombatAction::AdditionalAttacks(1)));
+    am.insert(ActionName::PrimaryAttack(AttackType::Normal),
+              CombatOption::new(ActionType::SingleAttack,
+                                CombatAction::Attack(WeaponAttack::primary_weapon(character))));
     if let Some(wa) = WeaponAttack::offhand_weapon(character) {
-        am.insert(ActionNames::OffhandAttack,
-                  CombatOption {
-                      action_type: ActionType::BonusAction,
-                      action: CombatAction::Attack(wa)
-                  });
+        am.insert(ActionName::OffhandAttack(AttackType::Normal),
+                  CombatOption::new(ActionType::BonusAction, CombatAction::Attack(wa)));
     }
     am
 }

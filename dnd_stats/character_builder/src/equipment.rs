@@ -333,8 +333,8 @@ impl Weapon { // TODO: implement the rest of the weapon constructors
         &self.properties
     }
 
-    pub fn has_property(&self, prop: &WeaponProperty) -> bool {
-        self.properties.contains(prop)
+    pub fn has_property(&self, prop: WeaponProperty) -> bool {
+        self.properties.contains(&prop)
     }
 
     pub fn get_magic_bonus(&self) -> Option<u8> {

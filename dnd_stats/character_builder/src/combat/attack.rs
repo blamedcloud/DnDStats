@@ -125,7 +125,7 @@ impl WeaponAttack {
         let weapon = character.get_equipment().get_primary_weapon();
         let mut hands = NumHands::OneHand;
         if character.get_equipment().get_off_hand() == &OffHand::Free {
-            if weapon.has_property(&WeaponProperty::TwoHanded) || weapon.is_versatile().is_some() {
+            if weapon.has_property(WeaponProperty::TwoHanded) || weapon.is_versatile().is_some() {
                 hands = NumHands::TwoHand;
             }
         }
@@ -150,7 +150,7 @@ impl WeaponAttack {
         let mut ability = Ability::STR;
         if let WeaponRange::Ranged(_, _) = weapon.get_range() {
             ability = Ability::DEX;
-        } else if weapon.has_property(&WeaponProperty::Finesse) {
+        } else if weapon.has_property(WeaponProperty::Finesse) {
             // for now, assumes that if you are using a finesse
             // weapon, you use dex for it.
             // TODO: use higher ability mod

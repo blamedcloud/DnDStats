@@ -4,7 +4,7 @@ use std::rc::Rc;
 use rand_var::rv_traits::RVError;
 use crate::ability_scores::AbilityScores;
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType, CharacterDependant};
-use crate::combat::{ActionManager, ActionNames, CombatAction, create_action_manager};
+use crate::combat::{ActionManager, ActionName, AttackType, CombatAction, CombatOption, create_action_manager};
 use crate::combat::attack::WeaponAttack;
 use crate::equipment::{ArmorType, Equipment};
 use crate::feature::Feature;
@@ -58,11 +58,40 @@ impl Add<Feet> for Feet {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum HitDice {
+    D6,
+    D8,
+    D10,
+    D12,
+}
+
+impl HitDice {
+    pub fn get_max(&self) -> isize {
+        match self {
+            HitDice::D6 => 6,
+            HitDice::D8 => 8,
+            HitDice::D10 => 10,
+            HitDice::D12 => 12,
+        }
+    }
+
+    pub fn get_per_lvl(&self) -> isize {
+        match self {
+            HitDice::D6 => 4,
+            HitDice::D8 => 5,
+            HitDice::D10 => 6,
+            HitDice::D12 => 7,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Character {
     name: String,
     ability_scores: AbilityScores,
     level: u8,
+    hit_dice: Vec<HitDice>,
     equipment: Equipment,
     armor_class: AttributedBonus,
     combat_actions: ActionManager,
@@ -74,6 +103,7 @@ impl Character {
             name,
             ability_scores,
             level: 0,
+            hit_dice: Vec::new(),
             equipment,
             armor_class: AttributedBonus::new(String::from("AC")),
             combat_actions: ActionManager::new(),
@@ -148,11 +178,12 @@ impl Character {
         }
     }
 
-    pub fn level_up(&mut self, features: Vec<Box<dyn Feature>>) {
+    pub fn level_up(&mut self, hit_die: HitDice, features: Vec<Box<dyn Feature>>) {
         for feat in features {
             feat.apply(self);
         }
         self.level += 1;
+        self.hit_dice.push(hit_die);
         self.cache_self();
     }
 
@@ -174,6 +205,20 @@ impl Character {
         (self.level + 3)/4 + 1
     }
 
+    pub fn get_max_hp(&self) -> isize {
+        let mut max_hp = 0;
+        let mut hd_iter = self.hit_dice.iter();
+        let first_hd = hd_iter.next();
+        if first_hd.is_some() {
+            max_hp += first_hd.unwrap().get_max();
+        }
+        for hd in hd_iter {
+            max_hp += hd.get_per_lvl();
+        }
+        max_hp += (self.level as isize) * (self.ability_scores.constitution.get_mod() as isize);
+        max_hp
+    }
+
     pub fn get_equipment(&self) -> &Equipment {
         &self.equipment
     }
@@ -186,7 +231,7 @@ impl Character {
     }
 
     pub fn get_basic_attack(&self) -> Option<&WeaponAttack> {
-        self.combat_actions.get(&ActionNames::BasicAttack).and_then(|co| {
+        self.combat_actions.get(&ActionName::PrimaryAttack(AttackType::Normal)).and_then(|co| {
             if let CombatAction::Attack(wa) = &co.action {
                 Some(wa)
             } else {
@@ -196,7 +241,7 @@ impl Character {
     }
 
     pub fn get_offhand_attack(&self) -> Option<&WeaponAttack> {
-        self.combat_actions.get(&ActionNames::OffhandAttack).and_then(|co| {
+        self.combat_actions.get(&ActionName::OffhandAttack(AttackType::Normal)).and_then(|co| {
             if let CombatAction::Attack(wa) = &co.action {
                 Some(wa)
             } else {
@@ -208,11 +253,17 @@ impl Character {
     pub fn get_action_manager(&self) -> &ActionManager {
         &self.combat_actions
     }
+
+    pub fn get_combat_option(&self, an: ActionName) -> Option<&CombatOption> {
+        self.combat_actions.get(&an)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::ability_scores::Ability;
     use crate::equipment::{ACSource, Armor, OffHand, Weapon};
+    use crate::feature::SaveProficiencies;
     use super::*;
 
     pub fn get_str_based() -> AbilityScores {
@@ -232,7 +283,7 @@ mod tests {
             OffHand::Free,
         );
         let mut fighter = Character::new(name, ability_scores, equipment);
-        fighter.level_up(vec!());
+        fighter.level_up(HitDice::D10, vec!(Box::new(SaveProficiencies::from(vec![Ability::STR, Ability::CON]))));
         fighter
     }
 
@@ -241,9 +292,11 @@ mod tests {
         let fighter = get_test_fighter();
         assert_eq!("FighterMan", fighter.get_name());
         assert_eq!(3, fighter.get_ability_scores().strength.get_mod());
+        assert!(fighter.get_ability_scores().strength.is_prof_save());
         assert_eq!(2, fighter.get_prof_bonus());
         assert_eq!("Greatsword", fighter.get_equipment().get_primary_weapon().get_name());
         assert_eq!(16, fighter.get_ac());
+        assert_eq!(13, fighter.get_max_hp());
     }
 
     #[test]
