@@ -26,13 +26,15 @@ pub enum CombatAction {
 #[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum AttackType {
     Normal,
-    GreatWeaponMaster,
+    GWMAttack,
+    SSAttack,
 }
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ActionName {
     PrimaryAttack(AttackType),
     OffhandAttack(AttackType),
+    BonusPAMAttack(AttackType),
     AttackAction,
     BonusGWMAttack,
 }

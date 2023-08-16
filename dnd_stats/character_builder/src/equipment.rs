@@ -236,6 +236,18 @@ impl Weapon { // TODO: implement the rest of the weapon constructors
         }
     }
 
+    pub const QUARTERSTAFF: &'static str = "Quarterstaff";
+    pub fn quarterstaff() -> Self {
+        Weapon {
+            name: String::from(Weapon::QUARTERSTAFF),
+            weapon_type: WeaponType::SimpleMelee,
+            dice: DamageDice::D6,
+            dmg_type: DamageType::Bludgeoning,
+            properties: vec!(WeaponProperty::Versatile(DamageDice::D8)),
+            magic_bonus: None,
+        }
+    }
+
     pub fn shortbow() -> Self {
         Weapon {
             name: String::from("Shortbow"),
@@ -247,9 +259,10 @@ impl Weapon { // TODO: implement the rest of the weapon constructors
         }
     }
 
+    pub const GLAIVE: &'static str = "Glaive";
     pub fn glaive() -> Self {
         Weapon {
-            name: String::from("Glaive"),
+            name: String::from(Weapon::GLAIVE),
             weapon_type: WeaponType::MartialMelee,
             dice: DamageDice::D10,
             dmg_type: DamageType::Slashing,
@@ -265,6 +278,18 @@ impl Weapon { // TODO: implement the rest of the weapon constructors
             dice: DamageDice::TwoD6,
             dmg_type: DamageType::Slashing,
             properties: vec!(WeaponProperty::Heavy, WeaponProperty::TwoHanded),
+            magic_bonus: None,
+        }
+    }
+
+    pub const HALBERD: &'static str = "Halberd";
+    pub fn halberd() -> Self {
+        Weapon {
+            name: String::from(Weapon::HALBERD),
+            weapon_type: WeaponType::MartialMelee,
+            dice: DamageDice::D10,
+            dmg_type: DamageType::Slashing,
+            properties: vec!(WeaponProperty::Heavy, WeaponProperty::Reach, WeaponProperty::TwoHanded),
             magic_bonus: None,
         }
     }
@@ -311,6 +336,14 @@ impl Weapon { // TODO: implement the rest of the weapon constructors
             properties: vec!(WeaponProperty::Ammunition, WeaponProperty::Heavy, WeaponProperty::TwoHanded, WeaponProperty::Range(Feet(150), Feet(600))),
             magic_bonus: None,
         }
+    }
+
+    pub fn as_pam(&self) -> Self {
+        let mut pam = self.clone();
+        pam.name.push_str(" PAM");
+        pam.dice = DamageDice::D4;
+        pam.dmg_type = DamageType::Bludgeoning;
+        pam
     }
 
     pub fn get_name(&self) -> &str {

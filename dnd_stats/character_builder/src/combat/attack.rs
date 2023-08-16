@@ -9,7 +9,7 @@ use rand_var::rv_traits::{RandVar, sequential};
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::sequential::{Pair, Seq, SeqIter};
 
-use crate::damage::{DamageInstance, DamageManager, DamageTerm, DamageType};
+use crate::damage::{DamageDice, DamageInstance, DamageManager, DamageTerm, DamageType};
 use crate::equipment::{OffHand, Weapon, WeaponProperty, WeaponRange};
 use crate::{AttributedBonus, CBError, Character};
 
@@ -142,6 +142,14 @@ impl WeaponAttack {
         })
     }
 
+    fn get_weapon_die(weapon: &Weapon, num_hands: NumHands) -> DamageDice {
+        if num_hands == NumHands::TwoHand && weapon.is_versatile().is_some() {
+            *weapon.is_versatile().unwrap()
+        } else {
+            *weapon.get_dice()
+        }
+    }
+
     pub fn new(weapon: &Weapon, hand_type: HandType, num_hands: NumHands) -> Self {
         let mut hit_bonus = AttributedBonus::new(String::from("Hit Bonus"));
         // for now, assumes you have proficiency in the weapons you use TODO: check this
@@ -159,17 +167,11 @@ impl WeaponAttack {
         hit_bonus.add_term(BonusTerm::new(BonusType::Modifier(ability)));
 
         let mut damage = DamageManager::new();
-        if num_hands == NumHands::TwoHand && weapon.is_versatile().is_some() {
-            damage.add_base_dmg(DamageTerm::new(
-                DamageInstance::Die(*weapon.is_versatile().unwrap()),
-                *weapon.get_dmg_type()
-            ));
-        } else {
-            damage.add_base_dmg(DamageTerm::new(
-                DamageInstance::Die(*weapon.get_dice()),
-                *weapon.get_dmg_type(),
-            ));
-        }
+        damage.add_base_dmg(DamageTerm::new(
+            DamageInstance::Die(WeaponAttack::get_weapon_die(weapon, num_hands)),
+            *weapon.get_dmg_type(),
+        ));
+
         if hand_type == HandType::MainHand {
             damage.add_base_char_dmg(
                 *weapon.get_dmg_type(),
@@ -211,6 +213,17 @@ impl WeaponAttack {
 
     pub fn get_weapon(&self) -> &Weapon {
         &self.weapon
+    }
+
+    pub fn as_pam_attack(&self) -> Self {
+        let mut new_attack = self.clone();
+        let new_weapon = self.weapon.as_pam();
+        if self.weapon.get_dmg_type() != new_weapon.get_dmg_type() {
+            // TODO: convert damage types
+        }
+        // TODO: convert weapon die in damage
+        new_attack.weapon = new_weapon;
+        new_attack
     }
 
     pub fn get_num_hands(&self) -> &NumHands {

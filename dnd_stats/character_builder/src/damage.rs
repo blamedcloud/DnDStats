@@ -178,7 +178,7 @@ impl DamageSum {
         Ratio<T>: FromPrimitive
     {
         let gwf = dmg_feats.contains(&DamageFeature::GWF);
-        let mut rv = RandomVariable::new_constant(0).unwrap();
+        let mut rv: RandomVariable<Ratio<T>> = RandomVariable::new_constant(0).unwrap();
         for dice in self.dmg_dice.iter() {
             if gwf {
                 rv = rv.add_rv(&dice.get_rv_gwf());
@@ -217,9 +217,6 @@ impl DamageManager {
     }
 
     fn add_char_dmg_term(de: &mut DamageExpression, dmg_type: DamageType, dmg: BonusTerm) {
-        // can't use the fancy entry API because BonusTerm isn't cloneable
-        // and (as of this writing), rustc isn't smart enough to figure out
-        // that only one of and_modify or or_insert will be called.
         if de.contains_key(&dmg_type) {
             de.get_mut(&dmg_type).unwrap().add_char_dmg(dmg);
         } else {
