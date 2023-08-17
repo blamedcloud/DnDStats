@@ -9,7 +9,7 @@ use rand_var::rv_traits::{RandVar, sequential};
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::sequential::{Pair, Seq, SeqIter};
 
-use crate::damage::{DamageDice, DamageInstance, DamageManager, DamageTerm, DamageType};
+use crate::damage::{DamageDice, DamageInstance, DamageManager, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
 use crate::equipment::{OffHand, Weapon, WeaponProperty, WeaponRange};
 use crate::{AttributedBonus, CBError, Character};
 
@@ -167,14 +167,15 @@ impl WeaponAttack {
         hit_bonus.add_term(BonusTerm::new(BonusType::Modifier(ability)));
 
         let mut damage = DamageManager::new();
+        damage.set_weapon(WeaponAttack::get_weapon_die(weapon, num_hands), *weapon.get_dmg_type());
         damage.add_base_dmg(DamageTerm::new(
-            DamageInstance::Die(WeaponAttack::get_weapon_die(weapon, num_hands)),
-            *weapon.get_dmg_type(),
+            DamageInstance::Die(ExtendedDamageDice::WeaponDice),
+            ExtendedDamageType::WeaponDamage,
         ));
 
         if hand_type == HandType::MainHand {
             damage.add_base_char_dmg(
-                *weapon.get_dmg_type(),
+                ExtendedDamageType::WeaponDamage,
                 BonusTerm::new(BonusType::Modifier(ability)),
             );
         }
@@ -186,7 +187,7 @@ impl WeaponAttack {
             ));
             damage.add_base_dmg(DamageTerm::new(
                 DamageInstance::Const(b as isize),
-                *weapon.get_dmg_type(),
+                ExtendedDamageType::WeaponDamage,
             ));
         }
 
@@ -218,10 +219,7 @@ impl WeaponAttack {
     pub fn as_pam_attack(&self) -> Self {
         let mut new_attack = self.clone();
         let new_weapon = self.weapon.as_pam();
-        if self.weapon.get_dmg_type() != new_weapon.get_dmg_type() {
-            // TODO: convert damage types
-        }
-        // TODO: convert weapon die in damage
+        new_attack.damage.set_weapon(*new_weapon.get_dice(), *new_weapon.get_dmg_type());
         new_attack.weapon = new_weapon;
         new_attack
     }

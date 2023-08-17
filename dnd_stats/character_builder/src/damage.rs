@@ -8,7 +8,7 @@ use crate::attributed_bonus::{AttributedBonus, BonusTerm};
 use crate::{CBError, Character};
 use crate::combat::attack::AttackResult;
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum DamageDice {
     D4,
     D6,
@@ -50,6 +50,28 @@ impl DamageDice {
     }
 }
 
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub enum ExtendedDamageDice {
+    Basic(DamageDice),
+    WeaponDice,
+    SingleWeaponDie, // used for brutal critical for example
+}
+
+impl ExtendedDamageDice {
+    pub fn get_single_die(dd: DamageDice) -> DamageDice {
+        match dd {
+            DamageDice::TwoD6 => DamageDice::D6,
+            d => d,
+        }
+    }
+}
+
+impl From<DamageDice> for ExtendedDamageDice {
+    fn from(value: DamageDice) -> Self {
+        ExtendedDamageDice::Basic(value)
+    }
+}
+
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum DamageFeature {
     GWF,
@@ -72,21 +94,33 @@ pub enum DamageType {
     Thunder,
 }
 
+#[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
+pub enum ExtendedDamageType {
+    Basic(DamageType),
+    WeaponDamage,
+}
+
+impl From<DamageType> for ExtendedDamageType {
+    fn from(value: DamageType) -> Self {
+        ExtendedDamageType::Basic(value)
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum DamageInstance {
-    Die(DamageDice),
-    Dice(u32, DamageDice),
+    Die(ExtendedDamageDice),
+    Dice(u32, ExtendedDamageDice),
     Const(isize),
 }
 
 #[derive(Debug, Copy, Clone)]
 pub struct DamageTerm {
     dmg: DamageInstance,
-    dmg_type: DamageType,
+    dmg_type: ExtendedDamageType,
 }
 
 impl DamageTerm {
-    pub fn new(dmg: DamageInstance, dmg_type: DamageType) -> Self {
+    pub fn new(dmg: DamageInstance, dmg_type: ExtendedDamageType) -> Self {
         DamageTerm {
             dmg,
             dmg_type,
@@ -97,14 +131,14 @@ impl DamageTerm {
         &self.dmg
     }
 
-    pub fn get_dmg_type(&self) -> &DamageType {
+    pub fn get_dmg_type(&self) -> &ExtendedDamageType {
         &self.dmg_type
     }
 }
 
 #[derive(Clone)]
 pub struct DamageSum {
-    dmg_dice: Vec<DamageDice>,
+    dmg_dice: Vec<ExtendedDamageDice>,
     dmg_const: isize,
     char_dmg: Option<AttributedBonus>,
 }
@@ -172,25 +206,46 @@ impl DamageSum {
         self.get_cached_char_dmg().map(|c| c + self.dmg_const)
     }
 
-    pub fn get_dmg_dice_rv<T>(&self, dmg_feats: &HashSet<DamageFeature>) -> RandomVariable<Ratio<T>>
+    fn get_die(ext_dice: &ExtendedDamageDice, weapon_dmg: Option<DamageDice>) -> Result<DamageDice, CBError> {
+        match ext_dice {
+            ExtendedDamageDice::Basic(d) => Ok(*d),
+            ExtendedDamageDice::WeaponDice => {
+                if let Some(d) = weapon_dmg {
+                    Ok(d)
+                } else {
+                    Err(CBError::NoWeaponSet)
+                }
+            },
+            ExtendedDamageDice::SingleWeaponDie => {
+                if let Some(d) = weapon_dmg {
+                    Ok(ExtendedDamageDice::get_single_die(d))
+                } else {
+                    Err(CBError::NoWeaponSet)
+                }
+            },
+        }
+    }
+
+    pub fn get_dmg_dice_rv<T>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<RandomVariable<Ratio<T>>, CBError>
     where
         T: Integer + Debug + Clone + Display + FromPrimitive,
         Ratio<T>: FromPrimitive
     {
         let gwf = dmg_feats.contains(&DamageFeature::GWF);
         let mut rv: RandomVariable<Ratio<T>> = RandomVariable::new_constant(0).unwrap();
-        for dice in self.dmg_dice.iter() {
+        for ext_dice in self.dmg_dice.iter() {
+            let dice = DamageSum::get_die(ext_dice, weapon_dmg)?;
             if gwf {
                 rv = rv.add_rv(&dice.get_rv_gwf());
             } else {
                 rv = rv.add_rv(&dice.get_rv());
             }
         }
-        rv
+        Ok(rv)
     }
 }
 
-type DamageExpression = HashMap<DamageType, DamageSum>;
+type DamageExpression = HashMap<ExtendedDamageType, DamageSum>;
 
 #[derive(Clone)]
 pub struct DamageManager {
@@ -198,6 +253,8 @@ pub struct DamageManager {
     bonus_crit_dmg: DamageExpression,
     miss_dmg: DamageExpression,
     damage_features: HashSet<DamageFeature>,
+    weapon_die: Option<DamageDice>,
+    weapon_dmg_type: Option<DamageType>,
 }
 
 impl DamageManager {
@@ -207,6 +264,8 @@ impl DamageManager {
             bonus_crit_dmg: HashMap::new(),
             miss_dmg: HashMap::new(),
             damage_features: HashSet::new(),
+            weapon_die: None,
+            weapon_dmg_type: None,
         }
     }
 
@@ -216,7 +275,7 @@ impl DamageManager {
             .or_insert(DamageSum::from(*dmg.get_dmg()));
     }
 
-    fn add_char_dmg_term(de: &mut DamageExpression, dmg_type: DamageType, dmg: BonusTerm) {
+    fn add_char_dmg_term(de: &mut DamageExpression, dmg_type: ExtendedDamageType, dmg: BonusTerm) {
         if de.contains_key(&dmg_type) {
             de.get_mut(&dmg_type).unwrap().add_char_dmg(dmg);
         } else {
@@ -224,24 +283,29 @@ impl DamageManager {
         }
     }
 
+    pub fn set_weapon(&mut self, die: DamageDice, dmg_type: DamageType) {
+        self.weapon_die = Some(die);
+        self.weapon_dmg_type = Some(dmg_type);
+    }
+
     pub fn add_base_dmg(&mut self, dmg: DamageTerm) {
         DamageManager::add_dmg_term(&mut self.base_dmg, dmg);
     }
-    pub fn add_base_char_dmg(&mut self, dmg_type: DamageType, dmg: BonusTerm) {
+    pub fn add_base_char_dmg(&mut self, dmg_type: ExtendedDamageType, dmg: BonusTerm) {
         DamageManager::add_char_dmg_term(&mut self.base_dmg, dmg_type, dmg);
     }
 
     pub fn add_bonus_crit_dmg(&mut self, dmg: DamageTerm) {
         DamageManager::add_dmg_term(&mut self.bonus_crit_dmg, dmg);
     }
-    pub fn add_crit_char_dmg(&mut self, dmg_type: DamageType, dmg: BonusTerm) {
+    pub fn add_crit_char_dmg(&mut self, dmg_type: ExtendedDamageType, dmg: BonusTerm) {
         DamageManager::add_char_dmg_term(&mut self.bonus_crit_dmg, dmg_type, dmg);
     }
 
     pub fn add_miss_dmg(&mut self, dmg: DamageTerm) {
         DamageManager::add_dmg_term(&mut self.miss_dmg, dmg);
     }
-    pub fn add_miss_char_dmg(&mut self, dmg_type: DamageType, dmg: BonusTerm) {
+    pub fn add_miss_char_dmg(&mut self, dmg_type: ExtendedDamageType, dmg: BonusTerm) {
         DamageManager::add_char_dmg_term(&mut self.miss_dmg, dmg_type, dmg);
     }
 
@@ -261,21 +325,33 @@ impl DamageManager {
         }
     }
 
-    fn get_total_dmg<T>(de: &DamageExpression, df: &HashSet<DamageFeature>, resistances: &HashSet<DamageType>, double_dice: bool) -> Result<RandomVariable<Ratio<T>>, CBError>
+    fn get_dmg_type(&self, edt: &ExtendedDamageType) -> Result<DamageType, CBError> {
+        match edt {
+            ExtendedDamageType::Basic(dt) => Ok(*dt),
+            ExtendedDamageType::WeaponDamage => {
+                if let Some(dt) = self.weapon_dmg_type {
+                    Ok(dt)
+                } else {
+                    Err(CBError::NoWeaponSet)
+                }
+            }
+        }
+    }
+
+    fn get_total_dmg<T>(&self, de: &DamageExpression, resistances: &HashSet<DamageType>, double_dice: bool) -> Result<RandomVariable<Ratio<T>>, CBError>
     where
         T: Integer + Debug + Clone + Display + FromPrimitive,
         Ratio<T>: FromPrimitive
     {
         let mut rv = RandomVariable::new_constant(0).unwrap();
         for (k, ds) in de.iter() {
-            let type_rv;
+            let mut type_rv = ds.get_dmg_dice_rv(&self.damage_features, self.weapon_die)?;
             if double_dice {
-                type_rv = ds.get_dmg_dice_rv(df).multiple(2);
-            } else {
-                type_rv = ds.get_dmg_dice_rv(df);
+                type_rv = type_rv.multiple(2);
             }
-            let type_rv = type_rv.add_const(ds.get_total_const()?);
-            if resistances.contains(k) {
+            type_rv = type_rv.add_const(ds.get_total_const()?);
+            let dmg_type = self.get_dmg_type(k)?;
+            if resistances.contains(&dmg_type) {
                 rv = rv.add_rv(&type_rv.half().unwrap());
             } else {
                 rv = rv.add_rv(&type_rv);
@@ -291,7 +367,7 @@ impl DamageManager {
         T: Integer + Debug + Clone + Display + FromPrimitive,
         Ratio<T>: FromPrimitive
     {
-        DamageManager::get_total_dmg(&self.base_dmg, &self.damage_features, resistances, false)
+        self.get_total_dmg(&self.base_dmg, resistances, false)
     }
 
     pub fn get_crit_dmg<T>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<Ratio<T>>, CBError>
@@ -300,9 +376,9 @@ impl DamageManager {
         Ratio<T>: FromPrimitive
     {
         // double base dice + base const
-        let mut rv = DamageManager::get_total_dmg(&self.base_dmg, &self.damage_features, resistances, true)?;
+        let mut rv = self.get_total_dmg(&self.base_dmg, resistances, true)?;
         // bonus crit dmg
-        rv = rv.add_rv(&DamageManager::get_total_dmg(&self.bonus_crit_dmg, &self.damage_features, resistances, false)?);
+        rv = rv.add_rv(&self.get_total_dmg(&self.bonus_crit_dmg, resistances, false)?);
         Ok(rv)
     }
 
@@ -311,7 +387,7 @@ impl DamageManager {
         T: Integer + Debug + Clone + Display + FromPrimitive,
         Ratio<T>: FromPrimitive
     {
-        DamageManager::get_total_dmg(&self.miss_dmg, &self.damage_features, resistances, false)
+        self.get_total_dmg(&self.miss_dmg, resistances, false)
     }
 
     // this is often easier for "half dmg on save" than building
@@ -345,8 +421,8 @@ mod tests {
     #[test]
     fn test_simple_dmg() {
         let mut dmg = DamageManager::new();
-        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Die(DamageDice::D6), DamageType::Bludgeoning));
-        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Const(3), DamageType::Bludgeoning));
+        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Die(ExtendedDamageDice::Basic(DamageDice::D6)), ExtendedDamageType::Basic(DamageType::Bludgeoning)));
+        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Const(3), ExtendedDamageType::Basic(DamageType::Bludgeoning)));
         let rv1: RandomVariable<Rational64> = dmg.get_base_dmg(&HashSet::new()).unwrap();
 
         let rv2: RandomVariable<Rational64> = RandomVariable::new_dice(6).unwrap();
@@ -363,10 +439,12 @@ mod tests {
     #[test]
     fn test_brutal_crit() {
         let mut dmg = DamageManager::new();
-        let d12_sl = DamageTerm::new(DamageInstance::Die(DamageDice::D12), DamageType::Slashing);
-        dmg.add_base_dmg(d12_sl);
-        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Const(5), DamageType::Slashing));
-        dmg.add_bonus_crit_dmg(d12_sl);
+        dmg.set_weapon(DamageDice::D12, DamageType::Slashing);
+        let weapon_dmg = DamageTerm::new(DamageInstance::Die(ExtendedDamageDice::WeaponDice), ExtendedDamageType::WeaponDamage);
+        dmg.add_base_dmg(weapon_dmg);
+        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Const(5), ExtendedDamageType::WeaponDamage));
+        let brutal_crit_dmg = DamageTerm::new(DamageInstance::Die(ExtendedDamageDice::SingleWeaponDie), ExtendedDamageType::WeaponDamage);
+        dmg.add_bonus_crit_dmg(brutal_crit_dmg);
         let rv1: RandomVariable<Rational64> = dmg.get_base_dmg(&HashSet::new()).unwrap();
 
         let d12: RandomVariable<Rational64> = RandomVariable::new_dice(12).unwrap();
@@ -382,8 +460,8 @@ mod tests {
     #[test]
     fn test_flame_strike() {
         let mut dmg = DamageManager::new();
-        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Dice(4,DamageDice::D6), DamageType::Fire));
-        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Dice(4,DamageDice::D6), DamageType::Radiant));
+        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Dice(4,DamageDice::D6.into()), DamageType::Fire.into()));
+        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Dice(4,DamageDice::D6.into()), DamageType::Radiant.into()));
         let rv1: RandomVariable<Rational64> = dmg.get_base_dmg(&HashSet::new()).unwrap();
         let rv2: RandomVariable<Rational64> = dmg.get_half_base_dmg(&HashSet::new()).unwrap();
 

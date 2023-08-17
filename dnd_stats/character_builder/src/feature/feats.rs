@@ -3,7 +3,7 @@ use crate::ability_scores::Ability;
 use crate::attributed_bonus::{BonusTerm, BonusType};
 use crate::Character;
 use crate::combat::{ActionName, ActionType, AttackType, CombatAction, CombatOption};
-use crate::damage::{DamageInstance, DamageTerm};
+use crate::damage::{DamageInstance, DamageTerm, ExtendedDamageType};
 use crate::equipment::{Weapon, WeaponProperty};
 use crate::feature::Feature;
 
@@ -15,7 +15,7 @@ impl GreatWeaponMaster {
             if wa.get_weapon().get_type().is_melee() && wa.get_weapon().has_property(WeaponProperty::Heavy) {
                 let mut new_wa = wa.clone();
                 new_wa.add_accuracy_bonus(BonusTerm::new_attr(BonusType::Constant(-5), String::from("gwm")));
-                new_wa.get_damage_mut().add_base_dmg(DamageTerm::new(DamageInstance::Const(10), *wa.get_weapon().get_dmg_type()));
+                new_wa.get_damage_mut().add_base_dmg(DamageTerm::new(DamageInstance::Const(10), ExtendedDamageType::WeaponDamage));
                 return Some(CombatOption::new(co.action_type, CombatAction::Attack(new_wa)));
             }
         }
@@ -87,7 +87,7 @@ impl Feature for PolearmMaster {
                 ActionName::PrimaryAttack(at) => {
                     let new_co = PolearmMaster::get_new_co(co);
                     if new_co.is_some() {
-                        new_actions.push((ActionName::BonusPAMAttack(*at),new_co.unwrap()));
+                        new_actions.push((ActionName::BonusPAMAttack(*at), new_co.unwrap()));
                     }
                 },
                 _ => {}
@@ -117,7 +117,7 @@ impl SharpShooter {
             if wa.get_weapon().get_type().is_ranged() {
                 let mut new_wa = wa.clone();
                 new_wa.add_accuracy_bonus(BonusTerm::new_attr(BonusType::Constant(-5), String::from("ss")));
-                new_wa.get_damage_mut().add_base_dmg(DamageTerm::new(DamageInstance::Const(10), *wa.get_weapon().get_dmg_type()));
+                new_wa.get_damage_mut().add_base_dmg(DamageTerm::new(DamageInstance::Const(10), ExtendedDamageType::WeaponDamage));
                 return Some(CombatOption::new(co.action_type, CombatAction::Attack(new_wa)));
             }
         }
@@ -160,11 +160,19 @@ mod tests {
     use rand_var::rv_traits::sequential::Pair;
     use crate::{Character, HitDice};
     use crate::ability_scores::Ability;
-    use crate::combat::{ActionName, AttackType, CombatAction};
-    use crate::combat::attack::AttackHitType;
+    use crate::combat::{ActionName, AttackType, CombatAction, CombatOption};
+    use crate::combat::attack::{AttackHitType, WeaponAttack};
     use crate::equipment::{Armor, Equipment, OffHand, Weapon};
-    use crate::feature::feats::{GreatWeaponMaster, Resilient, SharpShooter};
+    use crate::feature::feats::{GreatWeaponMaster, PolearmMaster, Resilient, SharpShooter};
     use crate::tests::{get_dex_based, get_str_based};
+
+    fn get_attack(option: &CombatOption) -> &WeaponAttack {
+        if let CombatAction::Attack(wa) = &option.action {
+            wa
+        } else {
+            panic!("should be an attack");
+        }
+    }
 
     #[test]
     fn resilient_test() {
@@ -190,12 +198,7 @@ mod tests {
         let mut fighter = Character::new(String::from("gwf"), get_str_based(), equipment);
         fighter.level_up(HitDice::D10, vec!(Box::new(GreatWeaponMaster)));
         let gwm_option = fighter.get_combat_option(ActionName::PrimaryAttack(AttackType::GWMAttack)).unwrap();
-        let gwm_attack;
-        if let CombatAction::Attack(wa) = &gwm_option.action {
-            gwm_attack = wa;
-        } else {
-            panic!("should be an attack");
-        }
+        let gwm_attack = get_attack(gwm_option);
         let acc = gwm_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
@@ -215,12 +218,7 @@ mod tests {
         let mut fighter = Character::new(String::from("sharpshooter"), get_dex_based(), equipment);
         fighter.level_up(HitDice::D10, vec!(Box::new(SharpShooter)));
         let ss_option = fighter.get_combat_option(ActionName::PrimaryAttack(AttackType::SSAttack)).unwrap();
-        let ss_attack;
-        if let CombatAction::Attack(wa) = &ss_option.action {
-            ss_attack = wa;
-        } else {
-            panic!("should be an attack");
-        }
+        let ss_attack = get_attack(ss_option);
         let acc = ss_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
@@ -232,16 +230,75 @@ mod tests {
 
     #[test]
     fn pam_test() {
-        todo!()
+        let equipment = Equipment::new(
+            Armor::chain_mail(),
+            Weapon::halberd(),
+            OffHand::Free
+        );
+        let mut fighter = Character::new(String::from("pam"), get_str_based(), equipment);
+        fighter.level_up(HitDice::D10, vec!(Box::new(PolearmMaster)));
+        let pam_option = fighter.get_combat_option(ActionName::BonusPAMAttack(AttackType::Normal)).unwrap();
+        let pam_attack = get_attack(pam_option);
+        let acc = pam_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
+        assert_eq!(Pair(1, 6), acc.lower_bound());
+        assert_eq!(Pair(20, 25), acc.upper_bound());
+        let dmg: RandomVariable<BigRational> = pam_attack.get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        assert_eq!(4, dmg.lower_bound());
+        assert_eq!(7, dmg.upper_bound());
+        assert_eq!(BigRational::new(BigInt::from_isize(11).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());
     }
 
     #[test]
     fn gwm_pam_test() {
-        todo!()
+        let equipment = Equipment::new(
+            Armor::chain_mail(),
+            Weapon::halberd(),
+            OffHand::Free
+        );
+        let mut fighter = Character::new(String::from("gwm-pam"), get_str_based(), equipment);
+        fighter.level_up(HitDice::D10, vec!(Box::new(GreatWeaponMaster)));
+        fighter.level_up(HitDice::D10, vec!());
+        fighter.level_up(HitDice::D10, vec!());
+        fighter.level_up(HitDice::D10, vec!(Box::new( PolearmMaster)));
+        assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::Normal)));
+        assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::GWMAttack)));
+        assert!(fighter.has_combat_option(ActionName::BonusPAMAttack(AttackType::Normal)));
+        assert!(fighter.has_combat_option(ActionName::BonusPAMAttack(AttackType::GWMAttack)));
+        let gwm_pam_option = fighter.get_combat_option(ActionName::BonusPAMAttack(AttackType::GWMAttack)).unwrap();
+        let gwm_pam_attack = get_attack(gwm_pam_option);
+        let acc = gwm_pam_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
+        assert_eq!(Pair(1, 1), acc.lower_bound());
+        assert_eq!(Pair(20, 20), acc.upper_bound());
+        let dmg: RandomVariable<BigRational> = gwm_pam_attack.get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        assert_eq!(14, dmg.lower_bound());
+        assert_eq!(17, dmg.upper_bound());
+        assert_eq!(BigRational::new(BigInt::from_isize(31).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());
     }
 
     #[test]
     fn pam_gwm_test() {
-        todo!()
+        let equipment = Equipment::new(
+            Armor::chain_mail(),
+            Weapon::halberd(),
+            OffHand::Free
+        );
+        let mut fighter = Character::new(String::from("pam-gwm"), get_str_based(), equipment);
+        fighter.level_up(HitDice::D10, vec!(Box::new(PolearmMaster)));
+        fighter.level_up(HitDice::D10, vec!());
+        fighter.level_up(HitDice::D10, vec!());
+        fighter.level_up(HitDice::D10, vec!(Box::new(GreatWeaponMaster)));
+        assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::Normal)));
+        assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::GWMAttack)));
+        assert!(fighter.has_combat_option(ActionName::BonusPAMAttack(AttackType::Normal)));
+        assert!(fighter.has_combat_option(ActionName::BonusPAMAttack(AttackType::GWMAttack)));
+        let pam_gwm_option = fighter.get_combat_option(ActionName::BonusPAMAttack(AttackType::GWMAttack)).unwrap();
+        let pam_gwm_attack = get_attack(pam_gwm_option);
+        let acc = pam_gwm_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
+        assert_eq!(Pair(1, 1), acc.lower_bound());
+        assert_eq!(Pair(20, 20), acc.upper_bound());
+        let dmg: RandomVariable<BigRational> = pam_gwm_attack.get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        assert_eq!(14, dmg.lower_bound());
+        assert_eq!(17, dmg.upper_bound());
+        assert_eq!(BigRational::new(BigInt::from_isize(31).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());
     }
 }

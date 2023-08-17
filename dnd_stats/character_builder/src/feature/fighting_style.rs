@@ -3,7 +3,7 @@ use crate::attributed_bonus::{BonusTerm, BonusType, CharacterDependant};
 use crate::Character;
 use crate::combat::attack::{HandType, NumHands};
 use crate::combat::CombatAction;
-use crate::damage::DamageFeature;
+use crate::damage::{DamageFeature, ExtendedDamageType};
 use crate::equipment::ArmorType;
 use crate::feature::Feature;
 
@@ -46,9 +46,8 @@ impl FightingStyle {
                             0
                         }
                     });
-                    let dmg_type = *attack.get_weapon().get_dmg_type();
                     attack.get_damage_mut().add_base_char_dmg(
-                        dmg_type,
+                        ExtendedDamageType::WeaponDamage,
                         BonusTerm::new_attr(BonusType::Dependant(dmg), String::from("dueling FS"))
                     );
                 }
@@ -71,9 +70,8 @@ impl FightingStyle {
             if let CombatAction::Attack(attack) = &mut co.action {
                 if attack.get_hand_type() == &HandType::OffHand {
                     let ability = *attack.get_ability();
-                    let dmg_type = *attack.get_weapon().get_dmg_type();
                     attack.get_damage_mut().add_base_char_dmg(
-                        dmg_type,
+                        ExtendedDamageType::WeaponDamage,
                         BonusTerm::new_attr(BonusType::Modifier(ability), String::from("twf FS"))
                     );
                 }

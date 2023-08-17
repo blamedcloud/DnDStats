@@ -63,7 +63,6 @@ impl From<(ActionType, CombatAction)> for CombatOption {
     }
 }
 
-// this will probably be replaced with a struct eventually
 pub type ActionManager = HashMap<ActionName, CombatOption>;
 
 pub fn create_action_manager(character: &Character) -> ActionManager {

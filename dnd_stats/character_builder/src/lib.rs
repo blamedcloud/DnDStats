@@ -19,6 +19,7 @@ pub mod feature;
 #[derive(Debug)]
 pub enum CBError {
     NoCache,
+    NoWeaponSet,
     RVError(RVError),
     Other(String),
 }
@@ -256,6 +257,10 @@ impl Character {
 
     pub fn get_combat_option(&self, an: ActionName) -> Option<&CombatOption> {
         self.combat_actions.get(&an)
+    }
+
+    pub fn has_combat_option(&self, an: ActionName) -> bool {
+        self.combat_actions.contains_key(&an)
     }
 }
 
