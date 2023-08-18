@@ -1,14 +1,13 @@
 use std::clone::Clone;
 use crate::ability_scores::Ability;
 use crate::attributed_bonus::{BonusTerm, BonusType};
-use crate::Character;
+use crate::{CBError, Character};
 use crate::combat::{ActionName, ActionType, AttackType, CombatAction, CombatOption};
 use crate::damage::{DamageInstance, DamageTerm, ExtendedDamageType};
 use crate::equipment::{Weapon, WeaponProperty};
 use crate::feature::Feature;
 
 pub struct GreatWeaponMaster;
-
 impl GreatWeaponMaster {
     pub fn get_new_co(co: &CombatOption) -> Option<CombatOption> {
         if let CombatAction::Attack(wa) = &co.action {
@@ -22,9 +21,8 @@ impl GreatWeaponMaster {
         None
     }
 }
-
 impl Feature for GreatWeaponMaster {
-    fn apply(&self, character: &mut Character) {
+    fn apply(&self, character: &mut Character) -> Result<(), CBError> {
         let mut new_actions: Vec<(ActionName, CombatOption)> = Vec::new();
         for (ca, co) in character.combat_actions.iter() {
             match ca {
@@ -53,11 +51,11 @@ impl Feature for GreatWeaponMaster {
             character.combat_actions.insert(ca, co);
         }
         character.combat_actions.insert(ActionName::BonusGWMAttack, CombatOption::new(ActionType::BonusAction, CombatAction::AdditionalAttacks(1)));
+        Ok(())
     }
 }
 
 pub struct PolearmMaster;
-
 impl PolearmMaster {
     pub fn is_valid_weapon(weapon: &Weapon) -> bool {
         let name = weapon.get_name();
@@ -78,9 +76,8 @@ impl PolearmMaster {
         None
     }
 }
-
 impl Feature for PolearmMaster {
-    fn apply(&self, character: &mut Character) {
+    fn apply(&self, character: &mut Character) -> Result<(), CBError> {
         let mut new_actions: Vec<(ActionName, CombatOption)> = Vec::new();
         for (ca, co) in character.combat_actions.iter() {
             match ca {
@@ -96,21 +93,21 @@ impl Feature for PolearmMaster {
         for (ca, co) in new_actions.into_iter() {
             character.combat_actions.insert(ca, co);
         }
+        Ok(())
     }
 }
 
-pub struct Resilient(Ability);
-
+pub struct Resilient(pub Ability);
 impl Feature for Resilient {
-    fn apply(&self, character: &mut Character) {
+    fn apply(&self, character: &mut Character) -> Result<(), CBError> {
         let ability = character.ability_scores.get_score_mut(&self.0);
         ability.increase();
         ability.set_prof_save(true);
+        Ok(())
     }
 }
 
 pub struct SharpShooter;
-
 impl SharpShooter {
     pub fn get_new_co(co: &CombatOption) -> Option<CombatOption> {
         if let CombatAction::Attack(wa) = &co.action {
@@ -124,9 +121,8 @@ impl SharpShooter {
         None
     }
 }
-
 impl Feature for SharpShooter {
-    fn apply(&self, character: &mut Character) {
+    fn apply(&self, character: &mut Character) -> Result<(), CBError> {
         let mut new_actions: Vec<(ActionName, CombatOption)> = Vec::new();
         for (ca, co) in character.combat_actions.iter() {
             match ca {
@@ -148,6 +144,7 @@ impl Feature for SharpShooter {
         for (ca, co) in new_actions.into_iter() {
             character.combat_actions.insert(ca, co);
         }
+        Ok(())
     }
 }
 
@@ -158,8 +155,10 @@ mod tests {
     use rand_var::RandomVariable;
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use rand_var::rv_traits::sequential::Pair;
-    use crate::{Character, HitDice};
+    use crate::Character;
     use crate::ability_scores::Ability;
+    use crate::classes::ClassName;
+    use crate::classes::fighter::ChampionFighter;
     use crate::combat::{ActionName, AttackType, CombatAction, CombatOption};
     use crate::combat::attack::{AttackHitType, WeaponAttack};
     use crate::equipment::{Armor, Equipment, OffHand, Weapon};
@@ -182,7 +181,7 @@ mod tests {
             OffHand::Free
         );
         let mut fighter = Character::new(String::from("gwf"), get_str_based(), equipment);
-        fighter.level_up(HitDice::D10, vec!(Box::new(Resilient(Ability::WIS))));
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(Resilient(Ability::WIS)))).unwrap();
         let wis = fighter.ability_scores.wisdom;
         assert_eq!(14, wis.get_score());
         assert!(wis.is_prof_save());
@@ -196,7 +195,7 @@ mod tests {
             OffHand::Free
         );
         let mut fighter = Character::new(String::from("gwf"), get_str_based(), equipment);
-        fighter.level_up(HitDice::D10, vec!(Box::new(GreatWeaponMaster)));
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(GreatWeaponMaster))).unwrap();
         let gwm_option = fighter.get_combat_option(ActionName::PrimaryAttack(AttackType::GWMAttack)).unwrap();
         let gwm_attack = get_attack(gwm_option);
         let acc = gwm_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
@@ -216,7 +215,7 @@ mod tests {
             OffHand::Free
         );
         let mut fighter = Character::new(String::from("sharpshooter"), get_dex_based(), equipment);
-        fighter.level_up(HitDice::D10, vec!(Box::new(SharpShooter)));
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(SharpShooter))).unwrap();
         let ss_option = fighter.get_combat_option(ActionName::PrimaryAttack(AttackType::SSAttack)).unwrap();
         let ss_attack = get_attack(ss_option);
         let acc = ss_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
@@ -236,7 +235,7 @@ mod tests {
             OffHand::Free
         );
         let mut fighter = Character::new(String::from("pam"), get_str_based(), equipment);
-        fighter.level_up(HitDice::D10, vec!(Box::new(PolearmMaster)));
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(PolearmMaster))).unwrap();
         let pam_option = fighter.get_combat_option(ActionName::BonusPAMAttack(AttackType::Normal)).unwrap();
         let pam_attack = get_attack(pam_option);
         let acc = pam_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
@@ -256,10 +255,10 @@ mod tests {
             OffHand::Free
         );
         let mut fighter = Character::new(String::from("gwm-pam"), get_str_based(), equipment);
-        fighter.level_up(HitDice::D10, vec!(Box::new(GreatWeaponMaster)));
-        fighter.level_up(HitDice::D10, vec!());
-        fighter.level_up(HitDice::D10, vec!());
-        fighter.level_up(HitDice::D10, vec!(Box::new( PolearmMaster)));
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(GreatWeaponMaster))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!()).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChampionFighter))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new( PolearmMaster))).unwrap();
         assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::Normal)));
         assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::GWMAttack)));
         assert!(fighter.has_combat_option(ActionName::BonusPAMAttack(AttackType::Normal)));
@@ -283,10 +282,10 @@ mod tests {
             OffHand::Free
         );
         let mut fighter = Character::new(String::from("pam-gwm"), get_str_based(), equipment);
-        fighter.level_up(HitDice::D10, vec!(Box::new(PolearmMaster)));
-        fighter.level_up(HitDice::D10, vec!());
-        fighter.level_up(HitDice::D10, vec!());
-        fighter.level_up(HitDice::D10, vec!(Box::new(GreatWeaponMaster)));
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(PolearmMaster))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!()).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChampionFighter))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(GreatWeaponMaster))).unwrap();
         assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::Normal)));
         assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::GWMAttack)));
         assert!(fighter.has_combat_option(ActionName::BonusPAMAttack(AttackType::Normal)));

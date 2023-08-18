@@ -1,6 +1,6 @@
 use std::rc::Rc;
 use crate::attributed_bonus::{BonusTerm, BonusType, CharacterDependant};
-use crate::Character;
+use crate::{CBError, Character};
 use crate::combat::attack::{HandType, NumHands};
 use crate::combat::CombatAction;
 use crate::damage::{DamageFeature, ExtendedDamageType};
@@ -81,7 +81,7 @@ impl FightingStyle {
 }
 
 impl Feature for FightingStyle {
-    fn apply(&self, character: &mut Character) {
+    fn apply(&self, character: &mut Character) -> Result<(), CBError> {
         match self.0 {
             FightingStyles::Archery => FightingStyle::archery(character),
             FightingStyles::Defense => FightingStyle::defense(character),
@@ -89,6 +89,7 @@ impl Feature for FightingStyle {
             FightingStyles::GreatWeaponFighting => FightingStyle::gwf(character),
             FightingStyles::TwoWeaponFighting => FightingStyle::twf(character),
         }
+        Ok(())
     }
 }
 
@@ -100,7 +101,8 @@ mod tests {
     use rand_var::RandomVariable;
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use rand_var::rv_traits::sequential::Pair;
-    use crate::{Character, HitDice};
+    use crate::Character;
+    use crate::classes::ClassName;
     use crate::combat::attack::AttackHitType;
     use crate::equipment::{ACSource, Armor, Equipment, OffHand, Weapon};
     use crate::tests::{get_dex_based, get_str_based};
@@ -114,7 +116,7 @@ mod tests {
             OffHand::Free,
         );
         let mut archer = Character::new(String::from("archer"), get_dex_based(), equipment);
-        archer.level_up(HitDice::D10, vec!(Box::new(FightingStyle(FightingStyles::Archery))));
+        archer.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::Archery)))).unwrap();
         let attack = archer.get_basic_attack().unwrap();
         let acc = attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
         assert_eq!(Pair(1, 8), acc.lower_bound());
@@ -129,7 +131,7 @@ mod tests {
             OffHand::Shield(ACSource::shield())
         );
         let mut fighter = Character::new(String::from("armored"), get_str_based(), equipment);
-        fighter.level_up(HitDice::D10, vec!(Box::new(FightingStyle(FightingStyles::Defense))));
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::Defense)))).unwrap();
         assert_eq!(21, fighter.get_ac());
     }
 
@@ -141,7 +143,7 @@ mod tests {
             OffHand::Shield(ACSource::shield())
         );
         let mut fighter = Character::new(String::from("duelist"), get_dex_based(), equipment);
-        fighter.level_up(HitDice::D10, vec!(Box::new(FightingStyle(FightingStyles::Dueling))));
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::Dueling)))).unwrap();
         let dmg: RandomVariable<BigRational> = fighter.get_basic_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
         assert_eq!(6, dmg.lower_bound());
         assert_eq!(13, dmg.upper_bound());
@@ -156,7 +158,7 @@ mod tests {
             OffHand::Free
         );
         let mut fighter = Character::new(String::from("gwf"), get_str_based(), equipment);
-        fighter.level_up(HitDice::D10, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting))));
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         let dmg: RandomVariable<BigRational> = fighter.get_basic_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
         assert_eq!(5, dmg.lower_bound());
         assert_eq!(15, dmg.upper_bound());
@@ -172,7 +174,7 @@ mod tests {
             OffHand::Weapon(Weapon::shortsword())
         );
         let mut fighter = Character::new(String::from("kirito"), get_dex_based(), equipment);
-        fighter.level_up(HitDice::D10, vec!(Box::new(FightingStyle(FightingStyles::TwoWeaponFighting))));
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::TwoWeaponFighting)))).unwrap();
         let main_dmg: RandomVariable<BigRational> = fighter.get_basic_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
         let off_dmg: RandomVariable<BigRational> = fighter.get_offhand_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
         assert_eq!(main_dmg, off_dmg);

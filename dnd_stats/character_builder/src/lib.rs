@@ -1,9 +1,11 @@
 use std::cmp::min;
+use std::collections::HashMap;
 use std::ops::Add;
 use std::rc::Rc;
 use rand_var::rv_traits::RVError;
 use crate::ability_scores::AbilityScores;
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType, CharacterDependant};
+use crate::classes::{ClassName, SubClass};
 use crate::combat::{ActionManager, ActionName, AttackType, CombatAction, CombatOption, create_action_manager};
 use crate::combat::attack::WeaponAttack;
 use crate::equipment::{ArmorType, Equipment};
@@ -11,6 +13,7 @@ use crate::feature::Feature;
 
 pub mod ability_scores;
 pub mod attributed_bonus;
+pub mod classes;
 pub mod combat;
 pub mod damage;
 pub mod equipment;
@@ -20,6 +23,9 @@ pub mod feature;
 pub enum CBError {
     NoCache,
     NoWeaponSet,
+    NotImplemented,
+    NoSubClassSet,
+    InvalidLevel,
     RVError(RVError),
     Other(String),
 }
@@ -92,7 +98,8 @@ pub struct Character {
     name: String,
     ability_scores: AbilityScores,
     level: u8,
-    hit_dice: Vec<HitDice>,
+    class_lvls: Vec<ClassName>,
+    sub_classes: HashMap<ClassName, Rc<dyn SubClass>>,
     equipment: Equipment,
     armor_class: AttributedBonus,
     combat_actions: ActionManager,
@@ -104,7 +111,8 @@ impl Character {
             name,
             ability_scores,
             level: 0,
-            hit_dice: Vec::new(),
+            class_lvls: Vec::new(),
+            sub_classes: HashMap::new(),
             equipment,
             armor_class: AttributedBonus::new(String::from("AC")),
             combat_actions: ActionManager::new(),
@@ -179,13 +187,22 @@ impl Character {
         }
     }
 
-    pub fn level_up(&mut self, hit_die: HitDice, features: Vec<Box<dyn Feature>>) {
-        for feat in features {
-            feat.apply(self);
-        }
+    pub fn level_up(&mut self, class: ClassName, features: Vec<Box<dyn Feature>>) -> Result<(), CBError> {
         self.level += 1;
-        self.hit_dice.push(hit_die);
+        if self.level == 1 {
+            class.get_save_profs().apply(self)?;
+        }
+        for feat in features {
+            feat.apply(self)?;
+        }
+        self.class_lvls.push(class);
+        let class_level = self.get_class_level(class);
+        let class_features = class.get_class()?.get_static_features(class_level)?;
+        for feat in class_features {
+            feat.apply(self)?;
+        }
         self.cache_self();
+        Ok(())
     }
 
     pub fn get_name(&self) -> &str {
@@ -199,6 +216,21 @@ impl Character {
     //     &mut self.ability_scores
     // }
 
+    pub fn get_class_levels(&self) -> &Vec<ClassName> {
+        &self.class_lvls
+    }
+    pub fn get_class_level(&self, class: ClassName) -> u8 {
+        self.class_lvls.iter().filter(|c| **c == class).map(|_| 1).sum()
+    }
+
+    pub fn get_sub_class(&self, class: ClassName) -> Result<Rc<dyn SubClass>, CBError> {
+        if let Some(sub) = self.sub_classes.get(&class) {
+            Ok(sub.clone())
+        } else {
+            Err(CBError::NoSubClassSet)
+        }
+    }
+
     pub fn get_level(&self) -> u8 {
         self.level
     }
@@ -208,7 +240,7 @@ impl Character {
 
     pub fn get_max_hp(&self) -> isize {
         let mut max_hp = 0;
-        let mut hd_iter = self.hit_dice.iter();
+        let mut hd_iter = self.class_lvls.iter().map(|c| c.get_hit_die());
         let first_hd = hd_iter.next();
         if first_hd.is_some() {
             max_hp += first_hd.unwrap().get_max();
@@ -266,9 +298,7 @@ impl Character {
 
 #[cfg(test)]
 mod tests {
-    use crate::ability_scores::Ability;
     use crate::equipment::{ACSource, Armor, OffHand, Weapon};
-    use crate::feature::SaveProficiencies;
     use super::*;
 
     pub fn get_str_based() -> AbilityScores {
@@ -288,7 +318,7 @@ mod tests {
             OffHand::Free,
         );
         let mut fighter = Character::new(name, ability_scores, equipment);
-        fighter.level_up(HitDice::D10, vec!(Box::new(SaveProficiencies::from(vec![Ability::STR, Ability::CON]))));
+        fighter.level_up(ClassName::Fighter, vec!()).unwrap();
         fighter
     }
 

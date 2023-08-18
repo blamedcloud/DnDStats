@@ -17,10 +17,8 @@ pub enum ActionType {
 #[derive(Clone)]
 pub enum CombatAction {
     Attack(WeaponAttack),
-    Hide,
-    Dash,
-    Disengage,
     AdditionalAttacks(u8),
+    ByName,
 }
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
@@ -37,6 +35,8 @@ pub enum ActionName {
     BonusPAMAttack(AttackType),
     AttackAction,
     BonusGWMAttack,
+    SecondWind,
+    ActionSurge,
 }
 
 #[derive(Clone)]
