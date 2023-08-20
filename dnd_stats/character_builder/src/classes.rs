@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use crate::ability_scores::Ability;
 use crate::feature::{Feature, SaveProficiencies};
 use crate::{CBError, Character, HitDice};
@@ -16,8 +17,20 @@ pub trait Class {
     }
 }
 
-pub trait SubClass : Feature {
+pub trait SubClass {
+    fn get_class_name(&self) -> ClassName;
     fn get_static_features(&self, level: u8) -> Result<Vec<Box<dyn Feature>>, CBError>;
+}
+
+pub struct ChooseSubClass<SC: SubClass + Clone>(pub SC);
+impl<SC> Feature for ChooseSubClass<SC>
+where
+    SC: SubClass + Clone + 'static,
+{
+    fn apply(&self, character: &mut Character) -> Result<(), CBError> {
+        character.sub_classes.insert(self.0.get_class_name(),  Rc::new(self.0.clone()));
+        Ok(())
+    }
 }
 
 pub struct SubclassFeatures {

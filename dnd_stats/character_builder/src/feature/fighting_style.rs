@@ -16,7 +16,7 @@ pub enum FightingStyles {
     TwoWeaponFighting,
 }
 
-pub struct FightingStyle(FightingStyles);
+pub struct FightingStyle(pub FightingStyles);
 
 impl FightingStyle {
     pub fn archery(character: &mut Character) {

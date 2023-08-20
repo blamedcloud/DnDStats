@@ -24,6 +24,7 @@ pub enum CBError {
     NoCache,
     NoWeaponSet,
     NotImplemented,
+    NoClassSet,
     NoSubClassSet,
     InvalidLevel,
     RVError(RVError),
@@ -202,6 +203,12 @@ impl Character {
             feat.apply(self)?;
         }
         self.cache_self();
+        Ok(())
+    }
+
+    pub fn level_up_basic(&mut self) -> Result<(), CBError> {
+        let class = self.class_lvls.last().ok_or(CBError::NoClassSet)?;
+        self.level_up(*class, Vec::new())?;
         Ok(())
     }
 

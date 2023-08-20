@@ -157,7 +157,7 @@ mod tests {
     use rand_var::rv_traits::sequential::Pair;
     use crate::Character;
     use crate::ability_scores::Ability;
-    use crate::classes::ClassName;
+    use crate::classes::{ChooseSubClass, ClassName};
     use crate::classes::fighter::ChampionFighter;
     use crate::combat::{ActionName, AttackType, CombatAction, CombatOption};
     use crate::combat::attack::{AttackHitType, WeaponAttack};
@@ -257,7 +257,7 @@ mod tests {
         let mut fighter = Character::new(String::from("gwm-pam"), get_str_based(), equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(GreatWeaponMaster))).unwrap();
         fighter.level_up(ClassName::Fighter, vec!()).unwrap();
-        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChampionFighter))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(ChampionFighter)))).unwrap();
         fighter.level_up(ClassName::Fighter, vec!(Box::new( PolearmMaster))).unwrap();
         assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::Normal)));
         assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::GWMAttack)));
@@ -284,7 +284,7 @@ mod tests {
         let mut fighter = Character::new(String::from("pam-gwm"), get_str_based(), equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(PolearmMaster))).unwrap();
         fighter.level_up(ClassName::Fighter, vec!()).unwrap();
-        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChampionFighter))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(ChampionFighter)))).unwrap();
         fighter.level_up(ClassName::Fighter, vec!(Box::new(GreatWeaponMaster))).unwrap();
         assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::Normal)));
         assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::GWMAttack)));

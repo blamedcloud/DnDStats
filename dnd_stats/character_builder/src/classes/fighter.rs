@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use crate::{CBError, Character};
 use crate::classes::{Class, ClassName, SubClass};
 use crate::combat::{ActionName, ActionType, CombatAction, CombatOption};
@@ -20,19 +19,30 @@ impl Class for FighterClass {
             6 => Ok(Vec::new()),
             7 => Ok(self.get_subclass_features(level)),
             8 => Ok(Vec::new()),
-            _ => Err(CBError::NotImplemented)
+            9 => Ok(vec!(Box::new(Indomitable))),
+            10 => Ok(self.get_subclass_features(level)),
+            11 => Ok(vec!(Box::new(ExtraAttack(3)))),
+            12 => Ok(Vec::new()),
+            13 => Ok(Vec::new()), // Indomitable (2 uses)
+            14 => Ok(Vec::new()),
+            15 => Ok(self.get_subclass_features(level)),
+            16 => Ok(Vec::new()),
+            17 => Ok(Vec::new()), // AS, Ind (2,3 uses)
+            18 => Ok(self.get_subclass_features(level)),
+            19 => Ok(Vec::new()),
+            20 => Ok(vec!(Box::new(ExtraAttack(4)))),
+            _ => Err(CBError::InvalidLevel)
         }
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct ChampionFighter;
-impl Feature for ChampionFighter {
-    fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        character.sub_classes.insert(ClassName::Fighter, Rc::new(ChampionFighter));
-        Ok(())
-    }
-}
 impl SubClass for ChampionFighter {
+    fn get_class_name(&self) -> ClassName {
+        ClassName::Fighter
+    }
+
     fn get_static_features(&self, level: u8) -> Result<Vec<Box<dyn Feature>>, CBError> {
         match level {
             3 => Ok(vec!(Box::new(ImprovedCritical(19)))),
@@ -61,6 +71,14 @@ impl Feature for ActionSurge {
     }
 }
 
+pub struct Indomitable;
+impl Feature for Indomitable {
+    fn apply(&self, character: &mut Character) -> Result<(), CBError> {
+        character.combat_actions.insert(ActionName::Indomitable, CombatOption::new(ActionType::FreeAction, CombatAction::ByName));
+        Ok(())
+    }
+}
+
 pub struct ImprovedCritical(pub isize);
 impl Feature for ImprovedCritical {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
@@ -70,5 +88,52 @@ impl Feature for ImprovedCritical {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ability_scores::Ability;
+    use crate::Character;
+    use crate::classes::{ChooseSubClass, ClassName};
+    use crate::classes::fighter::ChampionFighter;
+    use crate::equipment::{Armor, Equipment, OffHand, Weapon};
+    use crate::feature::AbilityScoreIncrease;
+    use crate::feature::feats::{GreatWeaponMaster, Resilient};
+    use crate::feature::fighting_style::{FightingStyle, FightingStyles};
+    use crate::tests::get_str_based;
+
+    #[test]
+    fn lvl_20_fighter() {
+        let equipment = Equipment::new(
+            Armor::chain_mail(),
+            Weapon::greatsword(),
+            OffHand::Free
+        );
+        let mut fighter = Character::new(String::from("lvl20fighter"), get_str_based(), equipment);
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
+        fighter.level_up_basic().unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(ChampionFighter)))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(GreatWeaponMaster))).unwrap();
+        fighter.level_up_basic().unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(AbilityScoreIncrease::from(Ability::STR)))).unwrap();
+        fighter.level_up_basic().unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(AbilityScoreIncrease::from(Ability::STR)))).unwrap();
+        fighter.level_up_basic().unwrap();
+        fighter.level_up_basic().unwrap();
+        fighter.level_up_basic().unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(AbilityScoreIncrease::from(Ability::CON)))).unwrap();
+        fighter.level_up_basic().unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(AbilityScoreIncrease::from(Ability::CON)))).unwrap();
+        fighter.level_up_basic().unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(Resilient(Ability::WIS)))).unwrap();
+        fighter.level_up_basic().unwrap();
+        fighter.level_up_basic().unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(AbilityScoreIncrease::from(Ability::WIS)))).unwrap();
+        fighter.level_up_basic().unwrap();
+        assert_eq!(20, fighter.get_level());
+        assert_eq!(20, fighter.ability_scores.strength.get_score());
+        assert_eq!(20, fighter.ability_scores.constitution.get_score());
+        assert_eq!(16, fighter.ability_scores.wisdom.get_score());
     }
 }

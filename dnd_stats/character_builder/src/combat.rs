@@ -37,6 +37,7 @@ pub enum ActionName {
     BonusGWMAttack,
     SecondWind,
     ActionSurge,
+    Indomitable,
 }
 
 #[derive(Clone)]
