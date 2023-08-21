@@ -1,13 +1,15 @@
 use std::collections::HashSet;
 use character_builder::combat::ActionManager;
 use character_builder::damage::DamageType;
-use crate::Participant;
+use character_builder::resources::ResourceManager;
+use crate::participant::Participant;
 
 pub struct TargetDummy {
     max_hp: isize,
     ac: isize,
     resistances: HashSet<DamageType>,
     action_manager: ActionManager,
+    resource_manager: ResourceManager,
 }
 
 impl TargetDummy {
@@ -17,6 +19,7 @@ impl TargetDummy {
             ac,
             resistances: HashSet::new(),
             action_manager: ActionManager::new(),
+            resource_manager: ResourceManager::new(),
         }
     }
 }
@@ -36,5 +39,13 @@ impl Participant for TargetDummy {
 
     fn get_action_manager(&self) -> &ActionManager {
         &self.action_manager
+    }
+
+    fn get_resource_manager(&self) -> &ResourceManager {
+        &self.resource_manager
+    }
+
+    fn get_resource_manager_mut(&mut self) -> &mut ResourceManager {
+        &mut self.resource_manager
     }
 }

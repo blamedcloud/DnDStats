@@ -55,8 +55,8 @@ impl Feature for GreatWeaponMaster {
 
         let mut res = Resource::new(ResourceCap::Soft(1));
         res.drain();
-        res.add_refresh(RefreshTiming::StartTurn, RefreshBy::ToEmpty);
-        res.add_refresh(RefreshTiming::EndTurn, RefreshBy::ToEmpty);
+        res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToEmpty);
+        res.add_refresh(RefreshTiming::EndMyTurn, RefreshBy::ToEmpty);
         character.resource_manager.add_perm(ResourceName::AN(ActionName::BonusGWMAttack), res);
 
         Ok(())

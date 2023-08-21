@@ -313,6 +313,9 @@ impl Character {
     pub fn get_resource_manager(&self) -> &ResourceManager {
         &self.resource_manager
     }
+    pub fn get_resource_manager_mut(&mut self) -> &mut ResourceManager {
+        &mut self.resource_manager
+    }
 
     pub fn get_resistances(&self) -> &HashSet<DamageType> {
         &self.resistances

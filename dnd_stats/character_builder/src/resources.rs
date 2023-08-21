@@ -10,8 +10,12 @@ pub enum ResourceName {
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum RefreshTiming {
-    StartTurn,
-    EndTurn,
+    StartRound,
+    EndRound,
+    StartMyTurn,
+    EndMyTurn,
+    StartOtherTurn,
+    EndOtherTurn,
     ShortRest,
     LongRest,
 }
@@ -181,7 +185,7 @@ impl ResourceManager {
 pub fn create_resource_manager() -> ResourceManager {
     let mut rm = ResourceManager::new();
     let mut at_res = Resource::new(ResourceCap::Soft(1));
-    at_res.add_refresh(RefreshTiming::StartTurn, RefreshBy::ToFull);
+    at_res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToFull);
 
     rm.add_perm(ResourceName::AT(ActionType::Action), at_res.clone());
     rm.add_perm(ResourceName::AT(ActionType::BonusAction), at_res.clone());
@@ -189,8 +193,8 @@ pub fn create_resource_manager() -> ResourceManager {
     rm.add_perm(ResourceName::AT(ActionType::Movement), at_res);
 
     let mut sa_res = Resource::new(ResourceCap::Soft(0));
-    sa_res.add_refresh(RefreshTiming::StartTurn, RefreshBy::ToEmpty);
-    sa_res.add_refresh(RefreshTiming::EndTurn, RefreshBy::ToEmpty);
+    sa_res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToEmpty);
+    sa_res.add_refresh(RefreshTiming::EndMyTurn, RefreshBy::ToEmpty);
     rm.add_perm(ResourceName::AT(ActionType::SingleAttack), sa_res);
 
     rm
