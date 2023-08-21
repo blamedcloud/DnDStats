@@ -6,6 +6,7 @@ use crate::combat::{ActionName, ActionType, AttackType, CombatAction, CombatOpti
 use crate::damage::{DamageInstance, DamageTerm, ExtendedDamageType};
 use crate::equipment::{Weapon, WeaponProperty};
 use crate::feature::Feature;
+use crate::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, ResourceName};
 
 pub struct GreatWeaponMaster;
 impl GreatWeaponMaster {
@@ -51,6 +52,13 @@ impl Feature for GreatWeaponMaster {
             character.combat_actions.insert(ca, co);
         }
         character.combat_actions.insert(ActionName::BonusGWMAttack, CombatOption::new(ActionType::BonusAction, CombatAction::AdditionalAttacks(1)));
+
+        let mut res = Resource::new(ResourceCap::Soft(1));
+        res.drain();
+        res.add_refresh(RefreshTiming::StartTurn, RefreshBy::ToEmpty);
+        res.add_refresh(RefreshTiming::EndTurn, RefreshBy::ToEmpty);
+        character.resource_manager.add_perm(ResourceName::AN(ActionName::BonusGWMAttack), res);
+
         Ok(())
     }
 }

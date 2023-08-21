@@ -57,4 +57,3 @@ impl Feature for ExtraAttack {
         Ok(())
     }
 }
-

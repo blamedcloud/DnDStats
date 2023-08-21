@@ -1,5 +1,5 @@
 use std::cmp::min;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Add;
 use std::rc::Rc;
 use rand_var::rv_traits::RVError;
@@ -8,8 +8,10 @@ use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType, CharacterDe
 use crate::classes::{ClassName, SubClass};
 use crate::combat::{ActionManager, ActionName, AttackType, CombatAction, CombatOption, create_action_manager};
 use crate::combat::attack::WeaponAttack;
+use crate::damage::DamageType;
 use crate::equipment::{ArmorType, Equipment};
 use crate::feature::Feature;
+use crate::resources::{create_resource_manager, ResourceManager};
 
 pub mod ability_scores;
 pub mod attributed_bonus;
@@ -18,6 +20,7 @@ pub mod combat;
 pub mod damage;
 pub mod equipment;
 pub mod feature;
+pub mod resources;
 
 #[derive(Debug)]
 pub enum CBError {
@@ -104,6 +107,8 @@ pub struct Character {
     equipment: Equipment,
     armor_class: AttributedBonus,
     combat_actions: ActionManager,
+    resource_manager: ResourceManager,
+    resistances: HashSet<DamageType>,
 }
 
 impl Character {
@@ -117,6 +122,8 @@ impl Character {
             equipment,
             armor_class: AttributedBonus::new(String::from("AC")),
             combat_actions: ActionManager::new(),
+            resource_manager: create_resource_manager(),
+            resistances: HashSet::new(),
         };
         character.calc_ac();
         character.combat_actions = create_action_manager(&character);
@@ -290,6 +297,7 @@ impl Character {
         })
     }
 
+
     pub fn get_action_manager(&self) -> &ActionManager {
         &self.combat_actions
     }
@@ -300,6 +308,14 @@ impl Character {
 
     pub fn has_combat_option(&self, an: ActionName) -> bool {
         self.combat_actions.contains_key(&an)
+    }
+
+    pub fn get_resource_manager(&self) -> &ResourceManager {
+        &self.resource_manager
+    }
+
+    pub fn get_resistances(&self) -> &HashSet<DamageType> {
+        &self.resistances
     }
 }
 
@@ -316,7 +332,7 @@ mod tests {
         AbilityScores::new(12,16,16,8,13,10)
     }
 
-    pub fn get_test_fighter() -> Character {
+    pub fn get_test_fighter_lvl0() -> Character {
         let name = String::from("FighterMan");
         let ability_scores = get_str_based();
         let equipment = Equipment::new(
@@ -324,7 +340,11 @@ mod tests {
             Weapon::greatsword(),
             OffHand::Free,
         );
-        let mut fighter = Character::new(name, ability_scores, equipment);
+        Character::new(name, ability_scores, equipment)
+    }
+
+    pub fn get_test_fighter() -> Character {
+        let mut fighter = get_test_fighter_lvl0();
         fighter.level_up(ClassName::Fighter, vec!()).unwrap();
         fighter
     }

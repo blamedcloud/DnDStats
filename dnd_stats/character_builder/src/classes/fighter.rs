@@ -2,6 +2,7 @@ use crate::{CBError, Character};
 use crate::classes::{Class, ClassName, SubClass};
 use crate::combat::{ActionName, ActionType, CombatAction, CombatOption};
 use crate::feature::{ExtraAttack, Feature};
+use crate::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, ResourceName};
 
 pub struct FighterClass;
 impl Class for FighterClass {
@@ -12,22 +13,22 @@ impl Class for FighterClass {
     fn get_static_features(&self, level: u8) -> Result<Vec<Box<dyn Feature>>, CBError> {
         match level {
             1 => Ok(vec!(Box::new(SecondWind))),
-            2 => Ok(vec!(Box::new(ActionSurge))),
+            2 => Ok(vec!(Box::new(ActionSurge(1)))),
             3 => Ok(self.get_subclass_features(level)),
             4 => Ok(Vec::new()),
             5 => Ok(vec!(Box::new(ExtraAttack(2)))),
             6 => Ok(Vec::new()),
             7 => Ok(self.get_subclass_features(level)),
             8 => Ok(Vec::new()),
-            9 => Ok(vec!(Box::new(Indomitable))),
+            9 => Ok(vec!(Box::new(Indomitable(1)))),
             10 => Ok(self.get_subclass_features(level)),
             11 => Ok(vec!(Box::new(ExtraAttack(3)))),
             12 => Ok(Vec::new()),
-            13 => Ok(Vec::new()), // Indomitable (2 uses)
+            13 => Ok(vec!(Box::new(Indomitable(2)))),
             14 => Ok(Vec::new()),
             15 => Ok(self.get_subclass_features(level)),
             16 => Ok(Vec::new()),
-            17 => Ok(Vec::new()), // AS, Ind (2,3 uses)
+            17 => Ok(vec!(Box::new(Indomitable(3)), Box::new(ActionSurge(2)))),
             18 => Ok(self.get_subclass_features(level)),
             19 => Ok(Vec::new()),
             20 => Ok(vec!(Box::new(ExtraAttack(4)))),
@@ -58,23 +59,41 @@ impl SubClass for ChampionFighter {
 pub struct SecondWind;
 impl Feature for SecondWind {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
+        // TODO: the CombatAction should probably be a Heal or something, rather than ByName.
         character.combat_actions.insert(ActionName::SecondWind, CombatOption::new(ActionType::BonusAction, CombatAction::ByName));
+
+        let mut res = Resource::new(ResourceCap::Hard(1));
+        res.add_refresh(RefreshTiming::ShortRest, RefreshBy::ToFull);
+        res.add_refresh(RefreshTiming::LongRest, RefreshBy::ToFull);
+        character.resource_manager.add_perm(ResourceName::AN(ActionName::SecondWind), res);
+
         Ok(())
     }
 }
 
-pub struct ActionSurge;
+pub struct ActionSurge(pub usize);
 impl Feature for ActionSurge {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
         character.combat_actions.insert(ActionName::ActionSurge, CombatOption::new(ActionType::FreeAction, CombatAction::ByName));
+
+        let mut res = Resource::new(ResourceCap::Hard(self.0));
+        res.add_refresh(RefreshTiming::ShortRest, RefreshBy::ToFull);
+        res.add_refresh(RefreshTiming::LongRest, RefreshBy::ToFull);
+        character.resource_manager.add_perm(ResourceName::AN(ActionName::ActionSurge), res);
+
         Ok(())
     }
 }
 
-pub struct Indomitable;
+pub struct Indomitable(pub usize);
 impl Feature for Indomitable {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
         character.combat_actions.insert(ActionName::Indomitable, CombatOption::new(ActionType::FreeAction, CombatAction::ByName));
+
+        let mut res = Resource::new(ResourceCap::Hard(self.0));
+        res.add_refresh(RefreshTiming::LongRest, RefreshBy::ToFull);
+        character.resource_manager.add_perm(ResourceName::AN(ActionName::ActionSurge), res);
+
         Ok(())
     }
 }

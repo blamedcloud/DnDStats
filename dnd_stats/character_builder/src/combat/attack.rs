@@ -283,7 +283,6 @@ impl WeaponAttack {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;

@@ -4,7 +4,7 @@ use crate::combat::attack::WeaponAttack;
 
 pub mod attack;
 
-#[derive(Copy, Clone)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ActionType {
     Action,
     SingleAttack,

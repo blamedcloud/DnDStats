@@ -1,0 +1,11 @@
+[package]
+name = "combat_sim"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+num = "0.4"
+rand_var = { path = "../rand_var" }
+character_builder = { path = "../character_builder" }
