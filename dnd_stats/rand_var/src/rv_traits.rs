@@ -4,9 +4,11 @@ use std::fmt::Display;
 use std::iter::Sum;
 use std::ops::{Add, Div, Mul, Sub};
 use num::{One, Zero};
+use crate::rv_traits::prob_type::ProbType;
 use crate::rv_traits::sequential::{Seq, SeqIter};
 
 pub mod sequential;
+pub mod prob_type;
 
 #[derive(Debug)]
 pub enum RVError {
@@ -18,9 +20,9 @@ pub enum RVError {
 }
 
 pub trait RandVar<P, T>
-    where
-        P: Ord + Clone,
-        T: Zero + One + Sum + Add<T, Output=T> + Sub<T, Output=T> + Mul<T, Output=T> + Clone,
+where
+    P: Ord + Clone,
+    T: ProbType,
 {
     fn build<F: Fn(P) -> T>(seq_iter: SeqIter<P>, f: F) -> Result<Self, RVError> where Self: Sized;
     fn lower_bound(&self) -> P;
@@ -225,7 +227,7 @@ where
 pub trait NumRandVar<P, T>: RandVar<P, T>
 where
     P: Seq + Zero + Add<P, Output=P> + Sub<P, Output=P>,
-    T: Zero + One + Sum + Add<T, Output=T> + Sub<T, Output=T> + Mul<T, Output=T> + Clone,
+    T: ProbType,
 {
     fn convert(&self, p: P) -> T;
 

@@ -158,6 +158,16 @@ impl ResourceManager {
         }
     }
 
+    pub fn gain(&mut self, rn: ResourceName, uses: usize) {
+        if let Some(res) = self.perm_resources.get_mut(&rn) {
+            res.gain(uses);
+        } else {
+            if let Some(res) = self.temp_resources.get_mut(&rn) {
+                res.gain(uses);
+            }
+        }
+    }
+
     pub fn handle_timing(&mut self, rt: RefreshTiming) {
         self.handle_expirations(rt);
         self.handle_refreshes(rt);

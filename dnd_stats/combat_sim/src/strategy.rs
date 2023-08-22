@@ -1,11 +1,13 @@
 use character_builder::combat::ActionName;
-use crate::combat_log::CombatLog;
+use character_builder::Square;
+use crate::combat_log::CombatState;
 use crate::participant::{ParticipantId, TeamMember};
 
 // TODO: add squares eventually (for spells and such)
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
 pub enum Target {
     Participant(ParticipantId),
+    Tile(Square, Square),
 }
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
@@ -15,12 +17,12 @@ pub struct StrategicOption {
 }
 
 pub trait Strategy {
-    fn get_action(&self, log: &CombatLog, participants: &Vec<TeamMember>, me: ParticipantId) -> Option<StrategicOption>;
+    fn get_action(&self, state: &CombatState, participants: &Vec<TeamMember>, me: ParticipantId) -> Option<StrategicOption>;
 }
 
 pub struct DoNothing;
 impl Strategy for DoNothing {
-    fn get_action(&self, _log: &CombatLog, _participants: &Vec<TeamMember>, _me: ParticipantId) -> Option<StrategicOption> {
+    fn get_action(&self, _state: &CombatState, _participants: &Vec<TeamMember>, _me: ParticipantId) -> Option<StrategicOption> {
         None
     }
 }

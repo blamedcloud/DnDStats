@@ -1,10 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display};
 use std::iter::Sum;
-use std::ops::{Add, Mul, Sub};
 use num::{FromPrimitive, Integer, One, Zero};
 use num::rational::Ratio;
 use crate::rv_traits::{NumRandVar, RandVar, RVError};
+use crate::rv_traits::prob_type::ProbType;
 use crate::rv_traits::sequential::{Pair, Seq, SeqIter};
 
 pub mod rv_traits;
@@ -110,7 +110,7 @@ where
 
 impl<T> RandVar<isize, T> for RandomVariable<T>
 where
-    T: Zero + One + Sum + Add<T, Output=T> + Sub<T, Output=T> + Mul<T, Output=T> + Clone + PartialOrd<T>
+    T: ProbType + PartialOrd<T>
 {
     fn build<F>(seq_iter: SeqIter<isize>, f: F) -> Result<RandomVariable<T>, RVError>
     where
@@ -165,7 +165,7 @@ where
 
 impl<T> NumRandVar<isize, T> for RandomVariable<T>
 where
-    T: Zero + One + Sum + Add<T, Output=T> + Sub<T, Output=T> + Mul<T, Output=T> + Clone + FromPrimitive + PartialOrd<T>
+    T: ProbType + PartialOrd<T> + FromPrimitive
 {
     fn convert(&self, p: isize) -> T {
         T::from_isize(p).unwrap()
@@ -205,7 +205,7 @@ where
 impl<P, T> MapRandVar<P, T>
 where
     P: Ord + Clone,
-    T: Zero + One + Sum + Add<T, Output=T> + Sub<T, Output=T> + Mul<T, Output=T> + Clone + PartialOrd<T> + for<'a> Sum<&'a T>,
+    T: ProbType + PartialOrd<T> + for<'a> Sum<&'a T>,
 {
     pub fn from_map(m: BTreeMap<P, T>) -> Result<Self, RVError> {
         if m.len() == 0 {
@@ -318,7 +318,7 @@ where
 impl<P, T> RandVar<P, T> for MapRandVar<P, T>
 where
     P: Ord + Clone,
-    T: Zero + One + Sum + Add<T, Output=T> + Sub<T, Output=T> + Mul<T, Output=T> + Clone + PartialOrd<T>,
+    T: ProbType + PartialOrd<T>,
 {
     fn build<F: Fn(P) -> T>(seq_iter: SeqIter<P>, f: F) -> Result<Self, RVError> {
         if seq_iter.items.len() == 0 {
@@ -373,7 +373,7 @@ where
 
 impl<T> NumRandVar<isize, T> for MapRandVar<isize, T>
 where
-    T: Zero + One + Sum + Add<T, Output=T> + Sub<T, Output=T> + Mul<T, Output=T> + Clone + PartialOrd<T> + FromPrimitive
+    T: ProbType + PartialOrd<T> + FromPrimitive
 {
     fn convert(&self, p: isize) -> T {
         T::from_isize(p).unwrap()

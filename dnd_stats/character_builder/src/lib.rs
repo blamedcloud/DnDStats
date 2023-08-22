@@ -40,23 +40,23 @@ impl From<RVError> for CBError {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
 pub struct Feet(i32);
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub struct Squares(i32);
+#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
+pub struct Square(i32);
 
-impl Add<Squares> for Squares {
-    type Output = Squares;
+impl Add<Square> for Square {
+    type Output = Square;
 
-    fn add(self, other: Squares) -> Squares {
-        Squares(self.0 + other.0)
+    fn add(self, other: Square) -> Square {
+        Square(self.0 + other.0)
     }
 }
 
-impl Add<Squares> for Feet {
+impl Add<Square> for Feet {
     type Output = Feet;
 
-    fn add(self, other: Squares) -> Feet {
+    fn add(self, other: Square) -> Feet {
         Feet(self.0 + (other.0 * 5))
     }
 }
@@ -296,7 +296,6 @@ impl Character {
             }
         })
     }
-
 
     pub fn get_action_manager(&self) -> &ActionManager {
         &self.combat_actions

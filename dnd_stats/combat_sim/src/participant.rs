@@ -2,15 +2,12 @@ use std::collections::HashSet;
 use character_builder::Character;
 use character_builder::combat::ActionManager;
 use character_builder::damage::DamageType;
-use character_builder::resources::ResourceManager;
 
 pub trait Participant {
     fn get_ac(&self) -> isize;
     fn get_max_hp(&self) -> isize;
     fn get_resistances(&self) -> &HashSet<DamageType>;
     fn get_action_manager(&self) -> &ActionManager;
-    fn get_resource_manager(&self) -> &ResourceManager;
-    fn get_resource_manager_mut(&mut self) -> &mut ResourceManager;
 }
 
 impl Participant for Character {
@@ -28,14 +25,6 @@ impl Participant for Character {
 
     fn get_action_manager(&self) -> &ActionManager {
         self.get_action_manager()
-    }
-
-    fn get_resource_manager(&self) -> &ResourceManager {
-        self.get_resource_manager()
-    }
-
-    fn get_resource_manager_mut(&mut self) -> &mut ResourceManager {
-        self.get_resource_manager_mut()
     }
 }
 

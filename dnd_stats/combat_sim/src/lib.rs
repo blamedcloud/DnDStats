@@ -1,96 +1,144 @@
-use character_builder::combat::{ActionName, ActionType};
-use character_builder::resources::ResourceName;
-use crate::combat_log::{CombatEvent, CombatLog, CombatTiming};
-use crate::participant::{Participant, ParticipantId, TeamMember};
-use crate::strategy::{StrategicOption, Strategy};
+use character_builder::Character;
+use character_builder::combat::{ActionName, ActionType, CombatAction};
+use character_builder::resources::{ResourceManager, ResourceName};
+use rand_var::rv_traits::prob_type::ProbType;
+use crate::combat_log::{CombatEvent, CombatStateRV, CombatTiming, ProbCombatState};
+use crate::participant::{Participant, ParticipantId, Team, TeamMember};
+use crate::strategy::{StrategicOption, Strategy, Target};
 
 pub mod combat_log;
 pub mod participant;
 pub mod strategy;
 pub mod target_dummy;
 
+#[derive(Debug)]
+pub enum CSError {
+    ActionNotHandled,
+    InvalidTarget,
+}
 
-pub struct EncounterManager {
+type HandledAction<T> = Result<Option<Vec<ProbCombatState<T>>>, CSError>;
+type ResultCSE = Result<(), CSError>;
+
+pub struct EncounterManager<T: ProbType> {
     participants: Vec<TeamMember>, // in order of initiative
     strategies: Vec<Box<dyn Strategy>>,
     round_num: u8,
-    combat_log: CombatLog,
+    cs_rv: CombatStateRV<T>,
 }
 
-impl EncounterManager {
+impl<T> EncounterManager<T>
+where
+    T: ProbType
+{
     pub fn new() -> Self {
-        EncounterManager {
+        Self {
             participants: Vec::new(),
             strategies: Vec::new(),
             round_num: 0,
-            combat_log: CombatLog::new(),
+            cs_rv: CombatStateRV::new(),
         }
     }
 
-    pub fn add_participant(&mut self, tm: TeamMember, str: Box<dyn Strategy>) {
+    pub fn add_player(&mut self, character: Character, str: Box<dyn Strategy>) {
+        let rm = character.get_resource_manager().clone();
+        self.add_participant(TeamMember::new(Team::Players, Box::new(character)), rm, str);
+    }
+
+    pub fn add_participant(&mut self, tm: TeamMember, rm: ResourceManager, str: Box<dyn Strategy>) {
         self.participants.push(tm);
         self.strategies.push(str);
+        self.cs_rv.add_participant(rm);
     }
 
-    pub fn get_participant(&self, pid: ParticipantId) -> &Box<dyn Participant> {
-        &self.participants.get(pid.0).unwrap().participant
-    }
-    fn get_participant_mut(&mut self, pid: ParticipantId) -> &mut Box<dyn Participant> {
-        &mut self.participants.get_mut(pid.0).unwrap().participant
+    pub fn simulate_n_rounds(&mut self, n: u8) -> ResultCSE {
+        while self.round_num < n {
+            self.round_num += 1;
+            self.register_timing(CombatTiming::BeginRound(self.round_num.into()));
+            self.simulate_round()?;
+            self.register_timing(CombatTiming::EndRound(self.round_num.into()));
+        }
+        Ok(())
     }
 
-    pub fn get_strategy(&self, pid: ParticipantId) -> &Box<dyn Strategy> {
-        &self.strategies.get(pid.0).unwrap()
+    pub fn get_state_rv(&self) -> &CombatStateRV<T> {
+        &self.cs_rv
     }
 
-    pub fn register_event(&mut self, event: CombatEvent) {
-        self.combat_log.push(event);
+    fn register_timing(&mut self, ct: CombatTiming) {
+        let event = CombatEvent::Timing(ct);
+        for pcs in self.cs_rv.get_states_mut() {
+            pcs.push(event);
 
-        if let CombatEvent::Timing(ct) = event {
             for i in 0..self.participants.len() {
                 let pid = ParticipantId(i);
                 let rt = ct.get_refresh_timing(pid);
-                self.get_participant_mut(pid).get_resource_manager_mut().handle_timing(rt);
+                pcs.get_rm_mut(pid).handle_timing(rt);
             }
         }
-
-        // TODO: setup triggers for participants for non-timing events
     }
 
-    pub fn simulate_n_rounds(&mut self, n: u8) {
-        while self.round_num < n {
-            self.register_event(CombatEvent::Timing(CombatTiming::BeginRound));
-            self.simulate_round();
-            self.register_event(CombatEvent::Timing(CombatTiming::EndRound));
-            self.round_num += 1;
-        }
-    }
-
-    fn simulate_round(&mut self) {
+    fn simulate_round(&mut self) -> ResultCSE {
         for i in 0..self.participants.len() {
             let pid = ParticipantId(i);
-            self.register_event(CombatEvent::Timing(CombatTiming::BeginTurn(pid)));
-            self.simulate_turn(pid);
-            self.register_event(CombatEvent::Timing(CombatTiming::EndTurn(pid)));
+            self.register_timing(CombatTiming::BeginTurn(pid));
+            self.simulate_turn(pid)?;
+            self.register_timing(CombatTiming::EndTurn(pid));
         }
+        Ok(())
     }
 
-    fn simulate_turn(&mut self, pid: ParticipantId) {
-        loop {
-            let strategy = self.get_strategy(pid);
-            if let Some(so) = strategy.get_action(&self.combat_log, &self.participants, pid) {
-                if self.possible_action(pid, so) {
-                    self.handle_action(pid, so);
+    fn simulate_turn(&mut self, pid: ParticipantId) -> ResultCSE {
+        let mut finished_pcs = Vec::new();
+        for pcs in self.cs_rv.get_states() {
+            let new_pcs = self.finish_turn(pcs.clone(), pid)?;
+            finished_pcs.extend(new_pcs.into_iter());
+        }
+        self.cs_rv = finished_pcs.into();
+        Ok(())
+    }
+
+    fn get_strategy(&self, pid: ParticipantId) -> &Box<dyn Strategy> {
+        &self.strategies.get(pid.0).unwrap()
+    }
+
+    fn finish_turn(&self, mut pcs: ProbCombatState<T>, pid: ParticipantId) -> Result<Vec<ProbCombatState<T>>, CSError> {
+        let strategy = self.get_strategy(pid);
+        if let Some(so) = strategy.get_action(pcs.get_state(), &self.participants, pid) {
+            if self.possible_action(&pcs, pid, so) {
+                let children_pcs = self.handle_action(&mut pcs, pid, so)?;
+                if children_pcs.is_none() {
+                    // pcs was modified in place, keep going
+                    self.finish_turn(pcs, pid)
                 } else {
-                    return;
+                    // pcs generated children, finish all of them
+                    let mut finished_pcs = Vec::new();
+                    let children_pcs = children_pcs.unwrap();
+                    for pcs in children_pcs.into_iter() {
+                        let new_pcs = self.finish_turn(pcs, pid)?;
+                        finished_pcs.extend(new_pcs.into_iter());
+                    }
+                    Ok(finished_pcs)
                 }
             } else {
-                return;
+                // strategy gave me a bad StrategicOption
+                let mut result = Vec::new();
+                result.push(pcs);
+                Ok(result)
             }
+        } else {
+            // strategy end-turn on purpose.
+            let mut result = Vec::new();
+            result.push(pcs);
+            Ok(result)
         }
     }
 
-    fn possible_action(&self, pid: ParticipantId, so: StrategicOption) -> bool {
+    fn get_participant(&self, pid: ParticipantId) -> &Box<dyn Participant> {
+        &self.participants.get(pid.0).unwrap().participant
+    }
+
+    fn possible_action(&self, pcs: &ProbCombatState<T>, pid: ParticipantId, so: StrategicOption) -> bool {
         let an = so.action_name;
         let participant = self.get_participant(pid);
         let has_action = participant.get_action_manager().contains_key(&an);
@@ -103,7 +151,7 @@ impl EncounterManager {
             }
         }
         if has_action && valid_target {
-            let rm = participant.get_resource_manager();
+            let rm = pcs.get_rm(pid);
             if rm.has_resource(ResourceName::AN(an)) && rm.get_current(ResourceName::AN(an)) == 0 {
                 has_resources = false;
             } else {
@@ -117,35 +165,52 @@ impl EncounterManager {
         has_action && valid_target && has_resources
     }
 
-    fn spend_resources(&mut self, pid: ParticipantId, an: ActionName, at: ActionType) {
-        let participant = self.get_participant_mut(pid);
-        let rm = participant.get_resource_manager_mut();
-        if rm.has_resource(ResourceName::AN(an)) {
-            rm.spend(ResourceName::AN(an));
-        }
-        if rm.has_resource(ResourceName::AT(at)) {
-            rm.spend(ResourceName::AT(at));
-        }
-    }
-
-    fn handle_action(&mut self, pid: ParticipantId, so: StrategicOption) {
+    // returns None if the passed in pcs is modified with only one child
+    // returns a Some(vec) if there was more than one child
+    fn handle_action(&self, pcs: &mut ProbCombatState<T>, pid: ParticipantId, so: StrategicOption) -> HandledAction<T> {
         let an = so.action_name;
-        let participant = self.get_participant_mut(pid);
+        let participant = self.get_participant(pid);
         let co = participant.get_action_manager().get(&an).unwrap();
         let at = co.action_type;
-        self.spend_resources(pid, an, at);
-        todo!()
-    }
+        pcs.spend_resources(pid, an, at);
 
+        pcs.push(CombatEvent::AN(an));
+
+        match &co.action {
+            CombatAction::Attack(wa) => {
+                if let Target::Participant(target_pid) = so.target.unwrap() {
+                    pcs.push(CombatEvent::Attack(pid, target_pid));
+                    Ok(None) // TODO should be vec
+                } else {
+                    Err(CSError::InvalidTarget)
+                }
+            }
+            CombatAction::AdditionalAttacks(aa) => {
+                pcs.get_rm_mut(pid).gain(ResourceName::AT(ActionType::SingleAttack), *aa as usize);
+                Ok(None)
+            }
+            CombatAction::ByName => {
+                match an {
+                    ActionName::ActionSurge => {
+                        pcs.get_rm_mut(pid).gain(ResourceName::AT(ActionType::Action), 1);
+                        Ok(None)
+                    },
+                    _ => Err(CSError::ActionNotHandled),
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use num::{BigRational, One};
     use character_builder::ability_scores::AbilityScores;
     use character_builder::Character;
     use character_builder::classes::ClassName;
     use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
+    use character_builder::resources::ResourceManager;
     use crate::EncounterManager;
     use crate::participant::{Team, TeamMember};
     use crate::strategy::DoNothing;
@@ -172,8 +237,23 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         let dummy = TargetDummy::new(isize::MAX, 14);
 
-        let mut em = EncounterManager::new();
-        em.add_participant(TeamMember::new(Team::Players, Box::new(fighter)), Box::new(DoNothing));
-        em.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy)), Box::new(DoNothing));
+        let mut em = EncounterManager::<BigRational>::new();
+        em.add_player(fighter, Box::new(DoNothing));
+        em.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy)), ResourceManager::new(),Box::new(DoNothing));
+        em.simulate_n_rounds(1).unwrap();
+
+        let cs_rv = em.get_state_rv();
+        assert_eq!(1, cs_rv.len());
+
+        let pcs = cs_rv.get_pcs(0);
+        assert_eq!(BigRational::one(), *pcs.get_prob());
+
+        let logs = pcs.get_state().get_logs();
+        assert!(!logs.has_parent());
+
+        let events = logs.get_local_events();
+        assert_eq!(6, events.len());
+        let all_events = logs.get_all_events();
+        assert_eq!(all_events, events.clone());
     }
 }
