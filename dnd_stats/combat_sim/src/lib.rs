@@ -1,5 +1,6 @@
-use character_builder::Character;
+use character_builder::{CBError, Character};
 use character_builder::combat::{ActionName, ActionType, CombatAction};
+use character_builder::combat::attack::AttackHitType;
 use character_builder::resources::{ResourceManager, ResourceName};
 use rand_var::rv_traits::prob_type::ProbType;
 use crate::combat_log::{CombatEvent, CombatStateRV, CombatTiming, ProbCombatState};
@@ -15,6 +16,12 @@ pub mod target_dummy;
 pub enum CSError {
     ActionNotHandled,
     InvalidTarget,
+    CBE(CBError)
+}
+impl From<CBError> for CSError {
+    fn from(value: CBError) -> Self {
+        CSError::CBE(value)
+    }
 }
 
 type HandledAction<T> = Result<Option<Vec<ProbCombatState<T>>>, CSError>;
@@ -180,6 +187,8 @@ where
             CombatAction::Attack(wa) => {
                 if let Target::Participant(target_pid) = so.target.unwrap() {
                     pcs.push(CombatEvent::Attack(pid, target_pid));
+                    let target = self.get_participant(target_pid);
+                    let outcome_rv = wa.get_attack_result_rv(AttackHitType::Normal, target.get_ac())?;
                     Ok(None) // TODO should be vec
                 } else {
                     Err(CSError::InvalidTarget)

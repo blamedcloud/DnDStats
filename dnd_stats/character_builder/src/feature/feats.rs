@@ -160,7 +160,7 @@ impl Feature for SharpShooter {
 mod tests {
     use std::collections::HashSet;
     use num::{BigInt, BigRational, FromPrimitive};
-    use rand_var::RandomVariable;
+    use rand_var::BigRV;
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use rand_var::rv_traits::sequential::Pair;
     use crate::Character;
@@ -209,7 +209,7 @@ mod tests {
         let acc = gwm_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
-        let dmg: RandomVariable<BigRational> = gwm_attack.get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        let dmg: BigRV = gwm_attack.get_damage().get_base_dmg(&HashSet::new()).unwrap();
         assert_eq!(15, dmg.lower_bound());
         assert_eq!(25, dmg.upper_bound());
         assert_eq!(BigRational::from_isize(20).unwrap(), dmg.expected_value());
@@ -229,7 +229,7 @@ mod tests {
         let acc = ss_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
-        let dmg: RandomVariable<BigRational> = ss_attack.get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        let dmg: BigRV = ss_attack.get_damage().get_base_dmg(&HashSet::new()).unwrap();
         assert_eq!(14, dmg.lower_bound());
         assert_eq!(21, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from_isize(35).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());
@@ -249,7 +249,7 @@ mod tests {
         let acc = pam_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
         assert_eq!(Pair(1, 6), acc.lower_bound());
         assert_eq!(Pair(20, 25), acc.upper_bound());
-        let dmg: RandomVariable<BigRational> = pam_attack.get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        let dmg: BigRV = pam_attack.get_damage().get_base_dmg(&HashSet::new()).unwrap();
         assert_eq!(4, dmg.lower_bound());
         assert_eq!(7, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from_isize(11).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());
@@ -276,7 +276,7 @@ mod tests {
         let acc = gwm_pam_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
-        let dmg: RandomVariable<BigRational> = gwm_pam_attack.get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        let dmg: BigRV = gwm_pam_attack.get_damage().get_base_dmg(&HashSet::new()).unwrap();
         assert_eq!(14, dmg.lower_bound());
         assert_eq!(17, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from_isize(31).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());
@@ -303,7 +303,7 @@ mod tests {
         let acc = pam_gwm_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
-        let dmg: RandomVariable<BigRational> = pam_gwm_attack.get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        let dmg: BigRV = pam_gwm_attack.get_damage().get_base_dmg(&HashSet::new()).unwrap();
         assert_eq!(14, dmg.lower_bound());
         assert_eq!(17, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from_isize(31).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());

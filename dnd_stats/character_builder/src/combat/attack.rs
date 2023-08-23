@@ -262,7 +262,7 @@ impl WeaponAttack {
             return Err(CBError::NoCache);
         }
         let hit_const = self.hit_bonus.get_saved_value().unwrap() as isize;
-        Ok(rv.to_map_rv().map_keys(|roll| Pair(roll, roll + hit_const)))
+        Ok(rv.into_mrv().map_keys(|roll| Pair(roll, roll + hit_const)))
     }
 
     pub fn get_attack_result_rv(&self, hit_type: AttackHitType, target_ac: isize) -> Result<MapRandVar<AttackResult, BigRational>, CBError> {
@@ -273,7 +273,7 @@ impl WeaponAttack {
     pub fn get_attack_dmg_rv(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<BigRational>, CBError> {
         let attack_result_rv = self.get_attack_result_rv(hit_type, target_ac)?;
         let dmg_map = self.damage.get_attack_dmg_map(resistances)?;
-        Ok(attack_result_rv.consolidate(&dmg_map)?.to_vec_rv())
+        Ok(attack_result_rv.consolidate(&dmg_map)?.into())
     }
 
     pub fn get_attack_outcome_rv(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<MapRandVar<Pair<AttackResult, isize>, BigRational>, CBError> {
@@ -287,6 +287,7 @@ impl WeaponAttack {
 mod tests {
     use std::collections::BTreeMap;
     use num::FromPrimitive;
+    use rand_var::{BigMRV, BigRV};
     use rand_var::rv_traits::NumRandVar;
     use crate::tests::get_test_fighter;
     use super::*;
@@ -304,12 +305,12 @@ mod tests {
 
         let damage = attack.get_damage();
 
-        let two_d6: RandomVariable<BigRational> = RandomVariable::new_dice(6).unwrap().multiple(2);
+        let two_d6: BigRV = RandomVariable::new_dice(6).unwrap().multiple(2);
         let base_dmg = two_d6.add_const(3);
         assert_eq!(base_dmg, damage.get_base_dmg(&no_resist).unwrap());
         let crit_dmg = two_d6.multiple(2).add_const(3);
         assert_eq!(crit_dmg, damage.get_crit_dmg(&no_resist).unwrap());
-        let miss_dmg: RandomVariable<BigRational> = RandomVariable::new_constant(0).unwrap();
+        let miss_dmg: BigRV = RandomVariable::new_constant(0).unwrap();
         assert_eq!(miss_dmg, damage.get_miss_dmg(&no_resist).unwrap());
 
         let mut dmg_map = BTreeMap::new();
@@ -317,12 +318,12 @@ mod tests {
         dmg_map.insert(AttackResult::Hit, base_dmg);
         dmg_map.insert(AttackResult::Miss, miss_dmg);
 
-        let d20: RandomVariable<BigRational> = RandomVariable::new_dice(20).unwrap();
-        let normal_hit = d20.to_map_rv().map_keys(|r| Pair(r, r+5));
+        let d20: BigMRV = RandomVariable::new_dice(20).unwrap().into();
+        let normal_hit = d20.map_keys(|r| Pair(r, r+5));
         assert_eq!(normal_hit, attack.get_accuracy_rv(AttackHitType::Normal).unwrap());
         let target_ac = 13;
         let normal_result = normal_hit.map_keys(|hit| AttackResult::from(hit, target_ac, 20));
-        let normal_dmg = normal_result.consolidate(&dmg_map).unwrap().to_vec_rv();
+        let normal_dmg: BigRV = normal_result.consolidate(&dmg_map).unwrap().into();
         assert_eq!(normal_dmg, attack.get_attack_dmg_rv(AttackHitType::Normal, target_ac, &no_resist).unwrap());
     }
 

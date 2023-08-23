@@ -98,7 +98,7 @@ impl Feature for FightingStyle {
 mod tests {
     use std::collections::HashSet;
     use num::{BigInt, BigRational};
-    use rand_var::RandomVariable;
+    use rand_var::{BigRV, RandomVariable};
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use rand_var::rv_traits::sequential::Pair;
     use crate::Character;
@@ -144,7 +144,7 @@ mod tests {
         );
         let mut fighter = Character::new(String::from("duelist"), get_dex_based(), equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::Dueling)))).unwrap();
-        let dmg: RandomVariable<BigRational> = fighter.get_basic_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        let dmg: BigRV = fighter.get_basic_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
         assert_eq!(6, dmg.lower_bound());
         assert_eq!(13, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from(19), BigInt::from(2)), dmg.expected_value());
@@ -159,10 +159,10 @@ mod tests {
         );
         let mut fighter = Character::new(String::from("gwf"), get_str_based(), equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
-        let dmg: RandomVariable<BigRational> = fighter.get_basic_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        let dmg: BigRV = fighter.get_basic_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
         assert_eq!(5, dmg.lower_bound());
         assert_eq!(15, dmg.upper_bound());
-        let rv: RandomVariable<BigRational> = RandomVariable::new_dice_reroll(6, 2).unwrap().multiple(2).add_const(3);
+        let rv: BigRV = RandomVariable::new_dice_reroll(6, 2).unwrap().multiple(2).add_const(3);
         assert_eq!(dmg, rv);
     }
 
@@ -175,8 +175,8 @@ mod tests {
         );
         let mut fighter = Character::new(String::from("kirito"), get_dex_based(), equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::TwoWeaponFighting)))).unwrap();
-        let main_dmg: RandomVariable<BigRational> = fighter.get_basic_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
-        let off_dmg: RandomVariable<BigRational> = fighter.get_offhand_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        let main_dmg: BigRV = fighter.get_basic_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        let off_dmg: BigRV = fighter.get_offhand_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
         assert_eq!(main_dmg, off_dmg);
     }
 }

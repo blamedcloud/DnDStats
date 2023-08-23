@@ -425,23 +425,23 @@ where
 #[cfg(test)]
 mod tests {
     use num::{BigInt, BigRational, One, Rational64, FromPrimitive, Zero};
-    use crate::RandomVariable;
+    use crate::{BigRV, RandomVariable, RV64};
     use super::*;
 
     #[test]
     fn test_reroll() {
-        let rv1: RandomVariable<Rational64> = RandomVariable::new_dice_reroll(10,2).unwrap();
-        let rv2: RandomVariable<Rational64> = RandomVariable::new_dice(10).unwrap().reroll_once_on(|p| *p <= 2);
+        let rv1: RV64 = RandomVariable::new_dice_reroll(10,2).unwrap();
+        let rv2: RV64 = RandomVariable::new_dice(10).unwrap().reroll_once_on(|p| *p <= 2);
         assert_eq!(rv1, rv2);
 
-        let rv3: RandomVariable<Rational64> = RandomVariable::new_dice_reroll(20,1).unwrap();
-        let rv4: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap().reroll_once_on(|p| *p <= 1);
+        let rv3: RV64 = RandomVariable::new_dice_reroll(20,1).unwrap();
+        let rv4: RV64 = RandomVariable::new_dice(20).unwrap().reroll_once_on(|p| *p <= 1);
         assert_eq!(rv3, rv4);
     }
 
     #[test]
     fn test_minus_d4() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(4).unwrap().opposite_rv();
+        let rv: RV64 = RandomVariable::new_dice(4).unwrap().opposite_rv();
         assert_eq!(-4, rv.lower_bound());
         assert_eq!(-1, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(0));
@@ -459,8 +459,8 @@ mod tests {
 
     #[test]
     fn test_d20_minus_5_cap_lb() {
-        let rv1: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap();
-        let rv2: RandomVariable<Rational64> = RandomVariable::new_constant(5).unwrap();
+        let rv1: RV64 = RandomVariable::new_dice(20).unwrap();
+        let rv2: RV64 = RandomVariable::new_constant(5).unwrap();
         let rv = rv1.minus_rv(&rv2).cap_lb(0).unwrap();
         assert_eq!(0, rv.lower_bound());
         assert_eq!(15, rv.upper_bound());
@@ -483,8 +483,8 @@ mod tests {
 
     #[test]
     fn test_d11_plus_3_cap_ub() {
-        let rv1: RandomVariable<Rational64> = RandomVariable::new_dice(11).unwrap();
-        let rv2: RandomVariable<Rational64> = RandomVariable::new_constant(3).unwrap();
+        let rv1: RV64 = RandomVariable::new_dice(11).unwrap();
+        let rv2: RV64 = RandomVariable::new_constant(3).unwrap();
         let rv = rv1.add_rv(&rv2).cap_ub(10).unwrap();
         assert_eq!(4, rv.lower_bound());
         assert_eq!(10, rv.upper_bound());
@@ -510,8 +510,8 @@ mod tests {
 
     #[test]
     fn test_d12_minus_d8() {
-        let rv1: RandomVariable<Rational64> = RandomVariable::new_dice(12).unwrap();
-        let rv2: RandomVariable<Rational64> = RandomVariable::new_dice(8).unwrap();
+        let rv1: RV64 = RandomVariable::new_dice(12).unwrap();
+        let rv2: RV64 = RandomVariable::new_dice(8).unwrap();
         let rv = rv1.minus_rv(&rv2);
         assert_eq!(-7, rv.lower_bound());
         assert_eq!(11, rv.upper_bound());
@@ -529,8 +529,8 @@ mod tests {
 
     #[test]
     fn test_2d6() {
-        let rv1: RandomVariable<BigRational> = RandomVariable::new_dice(6).unwrap();
-        let rv2: RandomVariable<BigRational> = RandomVariable::new_dice(6).unwrap();
+        let rv1: BigRV = RandomVariable::new_dice(6).unwrap();
+        let rv2: BigRV = RandomVariable::new_dice(6).unwrap();
         let rv = rv1.add_rv(&rv2);
         assert_eq!(2, rv.lower_bound());
         assert_eq!(12, rv.upper_bound());
@@ -550,7 +550,7 @@ mod tests {
 
     #[test]
     fn test_multiple() {
-        let rv1: RandomVariable<BigRational> = RandomVariable::new_dice(6).unwrap();
+        let rv1: BigRV = RandomVariable::new_dice(6).unwrap();
         let rv = rv1.add_rv(&rv1);
         let other_rv = rv1.multiple(2);
         assert_eq!(rv, other_rv);
@@ -562,7 +562,7 @@ mod tests {
 
     #[test]
     fn test_fireball() {
-        let d6: RandomVariable<BigRational> = RandomVariable::new_dice(6).unwrap();
+        let d6: BigRV = RandomVariable::new_dice(6).unwrap();
         let fireball = d6.multiple(8);
         assert_eq!(8, fireball.lower_bound());
         assert_eq!(48, fireball.upper_bound());
@@ -584,7 +584,7 @@ mod tests {
 
     #[test]
     fn test_half() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_uniform(-3,7).unwrap().half().unwrap();
+        let rv: RV64 = RandomVariable::new_uniform(-3,7).unwrap().half().unwrap();
         assert_eq!(-1, rv.lower_bound());
         assert_eq!(3, rv.upper_bound());
 
@@ -603,7 +603,7 @@ mod tests {
 
     #[test]
     fn test_d20_adv() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap().max_two_trials();
+        let rv: RV64 = RandomVariable::new_dice(20).unwrap().max_two_trials();
         assert_eq!(1, rv.lower_bound());
         assert_eq!(20, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(0));
@@ -621,7 +621,7 @@ mod tests {
 
     #[test]
     fn test_d20_disadv() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap().min_two_trials();
+        let rv: RV64 = RandomVariable::new_dice(20).unwrap().min_two_trials();
         assert_eq!(1, rv.lower_bound());
         assert_eq!(20, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(0));
@@ -639,7 +639,7 @@ mod tests {
 
     #[test]
     fn test_d20_super_adv() {
-        let rv: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap().max_three_trials();
+        let rv: RV64 = RandomVariable::new_dice(20).unwrap().max_three_trials();
         assert_eq!(1, rv.lower_bound());
         assert_eq!(20, rv.upper_bound());
         assert_eq!(Rational64::zero(), rv.pdf(0));
@@ -656,14 +656,14 @@ mod tests {
 
     #[test]
     fn test_cmp_rv() {
-        let d6: RandomVariable<Rational64> = RandomVariable::new_dice(6).unwrap();
+        let d6: RV64 = RandomVariable::new_dice(6).unwrap();
         assert_eq!(Rational64::new(5,12), d6.prob_gt(&d6));
         assert_eq!(Rational64::new(7,12), d6.prob_ge(&d6));
         assert_eq!(Rational64::new(1,6), d6.prob_eq(&d6));
         assert_eq!(Rational64::new(7,12), d6.prob_le(&d6));
         assert_eq!(Rational64::new(5,12), d6.prob_gt(&d6));
 
-        let d20: RandomVariable<Rational64> = RandomVariable::new_dice(20).unwrap();
+        let d20: RV64 = RandomVariable::new_dice(20).unwrap();
         let d20_adv = d20.max_two_trials();
         assert_eq!(Rational64::one(), d20_adv.prob_ge(&d20) + d20_adv.prob_lt(&d20));
         assert_eq!(Rational64::one(), d20_adv.prob_gt(&d20) + d20_adv.prob_lt(&d20) + d20_adv.prob_eq(&d20));
