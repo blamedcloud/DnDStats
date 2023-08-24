@@ -2,7 +2,9 @@ use std::rc::Rc;
 use character_builder::combat::{ActionName, ActionType};
 use character_builder::combat::attack::AttackResult;
 use character_builder::resources::{RefreshTiming, ResourceManager, ResourceName};
+use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
+use rand_var::rv_traits::RandVar;
 use crate::participant::ParticipantId;
 
 
@@ -52,6 +54,12 @@ pub enum CombatEvent {
     AR(AttackResult),
 }
 
+impl From<AttackResult> for CombatEvent {
+    fn from(value: AttackResult) -> Self {
+        CombatEvent::AR(value)
+    }
+}
+
 #[derive(Clone)]
 pub struct CombatLog {
     parent: Option<CombatLogRef>,
@@ -83,6 +91,17 @@ impl CombatLog {
     pub fn has_parent(&self) -> bool {
         self.parent.is_some()
     }
+
+    pub fn get_parent(&self) -> &CombatLogRef {
+        self.parent.as_ref().unwrap()
+    }
+
+    pub fn into_child(self) -> Self {
+        Self {
+            parent: Some(Rc::new(self)),
+            events: Vec::new(),
+        }
+    }
 }
 
 type ParticipantResources = Vec<ResourceManager>;
@@ -102,6 +121,21 @@ impl CombatState {
 
     pub fn get_logs(&self) -> &CombatLog {
         &self.logs
+    }
+
+    pub fn get_rm(&self, pid: ParticipantId) -> &ResourceManager {
+        self.resources.get(pid.0).unwrap()
+    }
+
+    pub fn into_child(self) -> Self {
+        Self {
+            logs: self.logs.into_child(),
+            resources: self.resources
+        }
+    }
+
+    pub fn push(&mut self, ce: CombatEvent) {
+        self.logs.events.push(ce);
     }
 }
 
@@ -152,6 +186,20 @@ impl<T: RVProb> ProbCombatState<T> {
         }
     }
 
+    pub fn split(self, rv: MapRandVar<CombatEvent, T>) -> Vec<Self> {
+        let mut v = Vec::with_capacity(rv.len());
+        let child_state = self.state.into_child();
+        for ce in rv.valid_p() {
+            let mut ce_state = child_state.clone();
+            ce_state.push(ce);
+            v.push(Self {
+                state: ce_state,
+                prob: self.prob.clone() * rv.pdf(ce)
+            })
+        }
+        v
+    }
+
 }
 
 pub struct CombatStateRV<T: RVProb> {
@@ -195,6 +243,12 @@ impl<T: RVProb> CombatStateRV<T> {
     }
     pub fn get_states_mut(&mut self) -> &mut Vec<ProbCombatState<T>> {
         &mut self.states
+    }
+
+    pub fn get_index_rv(&self) -> RandomVariable<T> {
+        let v: Vec<T> = self.states.iter().map(|pcs| pcs.get_prob()).cloned().collect();
+        let ub = (self.len() as isize) - 1;
+        RandomVariable::new(0, ub, v).unwrap()
     }
 }
 

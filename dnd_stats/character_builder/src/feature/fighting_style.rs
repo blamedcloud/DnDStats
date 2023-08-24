@@ -97,13 +97,13 @@ impl Feature for FightingStyle {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
-    use num::{BigInt, BigRational, Rational64};
-    use rand_var::{RVBig, MapRandVar, RandomVariable};
+    use num::{BigInt, BigRational};
+    use rand_var::{RVBig, RandomVariable};
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use rand_var::rv_traits::sequential::Pair;
     use crate::Character;
     use crate::classes::ClassName;
-    use crate::combat::attack::{AccMRV64, AttackHitType, RollPair};
+    use crate::combat::attack::{AccMRV64, AttackHitType};
     use crate::equipment::{ACSource, Armor, Equipment, OffHand, Weapon};
     use crate::tests::{get_dex_based, get_str_based};
     use super::*;

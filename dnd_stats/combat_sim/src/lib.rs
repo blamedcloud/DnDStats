@@ -1,7 +1,9 @@
+use num::{BigRational, Rational64};
 use character_builder::{CBError, Character};
 use character_builder::combat::{ActionName, ActionType, CombatAction};
 use character_builder::combat::attack::{ArMRV, AttackHitType};
 use character_builder::resources::{ResourceManager, ResourceName};
+use rand_var::MapRandVar;
 use rand_var::rv_traits::prob_type::RVProb;
 use crate::combat_log::{CombatEvent, CombatStateRV, CombatTiming, ProbCombatState};
 use crate::participant::{Participant, ParticipantId, Team, TeamMember};
@@ -24,7 +26,12 @@ impl From<CBError> for CSError {
     }
 }
 
-type HandledAction<T> = Result<Option<Vec<ProbCombatState<T>>>, CSError>;
+pub enum HandledAction<T: RVProb> {
+    InPlace(ProbCombatState<T>),
+    Children(Vec<ProbCombatState<T>>)
+}
+
+type ResultHA<T> = Result<HandledAction<T>, CSError>;
 type ResultCSE = Result<(), CSError>;
 
 pub struct EncounterManager<T: RVProb> {
@@ -33,6 +40,9 @@ pub struct EncounterManager<T: RVProb> {
     round_num: u8,
     cs_rv: CombatStateRV<T>,
 }
+
+pub type EM64 = EncounterManager<Rational64>;
+pub type EMBig = EncounterManager<BigRational>;
 
 impl<T: RVProb> EncounterManager<T> {
     pub fn new() -> Self {
@@ -106,35 +116,29 @@ impl<T: RVProb> EncounterManager<T> {
         &self.strategies.get(pid.0).unwrap()
     }
 
-    fn finish_turn(&self, mut pcs: ProbCombatState<T>, pid: ParticipantId) -> Result<Vec<ProbCombatState<T>>, CSError> {
+    fn finish_turn(&self, pcs: ProbCombatState<T>, pid: ParticipantId) -> Result<Vec<ProbCombatState<T>>, CSError> {
         let strategy = self.get_strategy(pid);
         if let Some(so) = strategy.get_action(pcs.get_state(), &self.participants, pid) {
             if self.possible_action(&pcs, pid, so) {
-                let children_pcs = self.handle_action(&mut pcs, pid, so)?;
-                if children_pcs.is_none() {
-                    // pcs was modified in place, keep going
-                    self.finish_turn(pcs, pid)
-                } else {
-                    // pcs generated children, finish all of them
-                    let mut finished_pcs = Vec::new();
-                    let children_pcs = children_pcs.unwrap();
-                    for pcs in children_pcs.into_iter() {
-                        let new_pcs = self.finish_turn(pcs, pid)?;
-                        finished_pcs.extend(new_pcs.into_iter());
+                let handled_action = self.handle_action(pcs, pid, so)?;
+                match handled_action {
+                    HandledAction::InPlace(p) => self.finish_turn(p, pid),
+                    HandledAction::Children(children) => {
+                        let mut finished_pcs = Vec::new();
+                        for pcs in children.into_iter() {
+                            let new_pcs = self.finish_turn(pcs, pid)?;
+                            finished_pcs.extend(new_pcs.into_iter());
+                        }
+                        Ok(finished_pcs)
                     }
-                    Ok(finished_pcs)
                 }
             } else {
-                // strategy gave me a bad StrategicOption
-                let mut result = Vec::new();
-                result.push(pcs);
-                Ok(result)
+                // strategy gave me an invalid StrategicOption
+                Ok(vec!(pcs))
             }
         } else {
             // strategy end-turn on purpose.
-            let mut result = Vec::new();
-            result.push(pcs);
-            Ok(result)
+            Ok(vec!(pcs))
         }
     }
 
@@ -171,7 +175,7 @@ impl<T: RVProb> EncounterManager<T> {
 
     // returns None if the passed in pcs is modified with only one child
     // returns a Some(vec) if there was more than one child
-    fn handle_action(&self, pcs: &mut ProbCombatState<T>, pid: ParticipantId, so: StrategicOption) -> HandledAction<T> {
+    fn handle_action(&self, mut pcs: ProbCombatState<T>, pid: ParticipantId, so: StrategicOption) -> ResultHA<T> {
         let an = so.action_name;
         let participant = self.get_participant(pid);
         let co = participant.get_action_manager().get(&an).unwrap();
@@ -186,20 +190,21 @@ impl<T: RVProb> EncounterManager<T> {
                     pcs.push(CombatEvent::Attack(pid, target_pid));
                     let target = self.get_participant(target_pid);
                     let outcome_rv: ArMRV<T> = wa.get_attack_result_rv(AttackHitType::Normal, target.get_ac())?;
-                    Ok(None) // TODO should be vec
+                    let ce_rv: MapRandVar<CombatEvent, T> = outcome_rv.map_keys(|ar| ar.into());
+                    Ok(HandledAction::Children(pcs.split(ce_rv)))
                 } else {
                     Err(CSError::InvalidTarget)
                 }
-            }
+            },
             CombatAction::AdditionalAttacks(aa) => {
                 pcs.get_rm_mut(pid).gain(ResourceName::AT(ActionType::SingleAttack), *aa as usize);
-                Ok(None)
-            }
+                Ok(HandledAction::InPlace(pcs))
+            },
             CombatAction::ByName => {
                 match an {
                     ActionName::ActionSurge => {
                         pcs.get_rm_mut(pid).gain(ResourceName::AT(ActionType::Action), 1);
-                        Ok(None)
+                        Ok(HandledAction::InPlace(pcs))
                     },
                     _ => Err(CSError::ActionNotHandled),
                 }
@@ -210,23 +215,27 @@ impl<T: RVProb> EncounterManager<T> {
 
 #[cfg(test)]
 mod tests {
-    use num::{BigRational, One};
+    use num::{One, Rational64};
     use character_builder::ability_scores::AbilityScores;
     use character_builder::Character;
     use character_builder::classes::ClassName;
+    use character_builder::combat::attack::{AttackHitType, AttackResult};
+    use character_builder::combat::{ActionName, AttackType};
     use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
     use character_builder::resources::ResourceManager;
-    use crate::EncounterManager;
-    use crate::participant::{Team, TeamMember};
-    use crate::strategy::DoNothing;
+    use rand_var::RV64;
+    use crate::{EM64, EncounterManager};
+    use crate::combat_log::{CombatEvent, CombatTiming, RoundId};
+    use crate::participant::{Participant, ParticipantId, Team, TeamMember};
+    use crate::strategy::{BasicAttacks, DoNothing};
     use crate::target_dummy::TargetDummy;
 
     pub fn get_str_based() -> AbilityScores {
         AbilityScores::new(16,12,16,8,13,10)
     }
 
-    pub fn get_test_fighter_lvl0() -> Character {
+    pub fn get_test_fighter_lvl_0() -> Character {
         let name = String::from("FighterMan");
         let ability_scores = get_str_based();
         let equipment = Equipment::new(
@@ -238,12 +247,12 @@ mod tests {
     }
 
     #[test]
-    fn lvl1fighter_vs_dummy() {
-        let mut fighter = get_test_fighter_lvl0();
+    fn fighter_vs_dummy_do_nothing() {
+        let mut fighter = get_test_fighter_lvl_0();
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         let dummy = TargetDummy::new(isize::MAX, 14);
 
-        let mut em = EncounterManager::<BigRational>::new();
+        let mut em: EM64 = EncounterManager::new();
         em.add_player(fighter, Box::new(DoNothing));
         em.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy)), ResourceManager::new(),Box::new(DoNothing));
         em.simulate_n_rounds(1).unwrap();
@@ -252,7 +261,7 @@ mod tests {
         assert_eq!(1, cs_rv.len());
 
         let pcs = cs_rv.get_pcs(0);
-        assert_eq!(BigRational::one(), *pcs.get_prob());
+        assert_eq!(Rational64::one(), *pcs.get_prob());
 
         let logs = pcs.get_state().get_logs();
         assert!(!logs.has_parent());
@@ -261,5 +270,72 @@ mod tests {
         assert_eq!(6, events.len());
         let all_events = logs.get_all_events();
         assert_eq!(all_events, events.clone());
+
+        let expected_events = vec!(
+            CombatEvent::Timing(CombatTiming::BeginRound(RoundId(1))),
+            CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(0))),
+            CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(0))),
+            CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(1))),
+            CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(1))),
+            CombatEvent::Timing(CombatTiming::EndRound(RoundId(1)))
+        );
+        assert_eq!(all_events, expected_events);
+    }
+
+    #[test]
+    fn fighter_vs_dummy_basic_attack() {
+        let mut fighter = get_test_fighter_lvl_0();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
+        let dummy = TargetDummy::new(isize::MAX, 14);
+
+        let mut em: EM64 = EncounterManager::new();
+        em.add_player(fighter.clone(), Box::new(BasicAttacks));
+        em.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy.clone())), ResourceManager::new(),Box::new(DoNothing));
+        em.simulate_n_rounds(1).unwrap();
+
+        let cs_rv = em.get_state_rv();
+        assert_eq!(3, cs_rv.len());
+
+        let index_rv = cs_rv.get_index_rv();
+        let ar_rv: RV64 = fighter.get_basic_attack().unwrap()
+            .get_attack_result_rv(AttackHitType::Normal, dummy.get_ac()).unwrap()
+            .map_keys(|ar| {
+                match ar {
+                    AttackResult::Miss => 0,
+                    AttackResult::Hit => 1,
+                    AttackResult::Crit => 2
+                }
+            }).into_rv();
+        assert_eq!(ar_rv, index_rv);
+
+        let hit_pcs = cs_rv.get_pcs(1);
+        let hit_logs = hit_pcs.get_state().get_logs();
+        assert!(hit_logs.has_parent());
+
+        let hit_local_events = hit_logs.get_local_events();
+        assert_eq!(5, hit_local_events.len());
+        let hit_all_events = hit_logs.get_all_events();
+        assert_eq!(10, hit_all_events.len());
+
+        let expected_local_events = vec!(
+            CombatEvent::AR(AttackResult::Hit),
+            CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(0))),
+            CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(1))),
+            CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(1))),
+            CombatEvent::Timing(CombatTiming::EndRound(RoundId(1)))
+        );
+        assert_eq!(&expected_local_events, hit_local_events);
+
+        let mut expected_events = vec!(
+            CombatEvent::Timing(CombatTiming::BeginRound(RoundId(1))),
+            CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(0))),
+            CombatEvent::AN(ActionName::AttackAction),
+            CombatEvent::AN(ActionName::PrimaryAttack(AttackType::Normal)),
+            CombatEvent::Attack(ParticipantId(0), ParticipantId(1))
+        );
+        assert_eq!(&expected_events, hit_logs.get_parent().get_local_events());
+
+        expected_events.extend(expected_local_events.into_iter());
+        assert_eq!(expected_events, hit_all_events);
     }
 }

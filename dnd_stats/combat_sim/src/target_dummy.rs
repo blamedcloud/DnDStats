@@ -3,6 +3,7 @@ use character_builder::combat::ActionManager;
 use character_builder::damage::DamageType;
 use crate::participant::Participant;
 
+#[derive(Clone)]
 pub struct TargetDummy {
     max_hp: isize,
     ac: isize,

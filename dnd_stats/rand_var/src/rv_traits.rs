@@ -29,6 +29,7 @@ where
     fn upper_bound(&self) -> P;
     unsafe fn raw_pdf(&self, p: &P) -> T;
     fn valid_p(&self) -> SeqIter<P>;
+    fn len(&self) -> usize;
 
     fn pdf_ref(&self, p: &P) -> T {
         if (&self.lower_bound() <= p) && (p <= &self.upper_bound()) {

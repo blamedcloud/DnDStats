@@ -171,6 +171,10 @@ where
     fn valid_p(&self) -> SeqIter<isize> {
         Seq::gen_seq(&self.lower_bound(), &self.upper_bound())
     }
+
+    fn len(&self) -> usize {
+        self.pdf_vec.len()
+    }
 }
 
 impl<T> NumRandVar<isize, T> for RandomVariable<T>
@@ -360,6 +364,10 @@ where
     fn valid_p(&self) -> SeqIter<P> {
         let items: BTreeSet<P> = self.pdf_map.keys().cloned().collect();
         SeqIter { items }
+    }
+
+    fn len(&self) -> usize {
+        self.pdf_map.len()
     }
 }
 

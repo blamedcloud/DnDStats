@@ -159,8 +159,8 @@ impl Feature for SharpShooter {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
-    use num::{BigInt, BigRational, FromPrimitive, Rational64};
-    use rand_var::{RVBig, MapRandVar};
+    use num::{BigInt, BigRational, FromPrimitive};
+    use rand_var::RVBig;
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use rand_var::rv_traits::sequential::Pair;
     use crate::Character;
@@ -168,7 +168,7 @@ mod tests {
     use crate::classes::{ChooseSubClass, ClassName};
     use crate::classes::fighter::ChampionFighter;
     use crate::combat::{ActionName, AttackType, CombatAction, CombatOption};
-    use crate::combat::attack::{AccMRV64, AttackHitType, RollPair, WeaponAttack};
+    use crate::combat::attack::{AccMRV64, AttackHitType, WeaponAttack};
     use crate::equipment::{Armor, Equipment, OffHand, Weapon};
     use crate::feature::feats::{GreatWeaponMaster, PolearmMaster, Resilient, SharpShooter};
     use crate::tests::{get_dex_based, get_str_based};
