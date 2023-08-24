@@ -1,5 +1,5 @@
 use std::cmp;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::{Display, Formatter};
 use num::{BigRational, Rational64};
 use crate::ability_scores::Ability;
@@ -264,6 +264,10 @@ impl WeaponAttack {
         &self.ability
     }
 
+    pub fn set_d20_type(&mut self, d20type: D20Type) {
+        self.d20_rv = d20type;
+    }
+
     pub fn set_crit_lb(&mut self, crit: isize) {
         if crit > 1 && crit <= 20 {
             self.crit_lb = crit;
@@ -280,8 +284,8 @@ impl WeaponAttack {
         &mut self.damage
     }
 
-    pub fn set_d20_type(&mut self, d20type: D20Type) {
-        self.d20_rv = d20type;
+    pub fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, CBError> {
+        self.damage.get_attack_dmg_map(resistances)
     }
 
     pub fn get_accuracy_rv<T: RVProb>(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, CBError> {

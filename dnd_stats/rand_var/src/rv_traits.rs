@@ -4,7 +4,7 @@ use std::fmt::Display;
 use std::iter::Sum;
 use std::ops::{Add, Div, Mul, Sub};
 use num::{One, Zero};
-use crate::rv_traits::prob_type::Prob;
+use crate::rv_traits::prob_type::{Prob, Reciprocal};
 use crate::rv_traits::sequential::{Seq, SeqIter};
 
 pub mod sequential;
@@ -122,6 +122,23 @@ where
         F: Fn(&P) -> bool,
     {
         self.valid_p().filter(pred).map(|p| self.pdf(p)).sum()
+    }
+
+    fn rv_slice<F>(&self, pred: F) -> (T, Option<Self>)
+    where
+        Self: Sized,
+        F: Fn(&P) -> bool,
+        T: Reciprocal,
+    {
+        let filter_p: BTreeSet<P> = self.valid_p().filter(pred).collect();
+        if filter_p.len() > 0 {
+            let filter_si = SeqIter { items: filter_p };
+            let prob_on: T = filter_si.clone().map(|p| self.pdf(p)).sum();
+            let slice_rv = RandVar::build(filter_si, |p| self.pdf(p) * prob_on.clone().reciprocal().unwrap()).unwrap();
+            (prob_on, Some(slice_rv))
+        } else {
+            (T::zero(), None)
+        }
     }
 
     fn reroll_once_on<F>(&self, pred: F) -> Self

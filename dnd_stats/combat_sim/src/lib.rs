@@ -1,9 +1,10 @@
+use std::collections::BTreeMap;
 use num::{BigRational, Rational64};
 use character_builder::{CBError, Character};
 use character_builder::combat::{ActionName, ActionType, CombatAction};
-use character_builder::combat::attack::{ArMRV, AttackHitType};
+use character_builder::combat::attack::{ArMRV, AttackHitType, WeaponAttack};
 use character_builder::resources::{ResourceManager, ResourceName};
-use rand_var::MapRandVar;
+use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
 use crate::combat_log::{CombatEvent, CombatStateRV, CombatTiming, ProbCombatState};
 use crate::participant::{Participant, ParticipantId, Team, TeamMember};
@@ -60,13 +61,13 @@ impl<T: RVProb> EncounterManager<T> {
     }
 
     pub fn add_participant(&mut self, tm: TeamMember, rm: ResourceManager, str: Box<dyn Strategy>) {
+        self.cs_rv.add_participant(rm, tm.participant.get_max_hp());
         self.participants.push(tm);
         self.strategies.push(str);
-        self.cs_rv.add_participant(rm);
     }
 
     pub fn simulate_n_rounds(&mut self, n: u8) -> ResultCSE {
-        while self.round_num < n {
+        for _ in 0..n {
             self.round_num += 1;
             self.register_timing(CombatTiming::BeginRound(self.round_num.into()));
             self.simulate_round()?;
@@ -173,8 +174,6 @@ impl<T: RVProb> EncounterManager<T> {
         has_action && valid_target && has_resources
     }
 
-    // returns None if the passed in pcs is modified with only one child
-    // returns a Some(vec) if there was more than one child
     fn handle_action(&self, mut pcs: ProbCombatState<T>, pid: ParticipantId, so: StrategicOption) -> ResultHA<T> {
         let an = so.action_name;
         let participant = self.get_participant(pid);
@@ -188,10 +187,7 @@ impl<T: RVProb> EncounterManager<T> {
             CombatAction::Attack(wa) => {
                 if let Target::Participant(target_pid) = so.target.unwrap() {
                     pcs.push(CombatEvent::Attack(pid, target_pid));
-                    let target = self.get_participant(target_pid);
-                    let outcome_rv: ArMRV<T> = wa.get_attack_result_rv(AttackHitType::Normal, target.get_ac())?;
-                    let ce_rv: MapRandVar<CombatEvent, T> = outcome_rv.map_keys(|ar| ar.into());
-                    Ok(HandledAction::Children(pcs.split(ce_rv)))
+                    Ok(HandledAction::Children(self.handle_attack(pcs, wa, target_pid)?))
                 } else {
                     Err(CSError::InvalidTarget)
                 }
@@ -211,6 +207,15 @@ impl<T: RVProb> EncounterManager<T> {
             }
         }
     }
+
+    fn handle_attack(&self, pcs: ProbCombatState<T>, wa: &WeaponAttack, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<T>>, CBError> {
+        let target = self.get_participant(target_pid);
+        let outcome_rv: ArMRV<T> = wa.get_attack_result_rv(AttackHitType::Normal, target.get_ac())?;
+        let ce_rv: MapRandVar<CombatEvent, T> = outcome_rv.map_keys(|ar| ar.into());
+        let ar_dmg_map = wa.get_dmg_map(target.get_resistances())?;
+        let ce_dmg_map: BTreeMap<CombatEvent, RandomVariable<T>> = ar_dmg_map.into_iter().map(|(k, v)| (k.into(), v)).collect();
+        Ok(pcs.split_dmg(ce_rv, ce_dmg_map, target_pid))
+    }
 }
 
 #[cfg(test)]
@@ -225,6 +230,7 @@ mod tests {
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
     use character_builder::resources::ResourceManager;
     use rand_var::RV64;
+    use rand_var::rv_traits::NumRandVar;
     use crate::{EM64, EncounterManager};
     use crate::combat_log::{CombatEvent, CombatTiming, RoundId};
     use crate::participant::{Participant, ParticipantId, Team, TeamMember};
@@ -337,5 +343,27 @@ mod tests {
 
         expected_events.extend(expected_local_events.into_iter());
         assert_eq!(expected_events, hit_all_events);
+    }
+
+    #[test]
+    fn fighter_vs_dummy_basic_attack_dmg() {
+        let mut fighter = get_test_fighter_lvl_0();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
+        let dummy = TargetDummy::new(isize::MAX, 14);
+
+        let mut em: EM64 = EncounterManager::new();
+        em.add_player(fighter.clone(), Box::new(BasicAttacks));
+        em.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy.clone())), ResourceManager::new(),Box::new(DoNothing));
+        em.simulate_n_rounds(1).unwrap();
+
+        let cs_rv = em.get_state_rv();
+        let dmg_rv = cs_rv.get_dmg(ParticipantId(1));
+        let atk_dmg: RV64 = fighter.get_basic_attack().unwrap().get_attack_dmg_rv(AttackHitType::Normal, dummy.get_ac(), dummy.get_resistances()).unwrap();
+        assert_eq!(atk_dmg, dmg_rv);
+
+        em.simulate_n_rounds(1).unwrap();
+        let cs_rv = em.get_state_rv();
+        let dmg_rv = cs_rv.get_dmg(ParticipantId(1));
+        assert_eq!(atk_dmg.multiple(2), dmg_rv);
     }
 }
