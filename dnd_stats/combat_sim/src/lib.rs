@@ -1,8 +1,8 @@
 use character_builder::{CBError, Character};
 use character_builder::combat::{ActionName, ActionType, CombatAction};
-use character_builder::combat::attack::AttackHitType;
+use character_builder::combat::attack::{ArMRV, AttackHitType};
 use character_builder::resources::{ResourceManager, ResourceName};
-use rand_var::rv_traits::prob_type::ProbType;
+use rand_var::rv_traits::prob_type::RVProb;
 use crate::combat_log::{CombatEvent, CombatStateRV, CombatTiming, ProbCombatState};
 use crate::participant::{Participant, ParticipantId, Team, TeamMember};
 use crate::strategy::{StrategicOption, Strategy, Target};
@@ -27,17 +27,14 @@ impl From<CBError> for CSError {
 type HandledAction<T> = Result<Option<Vec<ProbCombatState<T>>>, CSError>;
 type ResultCSE = Result<(), CSError>;
 
-pub struct EncounterManager<T: ProbType> {
+pub struct EncounterManager<T: RVProb> {
     participants: Vec<TeamMember>, // in order of initiative
     strategies: Vec<Box<dyn Strategy>>,
     round_num: u8,
     cs_rv: CombatStateRV<T>,
 }
 
-impl<T> EncounterManager<T>
-where
-    T: ProbType
-{
+impl<T: RVProb> EncounterManager<T> {
     pub fn new() -> Self {
         Self {
             participants: Vec::new(),
@@ -188,7 +185,7 @@ where
                 if let Target::Participant(target_pid) = so.target.unwrap() {
                     pcs.push(CombatEvent::Attack(pid, target_pid));
                     let target = self.get_participant(target_pid);
-                    let outcome_rv = wa.get_attack_result_rv(AttackHitType::Normal, target.get_ac())?;
+                    let outcome_rv: ArMRV<T> = wa.get_attack_result_rv(AttackHitType::Normal, target.get_ac())?;
                     Ok(None) // TODO should be vec
                 } else {
                     Err(CSError::InvalidTarget)

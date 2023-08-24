@@ -1,27 +1,26 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use std::iter::Sum;
-use std::ops::Div;
 use num::{BigRational, FromPrimitive, Rational64};
 use crate::rv_traits::{NumRandVar, RandVar, RVError};
-use crate::rv_traits::prob_type::ProbType;
+use crate::rv_traits::prob_type::{Prob, Reciprocal};
 use crate::rv_traits::sequential::{Pair, Seq, SeqIter};
 
 pub mod rv_traits;
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct RandomVariable<T: ProbType> {
+pub struct RandomVariable<T: Prob> {
     lower_bound: isize,
     upper_bound: isize,
     pdf_vec: Vec<T>,
 }
 
 pub type RV64 = RandomVariable<Rational64>;
-pub type BigRV = RandomVariable<BigRational>;
+pub type RVBig = RandomVariable<BigRational>;
 
 impl<T> RandomVariable<T>
 where
-    T: ProbType + PartialEq<T> + for<'a> Sum<&'a T> + Ord
+    T: Prob + PartialEq<T> + for<'a> Sum<&'a T> + Ord
 {
     pub fn new(lb: isize, ub: isize, v: Vec<T>) -> Result<Self, RVError> {
         if lb > ub {
@@ -46,17 +45,22 @@ where
 
 impl<T> RandomVariable<T>
 where
-    T: ProbType + Div<T, Output=T> + FromPrimitive + PartialOrd<T>
+    T: Prob + Reciprocal + FromPrimitive
 {
     pub fn new_dice(sides: isize) -> Result<Self, RVError> {
         if sides < 1 {
             return Err(RVError::InvalidBounds);
         }
-        RandVar::build(
-            Seq::gen_seq(&1, &sides),
-            |_| {
-                T::one() / T::from_isize(sides).unwrap()
-            })
+        let mut v = Vec::with_capacity(sides as usize);
+        let t = T::from_isize(sides).unwrap().reciprocal().unwrap();
+        for _ in 0..sides {
+            v.push(t.clone());
+        }
+        Ok(Self {
+            lower_bound: 1,
+            upper_bound: sides,
+            pdf_vec: v
+        })
     }
 
     pub fn new_dice_reroll(sides: isize, reroll_max: isize) -> Result<Self, RVError> {
@@ -69,40 +73,54 @@ where
         if sides <= reroll_max {
             return Err(RVError::Other(String::from("sides must be larger than reroll_max")));
         }
-        let one_over_sides = T::one() / T::from_isize(sides).unwrap();
-        let reroll_over_sides = T::from_isize(reroll_max).unwrap() / T::from_isize(sides).unwrap();
+        let one_over_sides = T::from_isize(sides).unwrap().reciprocal().unwrap();
+        let reroll_over_sides = T::from_isize(reroll_max).unwrap() * one_over_sides.clone();
         let reroll_only = reroll_over_sides * one_over_sides.clone();
         let possible_reroll = one_over_sides + reroll_only.clone();
-        RandVar::build(
-            Seq::gen_seq(&1, &sides),
-            |x| {
-                if x > reroll_max {
-                    possible_reroll.clone()
-                } else {
-                    reroll_only.clone()
-                }
+        let mut v = Vec::with_capacity(sides as usize);
+        for i in 1..=sides {
+            if i > reroll_max {
+                v.push(possible_reroll.clone());
+            } else {
+                v.push(reroll_only.clone());
             }
-        )
+        }
+        Ok(Self {
+            lower_bound: 1,
+            upper_bound: sides,
+            pdf_vec: v
+        })
     }
 
     pub fn new_constant(value: isize) -> Result<Self, RVError> {
-        RandVar::build(
-            Seq::gen_seq(&value, &value),
-            |_| T::one())
+        Ok(Self {
+            lower_bound: value,
+            upper_bound: value,
+            pdf_vec: vec!(T::one())
+        })
     }
 
     pub fn new_uniform(lb: isize, ub: isize) -> Result<Self, RVError> {
-        RandVar::build(
-            Seq::gen_seq(&lb, &ub),
-            |_| {
-                T::one() /  T::from_isize(ub-lb+1).unwrap()
-            })
+        if ub < lb {
+            return Err(RVError::InvalidBounds);
+        }
+        let size = (ub - lb + 1) as usize;
+        let mut v = Vec::with_capacity(size);
+        let t = T::from_usize(size).unwrap().reciprocal().unwrap();
+        for _ in 0..size {
+            v.push(t.clone());
+        }
+        Ok(Self {
+            lower_bound: lb,
+            upper_bound: ub,
+            pdf_vec: v
+        })
     }
 }
 
 impl<T> RandVar<isize, T> for RandomVariable<T>
 where
-    T: ProbType + PartialOrd<T>
+    T: Prob + PartialOrd<T>
 {
     fn build<F>(seq_iter: SeqIter<isize>, f: F) -> Result<Self, RVError>
     where
@@ -157,7 +175,7 @@ where
 
 impl<T> NumRandVar<isize, T> for RandomVariable<T>
 where
-    T: ProbType + PartialOrd<T> + FromPrimitive
+    T: Prob + PartialOrd<T> + FromPrimitive
 {
     fn convert(&self, p: isize) -> T {
         T::from_isize(p).unwrap()
@@ -167,19 +185,19 @@ where
 // Begin MapRandVar //
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct MapRandVar<P: Ord + Clone, T: ProbType> {
+pub struct MapRandVar<P: Ord + Clone, T: Prob> {
     lower_bound: P,
     upper_bound: P,
     pdf_map: BTreeMap<P,T>,
 }
 
 pub type MRV64 = MapRandVar<isize, Rational64>;
-pub type BigMRV = MapRandVar<isize, BigRational>;
+pub type MRVBig = MapRandVar<isize, BigRational>;
 
 impl<P, T> MapRandVar<P, T>
 where
     P: Ord + Clone,
-    T: ProbType + PartialOrd<T> + for<'a> Sum<&'a T>,
+    T: Prob + PartialOrd<T> + for<'a> Sum<&'a T>,
 {
     pub fn from_map(m: BTreeMap<P, T>) -> Result<Self, RVError> {
         if m.len() == 0 {
@@ -292,7 +310,7 @@ where
 impl<P, T> RandVar<P, T> for MapRandVar<P, T>
 where
     P: Ord + Clone,
-    T: ProbType + PartialOrd<T>,
+    T: Prob + PartialOrd<T>,
 {
     fn build<F: Fn(P) -> T>(seq_iter: SeqIter<P>, f: F) -> Result<Self, RVError> {
         if seq_iter.items.len() == 0 {
@@ -347,7 +365,7 @@ where
 
 impl<T> NumRandVar<isize, T> for MapRandVar<isize, T>
 where
-    T: ProbType + PartialOrd<T> + FromPrimitive
+    T: Prob + PartialOrd<T> + FromPrimitive
 {
     fn convert(&self, p: isize) -> T {
         T::from_isize(p).unwrap()
@@ -356,7 +374,7 @@ where
 
 // Conversions //
 
-impl<T: ProbType + PartialOrd<T>> From<RandomVariable<T>> for MapRandVar<isize, T> {
+impl<T: Prob + PartialOrd<T>> From<RandomVariable<T>> for MapRandVar<isize, T> {
     fn from(value: RandomVariable<T>) -> Self {
         let mut pdf_map: BTreeMap<isize, T> = BTreeMap::new();
         for (i, t) in value.pdf_vec.into_iter().enumerate() {
@@ -374,7 +392,7 @@ impl<T: ProbType + PartialOrd<T>> From<RandomVariable<T>> for MapRandVar<isize, 
     }
 }
 
-impl<T: ProbType> From<MapRandVar<isize, T>> for RandomVariable<T> {
+impl<T: Prob> From<MapRandVar<isize, T>> for RandomVariable<T> {
     fn from(value: MapRandVar<isize, T>) -> Self {
         let lb = value.lower_bound;
         let ub = value.upper_bound;
@@ -397,12 +415,12 @@ impl<T: ProbType> From<MapRandVar<isize, T>> for RandomVariable<T> {
 }
 
 // a couple of helper methods for when just .into is ambiguous
-impl<T: ProbType> MapRandVar<isize, T> {
+impl<T: Prob> MapRandVar<isize, T> {
     pub fn into_rv(self) -> RandomVariable<T> {
         self.into()
     }
 }
-impl<T: ProbType + PartialOrd<T>> RandomVariable<T> {
+impl<T: Prob + PartialOrd<T>> RandomVariable<T> {
     pub fn into_mrv(self) -> MapRandVar<isize, T> {
         self.into()
     }
@@ -482,7 +500,7 @@ mod tests {
 
     #[test]
     fn test_4d6_drop_lowest() {
-        let d6: BigRV = RandomVariable::new_dice(6).unwrap();
+        let d6: RVBig = RandomVariable::new_dice(6).unwrap();
         let ability_score = d6
             .into_mrv()
             .independent_trials_self()

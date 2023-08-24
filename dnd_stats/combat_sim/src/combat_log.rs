@@ -2,7 +2,7 @@ use std::rc::Rc;
 use character_builder::combat::{ActionName, ActionType};
 use character_builder::combat::attack::AttackResult;
 use character_builder::resources::{RefreshTiming, ResourceManager, ResourceName};
-use rand_var::rv_traits::prob_type::ProbType;
+use rand_var::rv_traits::prob_type::RVProb;
 use crate::participant::ParticipantId;
 
 
@@ -106,12 +106,12 @@ impl CombatState {
 }
 
 #[derive(Clone)]
-pub struct ProbCombatState<T: ProbType> {
+pub struct ProbCombatState<T: RVProb> {
     state: CombatState,
     prob: T,
 }
 
-impl<T: ProbType> ProbCombatState<T> {
+impl<T: RVProb> ProbCombatState<T> {
     pub fn new() -> Self {
         Self {
             state: CombatState::new(),
@@ -154,11 +154,11 @@ impl<T: ProbType> ProbCombatState<T> {
 
 }
 
-pub struct CombatStateRV<T: ProbType> {
+pub struct CombatStateRV<T: RVProb> {
     states: Vec<ProbCombatState<T>>,
 }
 
-impl<T: ProbType> CombatStateRV<T> {
+impl<T: RVProb> CombatStateRV<T> {
     pub fn new() -> Self {
         let mut states = Vec::new();
         states.push(ProbCombatState::new());
@@ -198,7 +198,7 @@ impl<T: ProbType> CombatStateRV<T> {
     }
 }
 
-impl<T: ProbType> From<Vec<ProbCombatState<T>>> for CombatStateRV<T> {
+impl<T: RVProb> From<Vec<ProbCombatState<T>>> for CombatStateRV<T> {
     fn from(value: Vec<ProbCombatState<T>>) -> Self {
         Self {
             states: value,

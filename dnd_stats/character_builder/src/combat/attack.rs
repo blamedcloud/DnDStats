@@ -1,14 +1,13 @@
 use std::cmp;
 use std::collections::{BTreeSet, HashSet};
 use std::fmt::{Display, Formatter};
-use num::BigRational;
-
+use num::{BigRational, Rational64};
 use crate::ability_scores::Ability;
 use crate::attributed_bonus::{BonusTerm, BonusType};
 use rand_var::rv_traits::{RandVar, sequential};
 use rand_var::{MapRandVar, RandomVariable};
+use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::sequential::{Pair, Seq, SeqIter};
-
 use crate::damage::{DamageDice, DamageInstance, DamageManager, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
 use crate::equipment::{OffHand, Weapon, WeaponProperty, WeaponRange};
 use crate::{AttributedBonus, CBError, Character};
@@ -22,15 +21,32 @@ pub enum AttackHitType {
 }
 
 impl AttackHitType {
-    pub fn get_rv(&self, rv: &RandomVariable<BigRational>) -> RandomVariable<BigRational> {
+    pub fn get_rv<T: RVProb>(&self, d20: &D20Type) -> RandomVariable<T> {
+        let rv = d20.get_rv();
         match self {
             AttackHitType::Disadvantage => rv.min_two_trials(),
-            AttackHitType::Normal => rv.clone(),
+            AttackHitType::Normal => rv,
             AttackHitType::Advantage => rv.max_two_trials(),
             AttackHitType::SuperAdvantage => rv.max_three_trials(),
         }
     }
 }
+
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub enum D20Type {
+    D20,
+    D20R1,
+}
+
+impl D20Type {
+    pub fn get_rv<T: RVProb>(&self) -> RandomVariable<T> {
+        match self {
+            D20Type::D20 => RandomVariable::new_dice(20).unwrap(),
+            D20Type::D20R1 => RandomVariable::new_dice_reroll(20, 1).unwrap()
+        }
+    }
+}
+
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum AttackResult {
@@ -96,6 +112,18 @@ impl Seq for AttackResult {
     }
 }
 
+pub type AccMRV<T> = MapRandVar<RollPair, T>;
+pub type AccMRV64 = MapRandVar<RollPair, Rational64>;
+pub type AccMRVBig = MapRandVar<RollPair, BigRational>;
+
+pub type ArMRV<T> = MapRandVar<AttackResult, T>;
+pub type ArMRV64 = MapRandVar<AttackResult, Rational64>;
+pub type ArMRVBig = MapRandVar<AttackResult, BigRational>;
+
+pub type AoMRV<T> = MapRandVar<Pair<AttackResult, isize>, T>;
+pub type AoMRV64 = MapRandVar<Pair<AttackResult, isize>, Rational64>;
+pub type AoMRVBig = MapRandVar<Pair<AttackResult, isize>, BigRational>;
+
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum NumHands {
     OneHand,
@@ -117,7 +145,7 @@ pub struct WeaponAttack {
     hit_bonus: AttributedBonus,
     damage: DamageManager,
     crit_lb: isize,
-    d20_rv: RandomVariable<BigRational>,
+    d20_rv: D20Type,
 }
 
 impl WeaponAttack {
@@ -191,7 +219,7 @@ impl WeaponAttack {
             ));
         }
 
-        WeaponAttack {
+        Self {
             weapon: weapon.clone(),
             num_hands,
             hand_type,
@@ -199,7 +227,7 @@ impl WeaponAttack {
             ability,
             damage,
             crit_lb: 20,
-            d20_rv: RandomVariable::new_dice(20).unwrap(),
+            d20_rv: D20Type::D20,
         }
     }
 
@@ -252,11 +280,11 @@ impl WeaponAttack {
         &mut self.damage
     }
 
-    pub fn set_halfling_lucky(&mut self) {
-        self.d20_rv = RandomVariable::new_dice_reroll(20, 1).unwrap();
+    pub fn set_d20_type(&mut self, d20type: D20Type) {
+        self.d20_rv = d20type;
     }
 
-    pub fn get_accuracy_rv(&self, hit_type: AttackHitType) -> Result<MapRandVar<RollPair, BigRational>, CBError> {
+    pub fn get_accuracy_rv<T: RVProb>(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, CBError> {
         let rv = hit_type.get_rv(&self.d20_rv);
         if let None = self.hit_bonus.get_saved_value() {
             return Err(CBError::NoCache);
@@ -265,18 +293,18 @@ impl WeaponAttack {
         Ok(rv.into_mrv().map_keys(|roll| Pair(roll, roll + hit_const)))
     }
 
-    pub fn get_attack_result_rv(&self, hit_type: AttackHitType, target_ac: isize) -> Result<MapRandVar<AttackResult, BigRational>, CBError> {
+    pub fn get_attack_result_rv<T: RVProb>(&self, hit_type: AttackHitType, target_ac: isize) -> Result<ArMRV<T>, CBError> {
         let hit_rv = self.get_accuracy_rv(hit_type)?;
         Ok(hit_rv.map_keys(|hit| AttackResult::from(hit, target_ac, self.crit_lb)))
     }
 
-    pub fn get_attack_dmg_rv(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<BigRational>, CBError> {
+    pub fn get_attack_dmg_rv<T: RVProb>(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CBError> {
         let attack_result_rv = self.get_attack_result_rv(hit_type, target_ac)?;
         let dmg_map = self.damage.get_attack_dmg_map(resistances)?;
         Ok(attack_result_rv.consolidate(&dmg_map)?.into())
     }
 
-    pub fn get_attack_outcome_rv(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<MapRandVar<Pair<AttackResult, isize>, BigRational>, CBError> {
+    pub fn get_attack_outcome_rv<T: RVProb>(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<AoMRV<T>, CBError> {
         let attack_result_rv = self.get_attack_result_rv(hit_type, target_ac)?;
         let dmg_map = self.damage.get_attack_dmg_map(resistances)?;
         Ok(attack_result_rv.projection(&dmg_map)?)
@@ -286,8 +314,8 @@ impl WeaponAttack {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
-    use num::FromPrimitive;
-    use rand_var::{BigMRV, BigRV};
+    use num::{BigRational, FromPrimitive};
+    use rand_var::{MRVBig, RVBig};
     use rand_var::rv_traits::NumRandVar;
     use crate::tests::get_test_fighter;
     use super::*;
@@ -305,12 +333,12 @@ mod tests {
 
         let damage = attack.get_damage();
 
-        let two_d6: BigRV = RandomVariable::new_dice(6).unwrap().multiple(2);
+        let two_d6: RVBig = RandomVariable::new_dice(6).unwrap().multiple(2);
         let base_dmg = two_d6.add_const(3);
         assert_eq!(base_dmg, damage.get_base_dmg(&no_resist).unwrap());
         let crit_dmg = two_d6.multiple(2).add_const(3);
         assert_eq!(crit_dmg, damage.get_crit_dmg(&no_resist).unwrap());
-        let miss_dmg: BigRV = RandomVariable::new_constant(0).unwrap();
+        let miss_dmg: RVBig = RandomVariable::new_constant(0).unwrap();
         assert_eq!(miss_dmg, damage.get_miss_dmg(&no_resist).unwrap());
 
         let mut dmg_map = BTreeMap::new();
@@ -318,12 +346,12 @@ mod tests {
         dmg_map.insert(AttackResult::Hit, base_dmg);
         dmg_map.insert(AttackResult::Miss, miss_dmg);
 
-        let d20: BigMRV = RandomVariable::new_dice(20).unwrap().into();
+        let d20: MRVBig = RandomVariable::new_dice(20).unwrap().into();
         let normal_hit = d20.map_keys(|r| Pair(r, r+5));
         assert_eq!(normal_hit, attack.get_accuracy_rv(AttackHitType::Normal).unwrap());
         let target_ac = 13;
         let normal_result = normal_hit.map_keys(|hit| AttackResult::from(hit, target_ac, 20));
-        let normal_dmg: BigRV = normal_result.consolidate(&dmg_map).unwrap().into();
+        let normal_dmg: RVBig = normal_result.consolidate(&dmg_map).unwrap().into();
         assert_eq!(normal_dmg, attack.get_attack_dmg_rv(AttackHitType::Normal, target_ac, &no_resist).unwrap());
     }
 
@@ -334,7 +362,7 @@ mod tests {
         let no_resist = HashSet::new();
         let ac = 13;
         // greatsword attack: d20 + 5 vs 13 @ 2d6 + 3
-        let result_rv = attack.get_attack_result_rv(AttackHitType::Normal, ac).unwrap();
+        let result_rv: ArMRVBig = attack.get_attack_result_rv(AttackHitType::Normal, ac).unwrap();
         let dmg_rv = attack.get_attack_dmg_rv(AttackHitType::Normal, ac, &no_resist).unwrap();
         assert_eq!(0, dmg_rv.lower_bound());
         assert_eq!(27, dmg_rv.upper_bound());

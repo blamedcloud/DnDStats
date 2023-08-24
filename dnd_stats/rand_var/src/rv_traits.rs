@@ -4,7 +4,7 @@ use std::fmt::Display;
 use std::iter::Sum;
 use std::ops::{Add, Div, Mul, Sub};
 use num::{One, Zero};
-use crate::rv_traits::prob_type::ProbType;
+use crate::rv_traits::prob_type::Prob;
 use crate::rv_traits::sequential::{Seq, SeqIter};
 
 pub mod sequential;
@@ -22,7 +22,7 @@ pub enum RVError {
 pub trait RandVar<P, T>
 where
     P: Ord + Clone,
-    T: ProbType,
+    T: Prob,
 {
     fn build<F: Fn(P) -> T>(seq_iter: SeqIter<P>, f: F) -> Result<Self, RVError> where Self: Sized;
     fn lower_bound(&self) -> P;
@@ -227,7 +227,7 @@ where
 pub trait NumRandVar<P, T>: RandVar<P, T>
 where
     P: Seq + Zero + Add<P, Output=P> + Sub<P, Output=P>,
-    T: ProbType,
+    T: Prob,
 {
     fn convert(&self, p: P) -> T;
 
@@ -425,7 +425,7 @@ where
 #[cfg(test)]
 mod tests {
     use num::{BigInt, BigRational, One, Rational64, FromPrimitive, Zero};
-    use crate::{BigRV, RandomVariable, RV64};
+    use crate::{RVBig, RandomVariable, RV64};
     use super::*;
 
     #[test]
@@ -529,8 +529,8 @@ mod tests {
 
     #[test]
     fn test_2d6() {
-        let rv1: BigRV = RandomVariable::new_dice(6).unwrap();
-        let rv2: BigRV = RandomVariable::new_dice(6).unwrap();
+        let rv1: RVBig = RandomVariable::new_dice(6).unwrap();
+        let rv2: RVBig = RandomVariable::new_dice(6).unwrap();
         let rv = rv1.add_rv(&rv2);
         assert_eq!(2, rv.lower_bound());
         assert_eq!(12, rv.upper_bound());
@@ -550,7 +550,7 @@ mod tests {
 
     #[test]
     fn test_multiple() {
-        let rv1: BigRV = RandomVariable::new_dice(6).unwrap();
+        let rv1: RVBig = RandomVariable::new_dice(6).unwrap();
         let rv = rv1.add_rv(&rv1);
         let other_rv = rv1.multiple(2);
         assert_eq!(rv, other_rv);
@@ -562,7 +562,7 @@ mod tests {
 
     #[test]
     fn test_fireball() {
-        let d6: BigRV = RandomVariable::new_dice(6).unwrap();
+        let d6: RVBig = RandomVariable::new_dice(6).unwrap();
         let fireball = d6.multiple(8);
         assert_eq!(8, fireball.lower_bound());
         assert_eq!(48, fireball.upper_bound());

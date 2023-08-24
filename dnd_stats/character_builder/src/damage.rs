@@ -1,9 +1,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::{Debug, Display};
-use num::{FromPrimitive, Integer};
-use num::rational::Ratio;
+use std::fmt::Debug;
 use rand_var::RandomVariable;
 use rand_var::rv_traits::{NumRandVar, RandVar};
+use rand_var::rv_traits::prob_type::RVProb;
 use crate::attributed_bonus::{AttributedBonus, BonusTerm};
 use crate::{CBError, Character};
 use crate::combat::attack::AttackResult;
@@ -19,11 +18,7 @@ pub enum DamageDice {
 }
 
 impl DamageDice {
-    pub fn get_rv<T>(&self) -> RandomVariable<Ratio<T>>
-    where
-        T: Integer + Debug + Clone + Display + FromPrimitive,
-        Ratio<T>: FromPrimitive
-    {
+    pub fn get_rv<T: RVProb>(&self) -> RandomVariable<T> {
         match self {
             DamageDice::D4 => RandomVariable::new_dice(4).unwrap(),
             DamageDice::D6 => RandomVariable::new_dice(6).unwrap(),
@@ -34,11 +29,7 @@ impl DamageDice {
         }
     }
 
-    pub fn get_rv_gwf<T>(&self) -> RandomVariable<Ratio<T>>
-    where
-        T: Integer + Debug + Clone + Display + FromPrimitive,
-        Ratio<T>: FromPrimitive
-    {
+    pub fn get_rv_gwf<T: RVProb>(&self) -> RandomVariable<T> {
         match self {
             DamageDice::D4 => RandomVariable::new_dice_reroll(4, 2).unwrap(),
             DamageDice::D6 => RandomVariable::new_dice_reroll(6, 2).unwrap(),
@@ -226,13 +217,9 @@ impl DamageSum {
         }
     }
 
-    pub fn get_dmg_dice_rv<T>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<RandomVariable<Ratio<T>>, CBError>
-    where
-        T: Integer + Debug + Clone + Display + FromPrimitive,
-        Ratio<T>: FromPrimitive
-    {
+    pub fn get_dmg_dice_rv<T: RVProb>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<RandomVariable<T>, CBError> {
         let gwf = dmg_feats.contains(&DamageFeature::GWF);
-        let mut rv: RandomVariable<Ratio<T>> = RandomVariable::new_constant(0).unwrap();
+        let mut rv: RandomVariable<T> = RandomVariable::new_constant(0).unwrap();
         for ext_dice in self.dmg_dice.iter() {
             let dice = DamageSum::get_die(ext_dice, weapon_dmg)?;
             if gwf {
@@ -338,23 +325,19 @@ impl DamageManager {
         }
     }
 
-    fn get_total_dmg<T>(&self, de: &DamageExpression, resistances: &HashSet<DamageType>, double_dice: bool) -> Result<RandomVariable<Ratio<T>>, CBError>
-    where
-        T: Integer + Debug + Clone + Display + FromPrimitive,
-        Ratio<T>: FromPrimitive
-    {
+    fn get_total_dmg<T: RVProb>(&self, de: &DamageExpression, resistances: &HashSet<DamageType>, double_dice: bool) -> Result<RandomVariable<T>, CBError> {
         let mut rv = RandomVariable::new_constant(0).unwrap();
         for (k, ds) in de.iter() {
-            let mut type_rv = ds.get_dmg_dice_rv(&self.damage_features, self.weapon_die)?;
+            let mut dice_rv = ds.get_dmg_dice_rv(&self.damage_features, self.weapon_die)?;
             if double_dice {
-                type_rv = type_rv.multiple(2);
+                dice_rv = dice_rv.multiple(2);
             }
-            type_rv = type_rv.add_const(ds.get_total_const()?);
+            dice_rv = dice_rv.add_const(ds.get_total_const()?);
             let dmg_type = self.get_dmg_type(k)?;
             if resistances.contains(&dmg_type) {
-                rv = rv.add_rv(&type_rv.half().unwrap());
+                rv = rv.add_rv(&dice_rv.half().unwrap());
             } else {
-                rv = rv.add_rv(&type_rv);
+                rv = rv.add_rv(&dice_rv);
             }
         }
         // damage is never negative
@@ -362,19 +345,11 @@ impl DamageManager {
         Ok(rv)
     }
 
-    pub fn get_base_dmg<T>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<Ratio<T>>, CBError>
-    where
-        T: Integer + Debug + Clone + Display + FromPrimitive,
-        Ratio<T>: FromPrimitive
-    {
+    pub fn get_base_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CBError> {
         self.get_total_dmg(&self.base_dmg, resistances, false)
     }
 
-    pub fn get_crit_dmg<T>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<Ratio<T>>, CBError>
-    where
-        T: Integer + Debug + Clone + Display + FromPrimitive,
-        Ratio<T>: FromPrimitive
-    {
+    pub fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CBError> {
         // double base dice + base const
         let mut rv = self.get_total_dmg(&self.base_dmg, resistances, true)?;
         // bonus crit dmg
@@ -382,29 +357,17 @@ impl DamageManager {
         Ok(rv)
     }
 
-    pub fn get_miss_dmg<T>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<Ratio<T>>, CBError>
-    where
-        T: Integer + Debug + Clone + Display + FromPrimitive,
-        Ratio<T>: FromPrimitive
-    {
+    pub fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CBError> {
         self.get_total_dmg(&self.miss_dmg, resistances, false)
     }
 
     // this is often easier for "half dmg on save" than building
     // an actual miss_dmg DamageExpression
-    pub fn get_half_base_dmg<T>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<Ratio<T>>, CBError>
-    where
-        T: Integer + Debug + Clone + Display + FromPrimitive,
-        Ratio<T>: FromPrimitive
-    {
+    pub fn get_half_base_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CBError> {
         Ok(self.get_base_dmg(resistances)?.half().unwrap())
     }
 
-    pub fn get_attack_dmg_map<T>(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<Ratio<T>>>, CBError>
-    where
-        T: Integer + Debug + Clone + Display + FromPrimitive,
-        Ratio<T>: FromPrimitive
-    {
+    pub fn get_attack_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, CBError> {
         let mut map = BTreeMap::new();
         map.insert(AttackResult::Miss, self.get_miss_dmg(resistances)?);
         map.insert(AttackResult::Hit, self.get_base_dmg(resistances)?);
