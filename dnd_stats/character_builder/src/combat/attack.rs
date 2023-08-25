@@ -10,6 +10,7 @@ use crate::CBError;
 use crate::damage::DamageType;
 
 pub mod weapon_attack;
+pub mod basic_attack;
 
 #[derive(Debug, Copy, Clone)]
 pub enum AttackHitType {

@@ -227,7 +227,7 @@ impl<T: RVProb> EncounterManager<T> {
         pcs.push(CombatEvent::AN(an));
 
         match &co.action {
-            CombatAction::Attack(wa) => {
+            CombatAction::WeaponAttack(wa) => {
                 if let Target::Participant(target_pid) = so.target.unwrap() {
                     pcs.push(CombatEvent::Attack(pid, target_pid));
                     Ok(HandledAction::Children(self.handle_attack(pcs, wa, target_pid)?))
@@ -235,6 +235,14 @@ impl<T: RVProb> EncounterManager<T> {
                     Err(CSError::InvalidTarget)
                 }
             },
+            CombatAction::BasicAttack(ba) => {
+                if let Target::Participant(target_pid) = so.target.unwrap() {
+                    pcs.push(CombatEvent::Attack(pid, target_pid));
+                    Ok(HandledAction::Children(self.handle_attack(pcs, ba, target_pid)?))
+                } else {
+                    Err(CSError::InvalidTarget)
+                }
+            }
             CombatAction::SelfHeal(de) => {
                 let heal: RandomVariable<T> = de.get_heal_rv()?;
                 Ok(HandledAction::Children(pcs.add_dmg(&heal, pid, self.is_dead_at_zero(pid))))
@@ -274,15 +282,18 @@ mod tests {
     use character_builder::classes::ClassName;
     use character_builder::combat::attack::{Attack, AttackHitType, AttackResult};
     use character_builder::combat::{ActionName, AttackType};
+    use character_builder::combat::attack::basic_attack::BasicAttack;
+    use character_builder::damage::{DamageDice, DamageType};
     use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
-    use character_builder::resources::ResourceManager;
+    use character_builder::resources::{create_basic_rm, ResourceManager};
     use rand_var::RV64;
     use rand_var::rv_traits::{NumRandVar, RandVar};
-    use crate::{EM64, EncounterManager};
     use crate::combat_log::{CombatEvent, CombatTiming, Health, RoundId};
+    use crate::{EM64, EncounterManager};
+    use crate::monster::Monster;
     use crate::participant::{Participant, ParticipantId, Team, TeamMember};
-    use crate::strategy::{BasicAttacks, DoNothing};
+    use crate::strategy::{BasicAttackStr, DoNothing, LinearStrategy, SecondWindStr};
     use crate::target_dummy::TargetDummy;
 
     pub fn get_str_based() -> AbilityScores {
@@ -344,7 +355,7 @@ mod tests {
         let dummy = TargetDummy::new(isize::MAX, 14);
 
         let mut em: EM64 = EncounterManager::new();
-        em.add_player(fighter.clone(), Box::new(BasicAttacks));
+        em.add_player(fighter.clone(), Box::new(BasicAttackStr));
         em.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy.clone())), ResourceManager::new(),Box::new(DoNothing));
         em.simulate_n_rounds(1).unwrap();
 
@@ -402,7 +413,7 @@ mod tests {
         let dummy = TargetDummy::new(isize::MAX, 14);
 
         let mut em: EM64 = EncounterManager::new();
-        em.add_player(fighter.clone(), Box::new(BasicAttacks));
+        em.add_player(fighter.clone(), Box::new(BasicAttackStr));
         em.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy.clone())), ResourceManager::new(),Box::new(DoNothing));
         em.simulate_n_rounds(1).unwrap();
 
@@ -424,7 +435,7 @@ mod tests {
         let orc = TargetDummy::new(15, 13);
 
         let mut em: EM64 = EncounterManager::new();
-        em.add_player(fighter.clone(), Box::new(BasicAttacks));
+        em.add_player(fighter.clone(), Box::new(BasicAttackStr));
         em.add_participant(TeamMember::new(Team::Enemies, Box::new(orc.clone())), ResourceManager::new(), Box::new(DoNothing));
         em.simulate_n_rounds(1).unwrap();
 
@@ -470,5 +481,50 @@ mod tests {
             .get_attack_dmg_rv(AttackHitType::Normal, orc.get_ac(), orc.get_resistances()).unwrap()
             .cap_ub(orc.get_max_hp()).unwrap();
         assert_eq!(atk_dmg, dmg_rv);
+    }
+
+    #[test]
+    fn fighter_vs_orc_strategy() {
+        let mut fighter = get_test_fighter_lvl_0();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
+        let mut fighter_str = LinearStrategy::new();
+        fighter_str.add_strategy(Box::new(BasicAttackStr));
+        fighter_str.add_strategy(Box::new(SecondWindStr));
+
+        let ba = BasicAttack::new(5, DamageType::Slashing, 3, DamageDice::D12, 1);
+        let orc = Monster::new(15, 13, ba, 1);
+
+        let mut em: EM64 = EncounterManager::new();
+        em.add_participant(TeamMember::new(Team::Enemies, Box::new(orc.clone())), create_basic_rm(), Box::new(BasicAttackStr));
+        em.add_player(fighter.clone(), Box::new(fighter_str));
+        em.simulate_n_rounds(1).unwrap();
+
+        let cs_rv = em.get_state_rv();
+        assert_eq!(59, cs_rv.len());
+
+        let branch = cs_rv.get_pcs(16);
+        let full_log = branch.get_state().get_logs().get_all_events();
+
+        let expected_events = vec!(
+            CombatEvent::Timing(CombatTiming::EncounterBegin),
+            CombatEvent::Timing(CombatTiming::BeginRound(RoundId(1))),
+            CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(0))),
+            CombatEvent::AN(ActionName::AttackAction),
+            CombatEvent::AN(ActionName::PrimaryAttack(AttackType::Normal)),
+            CombatEvent::Attack(ParticipantId(0), ParticipantId(1)),
+            CombatEvent::AR(AttackResult::Hit),
+            CombatEvent::HP(ParticipantId(1), Health::Bloodied),
+            CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(0))),
+            CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(1))),
+            CombatEvent::AN(ActionName::AttackAction),
+            CombatEvent::AN(ActionName::PrimaryAttack(AttackType::Normal)),
+            CombatEvent::Attack(ParticipantId(1), ParticipantId(0)),
+            CombatEvent::AR(AttackResult::Hit),
+            CombatEvent::AN(ActionName::SecondWind),
+            CombatEvent::HP(ParticipantId(1), Health::Healthy),
+            CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(1))),
+            CombatEvent::Timing(CombatTiming::EndRound(RoundId(1))),
+        );
+        assert_eq!(expected_events, full_log);
     }
 }

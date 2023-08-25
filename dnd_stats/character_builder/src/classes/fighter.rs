@@ -106,7 +106,7 @@ pub struct ImprovedCritical(pub isize);
 impl Feature for ImprovedCritical {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
         for (_, co) in character.combat_actions.iter_mut() {
-            if let CombatAction::Attack(wa) = &mut co.action {
+            if let CombatAction::WeaponAttack(wa) = &mut co.action {
                 wa.set_crit_lb(self.0);
             }
         }

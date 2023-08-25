@@ -11,12 +11,12 @@ use crate::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, Resource
 pub struct GreatWeaponMaster;
 impl GreatWeaponMaster {
     pub fn get_new_co(co: &CombatOption) -> Option<CombatOption> {
-        if let CombatAction::Attack(wa) = &co.action {
+        if let CombatAction::WeaponAttack(wa) = &co.action {
             if wa.get_weapon().get_type().is_melee() && wa.get_weapon().has_property(WeaponProperty::Heavy) {
                 let mut new_wa = wa.clone();
                 new_wa.add_accuracy_bonus(BonusTerm::new_attr(BonusType::Constant(-5), String::from("gwm")));
                 new_wa.get_damage_mut().add_base_dmg(DamageTerm::new(ExpressionTerm::Const(10), ExtendedDamageType::WeaponDamage));
-                return Some(CombatOption::new(co.action_type, CombatAction::Attack(new_wa)));
+                return Some(CombatOption::new(co.action_type, CombatAction::WeaponAttack(new_wa)));
             }
         }
         None
@@ -74,10 +74,10 @@ impl PolearmMaster {
     }
 
     pub fn get_new_co(co: &CombatOption) -> Option<CombatOption> {
-        if let CombatAction::Attack(wa) = &co.action {
+        if let CombatAction::WeaponAttack(wa) = &co.action {
             if PolearmMaster::is_valid_weapon(wa.get_weapon()) {
                 let new_wa = wa.as_pam_attack();
-                return Some(CombatOption::new(ActionType::BonusAction, CombatAction::Attack(new_wa)));
+                return Some(CombatOption::new(ActionType::BonusAction, CombatAction::WeaponAttack(new_wa)));
             }
         }
         None
@@ -117,12 +117,12 @@ impl Feature for Resilient {
 pub struct SharpShooter;
 impl SharpShooter {
     pub fn get_new_co(co: &CombatOption) -> Option<CombatOption> {
-        if let CombatAction::Attack(wa) = &co.action {
+        if let CombatAction::WeaponAttack(wa) = &co.action {
             if wa.get_weapon().get_type().is_ranged() {
                 let mut new_wa = wa.clone();
                 new_wa.add_accuracy_bonus(BonusTerm::new_attr(BonusType::Constant(-5), String::from("ss")));
                 new_wa.get_damage_mut().add_base_dmg(DamageTerm::new(ExpressionTerm::Const(10), ExtendedDamageType::WeaponDamage));
-                return Some(CombatOption::new(co.action_type, CombatAction::Attack(new_wa)));
+                return Some(CombatOption::new(co.action_type, CombatAction::WeaponAttack(new_wa)));
             }
         }
         None
@@ -174,7 +174,7 @@ mod tests {
     use crate::tests::{get_dex_based, get_str_based};
 
     fn get_attack(option: &CombatOption) -> &WeaponAttack {
-        if let CombatAction::Attack(wa) = &option.action {
+        if let CombatAction::WeaponAttack(wa) = &option.action {
             wa
         } else {
             panic!("should be an attack");

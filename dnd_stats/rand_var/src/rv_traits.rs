@@ -124,6 +124,7 @@ where
         self.valid_p().filter(pred).map(|p| self.pdf(p)).sum()
     }
 
+    // TODO: make a partitions fn
     fn rv_slice<F>(&self, pred: F) -> (T, Option<Self>)
     where
         Self: Sized,

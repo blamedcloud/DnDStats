@@ -21,7 +21,7 @@ pub struct FightingStyle(pub FightingStyles);
 impl FightingStyle {
     pub fn archery(character: &mut Character) {
         for (_, co) in character.combat_actions.iter_mut() {
-            if let CombatAction::Attack(attack) = &mut co.action {
+            if let CombatAction::WeaponAttack(attack) = &mut co.action {
                 if attack.get_weapon().get_type().is_ranged() {
                     attack.add_accuracy_bonus(BonusTerm::new_attr(BonusType::Constant(2), String::from("archery FS")));
                 }
@@ -37,7 +37,7 @@ impl FightingStyle {
 
     pub fn dueling(character: &mut Character) {
         for (_, co) in character.combat_actions.iter_mut() {
-            if let CombatAction::Attack(attack) = &mut co.action {
+            if let CombatAction::WeaponAttack(attack) = &mut co.action {
                 if attack.get_num_hands() == &NumHands::OneHand && attack.get_weapon().get_type().is_melee() {
                     let dmg: CharacterDependant = Rc::new(|chr| {
                         if chr.get_equipment().get_secondary_weapon().is_none() {
@@ -57,7 +57,7 @@ impl FightingStyle {
 
     pub fn gwf(character: &mut Character) {
         for (_, co) in character.combat_actions.iter_mut() {
-            if let CombatAction::Attack(attack) = &mut co.action {
+            if let CombatAction::WeaponAttack(attack) = &mut co.action {
                 if attack.get_num_hands() == &NumHands::TwoHand && attack.get_weapon().get_type().is_melee() {
                     attack.get_damage_mut().add_damage_feature(DamageFeature::GWF);
                 }
@@ -67,7 +67,7 @@ impl FightingStyle {
 
     pub fn twf(character: &mut Character) {
         for (_, co) in character.combat_actions.iter_mut() {
-            if let CombatAction::Attack(attack) = &mut co.action {
+            if let CombatAction::WeaponAttack(attack) = &mut co.action {
                 if attack.get_hand_type() == &HandType::OffHand {
                     let ability = *attack.get_ability();
                     attack.get_damage_mut().add_base_char_dmg(

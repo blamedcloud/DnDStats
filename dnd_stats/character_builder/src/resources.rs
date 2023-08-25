@@ -2,7 +2,7 @@ use std::cmp;
 use std::collections::{HashMap, HashSet};
 use crate::combat::{ActionName, ActionType};
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ResourceName {
     AT(ActionType),
     AN(ActionName),
@@ -19,7 +19,7 @@ impl From<ActionName> for ResourceName {
     }
 }
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum RefreshTiming {
     StartRound,
     EndRound,
@@ -31,14 +31,14 @@ pub enum RefreshTiming {
     LongRest,
 }
 
-#[derive(Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum RefreshBy {
     Const(usize),
     ToFull,
     ToEmpty,
 }
 
-#[derive(Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum ResourceCap {
     Soft(usize),
     Hard(usize),
@@ -53,7 +53,7 @@ impl ResourceCap {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Resource {
     max: ResourceCap,
     current: usize,
@@ -134,7 +134,7 @@ impl From<ResourceCap> for Resource {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ResourceManager {
     perm_resources: HashMap<ResourceName, Resource>,
     temp_resources: HashMap<ResourceName, Resource>,
@@ -215,7 +215,7 @@ impl ResourceManager {
     }
 }
 
-pub fn create_resource_manager() -> ResourceManager {
+pub fn create_basic_rm() -> ResourceManager {
     let mut rm = ResourceManager::new();
     let mut at_res = Resource::from(ResourceCap::Soft(1));
     at_res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToFull);

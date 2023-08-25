@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use crate::Character;
+use crate::combat::attack::basic_attack::BasicAttack;
 use crate::combat::attack::weapon_attack::WeaponAttack;
 use crate::damage::DiceExpression;
 
 pub mod attack;
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ActionType {
     Action,
     SingleAttack,
@@ -17,7 +18,8 @@ pub enum ActionType {
 
 #[derive(Clone)]
 pub enum CombatAction {
-    Attack(WeaponAttack),
+    WeaponAttack(WeaponAttack),
+    BasicAttack(BasicAttack),
     SelfHeal(DiceExpression),
     AdditionalAttacks(u8),
     ByName,
@@ -79,16 +81,26 @@ pub enum ActionName {
 
 pub type ActionManager = HashMap<ActionName, CombatOption>;
 
-pub fn create_action_manager(character: &Character) -> ActionManager {
+pub fn create_basic_attack_am(ba: BasicAttack, num_attacks: u8) -> ActionManager {
+    let mut am = ActionManager::new();
+    am.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CombatAction::AdditionalAttacks(num_attacks)));
+
+    let pa_co = CombatOption::new_target(ActionType::SingleAttack, CombatAction::BasicAttack(ba), true);
+    am.insert(ActionName::PrimaryAttack(AttackType::Normal), pa_co);
+
+    am
+}
+
+pub fn create_character_am(character: &Character) -> ActionManager {
     let mut am = ActionManager::new();
     am.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CombatAction::AdditionalAttacks(1)));
 
     let wa = WeaponAttack::primary_weapon(character);
-    let pa_co = CombatOption::new_target(ActionType::SingleAttack, CombatAction::Attack(wa), true);
+    let pa_co = CombatOption::new_target(ActionType::SingleAttack, CombatAction::WeaponAttack(wa), true);
     am.insert(ActionName::PrimaryAttack(AttackType::Normal), pa_co);
 
     if let Some(owa) = WeaponAttack::offhand_weapon(character) {
-        let oa_co = CombatOption::new_target(ActionType::BonusAction, CombatAction::Attack(owa), true);
+        let oa_co = CombatOption::new_target(ActionType::BonusAction, CombatAction::WeaponAttack(owa), true);
         am.insert(ActionName::OffhandAttack(AttackType::Normal), oa_co);
     }
     am

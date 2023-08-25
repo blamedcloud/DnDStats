@@ -6,12 +6,12 @@ use rand_var::rv_traits::RVError;
 use crate::ability_scores::AbilityScores;
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType, CharacterDependant};
 use crate::classes::{ClassName, SubClass};
-use crate::combat::{ActionManager, ActionName, AttackType, CombatAction, CombatOption, create_action_manager};
+use crate::combat::{ActionManager, ActionName, AttackType, CombatAction, CombatOption, create_character_am};
 use crate::combat::attack::weapon_attack::WeaponAttack;
 use crate::damage::DamageType;
 use crate::equipment::{ArmorType, Equipment};
 use crate::feature::Feature;
-use crate::resources::{create_resource_manager, ResourceManager};
+use crate::resources::{create_basic_rm, ResourceManager};
 
 pub mod ability_scores;
 pub mod attributed_bonus;
@@ -122,11 +122,11 @@ impl Character {
             equipment,
             armor_class: AttributedBonus::new(String::from("AC")),
             combat_actions: ActionManager::new(),
-            resource_manager: create_resource_manager(),
+            resource_manager: create_basic_rm(),
             resistances: HashSet::new(),
         };
         character.calc_ac();
-        character.combat_actions = create_action_manager(&character);
+        character.combat_actions = create_character_am(&character);
         character
     }
 
@@ -190,7 +190,7 @@ impl Character {
         let clone = self.clone();
         for (_, co) in self.combat_actions.iter_mut() {
             match &mut co.action {
-                CombatAction::Attack(wa) => wa.cache_char_vals(&clone),
+                CombatAction::WeaponAttack(wa) => wa.cache_char_vals(&clone),
                 CombatAction::SelfHeal(de) => de.cache_char_terms(&clone),
                 _ => {}
             }
@@ -281,7 +281,7 @@ impl Character {
 
     pub fn get_weapon_attack(&self) -> Option<&WeaponAttack> {
         self.combat_actions.get(&ActionName::PrimaryAttack(AttackType::Normal)).and_then(|co| {
-            if let CombatAction::Attack(wa) = &co.action {
+            if let CombatAction::WeaponAttack(wa) = &co.action {
                 Some(wa)
             } else {
                 None
@@ -291,7 +291,7 @@ impl Character {
 
     pub fn get_offhand_attack(&self) -> Option<&WeaponAttack> {
         self.combat_actions.get(&ActionName::OffhandAttack(AttackType::Normal)).and_then(|co| {
-            if let CombatAction::Attack(wa) = &co.action {
+            if let CombatAction::WeaponAttack(wa) = &co.action {
                 Some(wa)
             } else {
                 None
