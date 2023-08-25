@@ -1,7 +1,8 @@
 use std::cmp;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
 use std::iter::Sum;
+use std::marker::PhantomData;
 use std::ops::{Add, Div, Mul, Sub};
 use num::{One, Zero};
 use crate::rv_traits::prob_type::{Prob, Reciprocal};
@@ -17,6 +18,40 @@ pub enum RVError {
     NegProb,
     NoRound,
     Other(String),
+}
+
+pub struct RVPartition<P, T, RV>
+where
+    P: Ord + Clone,
+    T: Prob,
+    RV: RandVar<P, T>
+{
+    pub prob: T,
+    pub rv: Option<RV>,
+    _p: PhantomData<P>,
+}
+
+impl<P, T, RV> RVPartition<P, T, RV>
+where
+    P: Ord + Clone,
+    T: Prob,
+    RV: RandVar<P, T>
+{
+    pub fn new(prob: T, rv: RV) -> Self {
+        Self {
+            prob,
+            rv: Some(rv),
+            _p: PhantomData,
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            prob: T::zero(),
+            rv: None,
+            _p: PhantomData
+        }
+    }
 }
 
 pub trait RandVar<P, T>
@@ -124,8 +159,7 @@ where
         self.valid_p().filter(pred).map(|p| self.pdf(p)).sum()
     }
 
-    // TODO: make a partitions fn
-    fn rv_slice<F>(&self, pred: F) -> (T, Option<Self>)
+    fn get_partition<F>(&self, pred: F) -> RVPartition<P, T, Self>
     where
         Self: Sized,
         F: Fn(&P) -> bool,
@@ -136,10 +170,36 @@ where
             let filter_si = SeqIter { items: filter_p };
             let prob_on: T = filter_si.clone().map(|p| self.pdf(p)).sum();
             let slice_rv = RandVar::build(filter_si, |p| self.pdf(p) * prob_on.clone().reciprocal().unwrap()).unwrap();
-            (prob_on, Some(slice_rv))
+            RVPartition::new(prob_on, slice_rv)
         } else {
-            (T::zero(), None)
+            RVPartition::empty()
         }
+    }
+
+    fn partitions<F, P2>(&self, part: F) -> BTreeMap<P2, RVPartition<P, T, Self>>
+    where
+        Self: Sized,
+        P2: Ord + Clone,
+        F: Fn(&P) -> P2,
+        T: Reciprocal + PartialOrd<T>,
+    {
+        let part_map: BTreeMap<P, P2> = self.valid_p().map(|p| {
+            let p2 = part(&p);
+            (p, p2)
+        }).collect();
+        let p2_vals: BTreeSet<P2> = part_map.iter().map(|(_, p2)| p2.clone()).collect();
+        let mut result = BTreeMap::new();
+        for p2 in p2_vals.into_iter() {
+            let p_set: BTreeSet<P> = part_map.iter()
+                .filter(|(_, v)| *v == &p2)
+                .map(|(k, _)| k.clone())
+                .collect();
+            let partition = self.get_partition(|p| p_set.contains(p));
+            if partition.prob > T::zero() {
+                result.insert(p2, partition);
+            }
+        }
+        result
     }
 
     fn reroll_once_on<F>(&self, pred: F) -> Self

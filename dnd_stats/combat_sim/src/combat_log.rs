@@ -80,28 +80,8 @@ impl Health {
         let bloodied = Health::calc_bloodied(max_hp);
         let lb = dmg.lower_bound();
         let ub = dmg.upper_bound();
-
-        let mut lb_h = Health::Healthy;
-        if lb >= max_hp {
-            if dead_at_zero {
-                lb_h = Health::Dead;
-            } else {
-                lb_h = Health::ZeroHP;
-            }
-        } else if lb >= bloodied {
-            lb_h = Health::Bloodied;
-        }
-
-        let mut ub_h = Health::ZeroHP;
-        if dead_at_zero {
-            ub_h = Health::Dead;
-        }
-        if ub < bloodied {
-            ub_h = Health::Healthy;
-        } else if ub < max_hp {
-            ub_h = Health::Bloodied
-        }
-
+        let lb_h = Health::classify_hp(&lb, bloodied, max_hp, dead_at_zero);
+        let ub_h = Health::classify_hp(&ub, bloodied, max_hp, dead_at_zero);
         (lb_h, ub_h)
     }
 
@@ -110,6 +90,20 @@ impl Health {
             max_hp / 2
         } else {
             (max_hp / 2) + 1
+        }
+    }
+
+    pub fn classify_hp(dmg: &isize, bloody_hp: isize, max_hp: isize, dead_at_zero: bool) -> Health {
+        if dmg < &bloody_hp {
+            Health::Healthy
+        } else if dmg < &max_hp {
+            Health::Bloodied
+        } else {
+            if dead_at_zero {
+                Health::Dead
+            } else {
+                Health::ZeroHP
+            }
         }
     }
 }
@@ -394,7 +388,7 @@ impl<T: RVProb> ProbCombatState<T> {
     }
 
     pub fn add_dmg(mut self, dmg: &RandomVariable<T>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
-        let health = self.get_health(target);
+        let old_health = self.get_health(target);
         let hp = self.get_hp(target);
         let bloody_hp = Health::calc_bloodied(hp);
         let old_dmg = self.get_dmg(target);
@@ -404,7 +398,7 @@ impl<T: RVProb> ProbCombatState<T> {
         let mut result = Vec::new();
 
         if new_hlb == new_hub {
-            if new_hlb == health {
+            if new_hlb == old_health {
                 self.set_dmg(target, new_dmg);
                 result.push(self);
             } else {
@@ -415,72 +409,25 @@ impl<T: RVProb> ProbCombatState<T> {
             }
         } else {
             let child_state = self.state.clone().into_child();
-            let (prob_healthy, healthy_rv) = new_dmg.rv_slice(|p| p < &bloody_hp);
-            let (prob_bloody, bloody_rv) = new_dmg.rv_slice(|p| p >= &bloody_hp && p < &hp);
-            let (prob_zero_hp, zero_hp_rv) = new_dmg.rv_slice(|p| p == &hp);
-            if prob_healthy > T::zero() {
-                self.child_health_helper(
-                    &mut result,
-                    child_state.clone(),
-                    health,
-                    Health::Healthy,
-                    target,
-                    prob_healthy,
-                    healthy_rv.unwrap()
-                );
-            }
-            if prob_bloody > T::zero() {
-                self.child_health_helper(
-                    &mut result,
-                    child_state.clone(),
-                    health,
-                    Health::Bloodied,
-                    target,
-                    prob_bloody,
-                    bloody_rv.unwrap()
-                );
-            }
-            if prob_zero_hp > T::zero() {
-                let mut new_health = Health::ZeroHP;
-                if dead_at_zero {
-                    new_health = Health::Dead;
+            let partitions = new_dmg.partitions(|p| Health::classify_hp(p, bloody_hp, hp, dead_at_zero));
+            for (new_health, partition) in partitions.into_iter() {
+                let mut state = child_state.clone();
+                if old_health != new_health {
+                    state.push(CombatEvent::HP(target, new_health));
+                    state.set_health(target, new_health);
                 }
-                self.child_health_helper(
-                    &mut result,
-                    child_state.clone(),
-                    health,
-                    new_health,
-                    target,
-                    prob_zero_hp,
-                    zero_hp_rv.unwrap()
-                );
+                let mut child = Self {
+                    state,
+                    max_hp: self.max_hp.clone(),
+                    dmg: self.dmg.clone(),
+                    prob: self.prob.clone() * partition.prob
+                };
+                child.set_dmg(target, partition.rv.unwrap());
+                result.push(child);
             }
         }
         result
     }
-
-    fn child_health_helper(&self,
-                           vec: &mut Vec<ProbCombatState<T>>,
-                           mut state: CombatState,
-                           old_health: Health,
-                           new_health: Health,
-                           target: ParticipantId,
-                           prob_h: T,
-                           h_rv: RandomVariable<T>) {
-        if old_health != new_health {
-            state.push(CombatEvent::HP(target, new_health));
-            state.set_health(target, new_health);
-        }
-        let mut child = Self {
-            state,
-            max_hp: self.max_hp.clone(),
-            dmg: self.dmg.clone(),
-            prob: self.prob.clone() * prob_h
-        };
-        child.set_dmg(target, h_rv);
-        vec.push(child);
-    }
-
 }
 
 pub struct CombatStateRV<T: RVProb> {
