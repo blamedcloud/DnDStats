@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 use num::{BigRational, Rational64};
 use character_builder::{CBError, Character};
 use character_builder::combat::{ActionName, ActionType, CombatAction};
-use character_builder::combat::attack::{ArMRV, AttackHitType, WeaponAttack};
+use character_builder::combat::attack::{ArMRV, AttackHitType};
+use character_builder::combat::attack::weapon_attack::WeaponAttack;
 use character_builder::resources::{ResourceManager, ResourceName};
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
@@ -11,6 +12,7 @@ use crate::participant::{Participant, ParticipantId, Team, TeamMember};
 use crate::strategy::{StrategicOption, Strategy, Target};
 
 pub mod combat_log;
+pub mod monster;
 pub mod participant;
 pub mod strategy;
 pub mod target_dummy;
@@ -351,7 +353,7 @@ mod tests {
         assert_eq!(3, cs_rv.len());
 
         let index_rv = cs_rv.get_index_rv();
-        let ar_rv: RV64 = fighter.get_basic_attack().unwrap()
+        let ar_rv: RV64 = fighter.get_weapon_attack().unwrap()
             .get_attack_result_rv(AttackHitType::Normal, dummy.get_ac()).unwrap()
             .map_keys(|ar| {
                 match ar {
@@ -407,7 +409,7 @@ mod tests {
 
         let cs_rv = em.get_state_rv();
         let dmg_rv = cs_rv.get_dmg(ParticipantId(1));
-        let atk_dmg: RV64 = fighter.get_basic_attack().unwrap().get_attack_dmg_rv(AttackHitType::Normal, dummy.get_ac(), dummy.get_resistances()).unwrap();
+        let atk_dmg: RV64 = fighter.get_weapon_attack().unwrap().get_attack_dmg_rv(AttackHitType::Normal, dummy.get_ac(), dummy.get_resistances()).unwrap();
         assert_eq!(atk_dmg, dmg_rv);
 
         em.simulate_n_rounds(1).unwrap();
@@ -465,7 +467,7 @@ mod tests {
 
         let dmg_rv = cs_rv.get_dmg(orc_pid);
         let atk_dmg: RV64 = fighter
-            .get_basic_attack().unwrap()
+            .get_weapon_attack().unwrap()
             .get_attack_dmg_rv(AttackHitType::Normal, orc.get_ac(), orc.get_resistances()).unwrap()
             .cap_ub(orc.get_max_hp()).unwrap();
         assert_eq!(atk_dmg, dmg_rv);

@@ -7,7 +7,7 @@ use crate::ability_scores::AbilityScores;
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType, CharacterDependant};
 use crate::classes::{ClassName, SubClass};
 use crate::combat::{ActionManager, ActionName, AttackType, CombatAction, CombatOption, create_action_manager};
-use crate::combat::attack::WeaponAttack;
+use crate::combat::attack::weapon_attack::WeaponAttack;
 use crate::damage::DamageType;
 use crate::equipment::{ArmorType, Equipment};
 use crate::feature::Feature;
@@ -279,7 +279,7 @@ impl Character {
         self.armor_class.get_value(&self)
     }
 
-    pub fn get_basic_attack(&self) -> Option<&WeaponAttack> {
+    pub fn get_weapon_attack(&self) -> Option<&WeaponAttack> {
         self.combat_actions.get(&ActionName::PrimaryAttack(AttackType::Normal)).and_then(|co| {
             if let CombatAction::Attack(wa) = &co.action {
                 Some(wa)

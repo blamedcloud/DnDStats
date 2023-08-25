@@ -167,7 +167,8 @@ mod tests {
     use crate::classes::{ChooseSubClass, ClassName};
     use crate::classes::fighter::ChampionFighter;
     use crate::combat::{ActionName, AttackType, CombatAction, CombatOption};
-    use crate::combat::attack::{AccMRV64, AttackHitType, WeaponAttack};
+    use crate::combat::attack::{AccMRV64, AttackHitType};
+    use crate::combat::attack::weapon_attack::WeaponAttack;
     use crate::equipment::{Armor, Equipment, OffHand, Weapon};
     use crate::feature::feats::{GreatWeaponMaster, PolearmMaster, Resilient, SharpShooter};
     use crate::tests::{get_dex_based, get_str_based};

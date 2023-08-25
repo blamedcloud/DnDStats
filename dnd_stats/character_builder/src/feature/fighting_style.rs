@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use crate::attributed_bonus::{BonusTerm, BonusType, CharacterDependant};
 use crate::{CBError, Character};
-use crate::combat::attack::{HandType, NumHands};
+use crate::combat::attack::weapon_attack::{HandType, NumHands};
 use crate::combat::CombatAction;
 use crate::damage::{DamageFeature, ExtendedDamageType};
 use crate::equipment::ArmorType;
@@ -117,7 +117,7 @@ mod tests {
         );
         let mut archer = Character::new(String::from("archer"), get_dex_based(), equipment);
         archer.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::Archery)))).unwrap();
-        let attack = archer.get_basic_attack().unwrap();
+        let attack = archer.get_weapon_attack().unwrap();
         let acc: AccMRV64 = attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
         assert_eq!(Pair(1, 8), acc.lower_bound());
         assert_eq!(Pair(20, 27), acc.upper_bound());
@@ -144,7 +144,7 @@ mod tests {
         );
         let mut fighter = Character::new(String::from("duelist"), get_dex_based(), equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::Dueling)))).unwrap();
-        let dmg: RVBig = fighter.get_basic_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        let dmg: RVBig = fighter.get_weapon_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
         assert_eq!(6, dmg.lower_bound());
         assert_eq!(13, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from(19), BigInt::from(2)), dmg.expected_value());
@@ -159,7 +159,7 @@ mod tests {
         );
         let mut fighter = Character::new(String::from("gwf"), get_str_based(), equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
-        let dmg: RVBig = fighter.get_basic_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        let dmg: RVBig = fighter.get_weapon_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
         assert_eq!(5, dmg.lower_bound());
         assert_eq!(15, dmg.upper_bound());
         let rv: RVBig = RandomVariable::new_dice_reroll(6, 2).unwrap().multiple(2).add_const(3);
@@ -175,7 +175,7 @@ mod tests {
         );
         let mut fighter = Character::new(String::from("kirito"), get_dex_based(), equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::TwoWeaponFighting)))).unwrap();
-        let main_dmg: RVBig = fighter.get_basic_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
+        let main_dmg: RVBig = fighter.get_weapon_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
         let off_dmg: RVBig = fighter.get_offhand_attack().unwrap().get_damage().get_base_dmg(&HashSet::new()).unwrap();
         assert_eq!(main_dmg, off_dmg);
     }

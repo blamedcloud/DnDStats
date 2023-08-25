@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::Character;
-use crate::combat::attack::WeaponAttack;
+use crate::combat::attack::weapon_attack::WeaponAttack;
 use crate::damage::DiceExpression;
 
 pub mod attack;
