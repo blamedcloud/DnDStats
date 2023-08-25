@@ -103,7 +103,7 @@ mod tests {
     use rand_var::rv_traits::sequential::Pair;
     use crate::Character;
     use crate::classes::ClassName;
-    use crate::combat::attack::{AccMRV64, AttackHitType};
+    use crate::combat::attack::{AccMRV64, Attack, AttackHitType};
     use crate::equipment::{ACSource, Armor, Equipment, OffHand, Weapon};
     use crate::tests::{get_dex_based, get_str_based};
     use super::*;

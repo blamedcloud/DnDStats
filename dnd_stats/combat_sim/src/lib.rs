@@ -2,8 +2,7 @@ use std::collections::BTreeMap;
 use num::{BigRational, Rational64};
 use character_builder::{CBError, Character};
 use character_builder::combat::{ActionName, ActionType, CombatAction};
-use character_builder::combat::attack::{ArMRV, AttackHitType};
-use character_builder::combat::attack::weapon_attack::WeaponAttack;
+use character_builder::combat::attack::{ArMRV, Attack, AttackHitType};
 use character_builder::resources::{ResourceManager, ResourceName};
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
@@ -256,11 +255,11 @@ impl<T: RVProb> EncounterManager<T> {
         }
     }
 
-    fn handle_attack(&self, pcs: ProbCombatState<T>, wa: &WeaponAttack, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<T>>, CBError> {
+    fn handle_attack(&self, pcs: ProbCombatState<T>, atk: &impl Attack, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<T>>, CBError> {
         let target = self.get_participant(target_pid);
-        let outcome_rv: ArMRV<T> = wa.get_attack_result_rv(AttackHitType::Normal, target.get_ac())?;
+        let outcome_rv: ArMRV<T> = atk.get_attack_result_rv(AttackHitType::Normal, target.get_ac())?;
         let ce_rv: MapRandVar<CombatEvent, T> = outcome_rv.map_keys(|ar| ar.into());
-        let ar_dmg_map = wa.get_dmg_map(target.get_resistances())?;
+        let ar_dmg_map = atk.get_dmg_map(target.get_resistances())?;
         let ce_dmg_map: BTreeMap<CombatEvent, RandomVariable<T>> = ar_dmg_map.into_iter().map(|(k, v)| (k.into(), v)).collect();
         let dead_at_zero = self.is_dead_at_zero(target_pid);
         Ok(pcs.split_dmg(ce_rv, ce_dmg_map, target_pid, dead_at_zero))
@@ -273,7 +272,7 @@ mod tests {
     use character_builder::ability_scores::AbilityScores;
     use character_builder::Character;
     use character_builder::classes::ClassName;
-    use character_builder::combat::attack::{AttackHitType, AttackResult};
+    use character_builder::combat::attack::{Attack, AttackHitType, AttackResult};
     use character_builder::combat::{ActionName, AttackType};
     use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};

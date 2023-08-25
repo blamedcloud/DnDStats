@@ -5,7 +5,7 @@ use rand_var::rv_traits::sequential::Pair;
 use crate::ability_scores::Ability;
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType};
 use crate::{CBError, Character};
-use crate::combat::attack::{AccMRV, AoMRV, ArMRV, AttackHitType, AttackResult, D20Type};
+use crate::combat::attack::{AccMRV, Attack, AttackHitType, AttackResult, D20Type};
 use crate::damage::{DamageDice, DamageManager, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 use crate::equipment::{OffHand, Weapon, WeaponProperty, WeaponRange};
 
@@ -159,9 +159,6 @@ impl WeaponAttack {
             self.crit_lb = crit;
         }
     }
-    pub fn get_crit_lb(&self) -> isize {
-        self.crit_lb
-    }
 
     pub fn get_damage(&self) -> &DamageManager {
         &self.damage
@@ -169,12 +166,14 @@ impl WeaponAttack {
     pub fn get_damage_mut(&mut self) -> &mut DamageManager {
         &mut self.damage
     }
+}
 
-    pub fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, CBError> {
+impl Attack for WeaponAttack {
+    fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, CBError> {
         self.damage.get_attack_dmg_map(resistances)
     }
 
-    pub fn get_accuracy_rv<T: RVProb>(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, CBError> {
+    fn get_accuracy_rv<T: RVProb>(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, CBError> {
         let rv = hit_type.get_rv(&self.d20_rv);
         if let None = self.hit_bonus.get_saved_value() {
             return Err(CBError::NoCache);
@@ -183,21 +182,8 @@ impl WeaponAttack {
         Ok(rv.into_mrv().map_keys(|roll| Pair(roll, roll + hit_const)))
     }
 
-    pub fn get_attack_result_rv<T: RVProb>(&self, hit_type: AttackHitType, target_ac: isize) -> Result<ArMRV<T>, CBError> {
-        let hit_rv = self.get_accuracy_rv(hit_type)?;
-        Ok(hit_rv.map_keys(|hit| AttackResult::from(hit, target_ac, self.crit_lb)))
-    }
-
-    pub fn get_attack_dmg_rv<T: RVProb>(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CBError> {
-        let attack_result_rv = self.get_attack_result_rv(hit_type, target_ac)?;
-        let dmg_map = self.damage.get_attack_dmg_map(resistances)?;
-        Ok(attack_result_rv.consolidate(&dmg_map)?.into())
-    }
-
-    pub fn get_attack_outcome_rv<T: RVProb>(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<AoMRV<T>, CBError> {
-        let attack_result_rv = self.get_attack_result_rv(hit_type, target_ac)?;
-        let dmg_map = self.damage.get_attack_dmg_map(resistances)?;
-        Ok(attack_result_rv.projection(&dmg_map)?)
+    fn get_crit_lb(&self) -> isize {
+        self.crit_lb
     }
 }
 
