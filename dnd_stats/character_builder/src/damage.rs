@@ -98,7 +98,7 @@ impl From<DamageType> for ExtendedDamageType {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum DamageInstance {
+pub enum ExpressionTerm {
     Die(ExtendedDamageDice),
     Dice(u32, ExtendedDamageDice),
     Const(isize),
@@ -106,20 +106,20 @@ pub enum DamageInstance {
 
 #[derive(Debug, Copy, Clone)]
 pub struct DamageTerm {
-    dmg: DamageInstance,
+    expr: ExpressionTerm,
     dmg_type: ExtendedDamageType,
 }
 
 impl DamageTerm {
-    pub fn new(dmg: DamageInstance, dmg_type: ExtendedDamageType) -> Self {
+    pub fn new(expr: ExpressionTerm, dmg_type: ExtendedDamageType) -> Self {
         DamageTerm {
-            dmg,
+            expr,
             dmg_type,
         }
     }
 
-    pub fn get_dmg(&self) -> &DamageInstance {
-        &self.dmg
+    pub fn get_expr(&self) -> &ExpressionTerm {
+        &self.expr
     }
 
     pub fn get_dmg_type(&self) -> &ExtendedDamageType {
@@ -128,58 +128,58 @@ impl DamageTerm {
 }
 
 #[derive(Clone)]
-pub struct DamageSum {
-    dmg_dice: Vec<ExtendedDamageDice>,
-    dmg_const: isize,
-    char_dmg: Option<AttributedBonus>,
+pub struct DiceExpression {
+    dice_terms: Vec<ExtendedDamageDice>,
+    const_term: isize,
+    char_terms: Option<AttributedBonus>,
 }
 
-impl DamageSum {
+impl DiceExpression {
     pub fn new() -> Self {
-        DamageSum {
-            dmg_dice: Vec::new(),
-            dmg_const: 0,
-            char_dmg: None,
+        DiceExpression {
+            dice_terms: Vec::new(),
+            const_term: 0,
+            char_terms: None,
         }
     }
 
-    pub fn from(dmg: DamageInstance) -> Self {
-        let mut ds = DamageSum::new();
-        ds.add_dmg(dmg);
+    pub fn from(term: ExpressionTerm) -> Self {
+        let mut ds = DiceExpression::new();
+        ds.add_term(term);
         ds
     }
 
-    pub fn from_char(dmg: BonusTerm) -> Self {
-        let mut ds = DamageSum::new();
-        ds.add_char_dmg(dmg);
+    pub fn from_char(term: BonusTerm) -> Self {
+        let mut ds = DiceExpression::new();
+        ds.add_char_term(term);
         ds
     }
 
-    pub fn add_dmg(&mut self, dmg: DamageInstance) {
-        match dmg {
-            DamageInstance::Die(d) => self.dmg_dice.push(d),
-            DamageInstance::Dice(num, d) => {
+    pub fn add_term(&mut self, term: ExpressionTerm) {
+        match term {
+            ExpressionTerm::Die(d) => self.dice_terms.push(d),
+            ExpressionTerm::Dice(num, d) => {
                 for _ in 0..num {
-                    self.dmg_dice.push(d);
+                    self.dice_terms.push(d);
                 }
             },
-            DamageInstance::Const(c) => self.dmg_const += c,
+            ExpressionTerm::Const(c) => self.const_term += c,
         };
     }
 
-    pub fn add_char_dmg(&mut self, dmg: BonusTerm) {
-        if let None = self.char_dmg {
-            self.char_dmg = Some(AttributedBonus::new(String::from("damage const")));
+    pub fn add_char_term(&mut self, term: BonusTerm) {
+        if let None = self.char_terms {
+            self.char_terms = Some(AttributedBonus::new(String::from("dice expr const")));
         }
-        self.char_dmg.as_mut().unwrap().add_term(dmg);
+        self.char_terms.as_mut().unwrap().add_term(term);
     }
 
-    pub fn cache_char_dmg(&mut self, character: &Character) {
-        self.char_dmg.as_mut().map(|ab| ab.save_value(character));
+    pub fn cache_char_terms(&mut self, character: &Character) {
+        self.char_terms.as_mut().map(|ab| ab.save_value(character));
     }
 
-    pub fn get_cached_char_dmg(&self) -> Result<isize, CBError> {
-        if let Some(ab) = &self.char_dmg {
+    pub fn get_cached_char_terms(&self) -> Result<isize, CBError> {
+        if let Some(ab) = &self.char_terms {
             match ab.get_saved_value() {
                 None => Err(CBError::NoCache),
                 Some(c) => Ok(c as isize),
@@ -189,26 +189,26 @@ impl DamageSum {
         }
     }
 
-    pub fn get_dmg_const(&self) -> isize {
-        self.dmg_const
+    pub fn get_const_term(&self) -> isize {
+        self.const_term
     }
 
     pub fn get_total_const(&self) -> Result<isize, CBError> {
-        self.get_cached_char_dmg().map(|c| c + self.dmg_const)
+        self.get_cached_char_terms().map(|c| c + self.const_term)
     }
 
-    fn get_die(ext_dice: &ExtendedDamageDice, weapon_dmg: Option<DamageDice>) -> Result<DamageDice, CBError> {
+    fn get_die(ext_dice: &ExtendedDamageDice, weapon_die: Option<DamageDice>) -> Result<DamageDice, CBError> {
         match ext_dice {
             ExtendedDamageDice::Basic(d) => Ok(*d),
             ExtendedDamageDice::WeaponDice => {
-                if let Some(d) = weapon_dmg {
+                if let Some(d) = weapon_die {
                     Ok(d)
                 } else {
                     Err(CBError::NoWeaponSet)
                 }
             },
             ExtendedDamageDice::SingleWeaponDie => {
-                if let Some(d) = weapon_dmg {
+                if let Some(d) = weapon_die {
                     Ok(ExtendedDamageDice::get_single_die(d))
                 } else {
                     Err(CBError::NoWeaponSet)
@@ -217,11 +217,21 @@ impl DamageSum {
         }
     }
 
-    pub fn get_dmg_dice_rv<T: RVProb>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<RandomVariable<T>, CBError> {
+    // healing is currently just negative damage
+    pub fn get_heal_rv<T: RVProb>(&self) -> Result<RandomVariable<T>, CBError> {
+        let rv_base = self.get_rv_base();
+        rv_base.map(|rv| rv.opposite_rv())
+    }
+
+    pub fn get_rv_base<T: RVProb>(&self) -> Result<RandomVariable<T>, CBError> {
+        self.get_dmg_rv(&HashSet::new(), None)
+    }
+
+    pub fn get_dmg_rv<T: RVProb>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<RandomVariable<T>, CBError> {
         let gwf = dmg_feats.contains(&DamageFeature::GWF);
         let mut rv: RandomVariable<T> = RandomVariable::new_constant(0).unwrap();
-        for ext_dice in self.dmg_dice.iter() {
-            let dice = DamageSum::get_die(ext_dice, weapon_dmg)?;
+        for ext_dice in self.dice_terms.iter() {
+            let dice = DiceExpression::get_die(ext_dice, weapon_dmg)?;
             if gwf {
                 rv = rv.add_rv(&dice.get_rv_gwf());
             } else {
@@ -232,7 +242,7 @@ impl DamageSum {
     }
 }
 
-type DamageExpression = HashMap<ExtendedDamageType, DamageSum>;
+type DamageExpression = HashMap<ExtendedDamageType, DiceExpression>;
 
 #[derive(Clone)]
 pub struct DamageManager {
@@ -258,15 +268,15 @@ impl DamageManager {
 
     fn add_dmg_term(de: &mut DamageExpression, dmg: DamageTerm) {
         de.entry(*dmg.get_dmg_type())
-            .and_modify(|ds| ds.add_dmg(*dmg.get_dmg()))
-            .or_insert(DamageSum::from(*dmg.get_dmg()));
+            .and_modify(|ds| ds.add_term(*dmg.get_expr()))
+            .or_insert(DiceExpression::from(*dmg.get_expr()));
     }
 
     fn add_char_dmg_term(de: &mut DamageExpression, dmg_type: ExtendedDamageType, dmg: BonusTerm) {
         if de.contains_key(&dmg_type) {
-            de.get_mut(&dmg_type).unwrap().add_char_dmg(dmg);
+            de.get_mut(&dmg_type).unwrap().add_char_term(dmg);
         } else {
-            de.insert(dmg_type, DamageSum::from_char(dmg));
+            de.insert(dmg_type, DiceExpression::from_char(dmg));
         }
     }
 
@@ -302,13 +312,13 @@ impl DamageManager {
 
     pub fn cache_char_dmg(&mut self, character: &Character) {
         for (_, ds) in self.base_dmg.iter_mut() {
-            ds.cache_char_dmg(character);
+            ds.cache_char_terms(character);
         }
         for (_, ds) in self.bonus_crit_dmg.iter_mut() {
-            ds.cache_char_dmg(character);
+            ds.cache_char_terms(character);
         }
         for (_, ds) in self.miss_dmg.iter_mut() {
-            ds.cache_char_dmg(character);
+            ds.cache_char_terms(character);
         }
     }
 
@@ -328,7 +338,7 @@ impl DamageManager {
     fn get_total_dmg<T: RVProb>(&self, de: &DamageExpression, resistances: &HashSet<DamageType>, double_dice: bool) -> Result<RandomVariable<T>, CBError> {
         let mut rv = RandomVariable::new_constant(0).unwrap();
         for (k, ds) in de.iter() {
-            let mut dice_rv = ds.get_dmg_dice_rv(&self.damage_features, self.weapon_die)?;
+            let mut dice_rv = ds.get_dmg_rv(&self.damage_features, self.weapon_die)?;
             if double_dice {
                 dice_rv = dice_rv.multiple(2);
             }
@@ -384,8 +394,8 @@ mod tests {
     #[test]
     fn test_simple_dmg() {
         let mut dmg = DamageManager::new();
-        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Die(ExtendedDamageDice::Basic(DamageDice::D6)), ExtendedDamageType::Basic(DamageType::Bludgeoning)));
-        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Const(3), ExtendedDamageType::Basic(DamageType::Bludgeoning)));
+        dmg.add_base_dmg(DamageTerm::new(ExpressionTerm::Die(ExtendedDamageDice::Basic(DamageDice::D6)), ExtendedDamageType::Basic(DamageType::Bludgeoning)));
+        dmg.add_base_dmg(DamageTerm::new(ExpressionTerm::Const(3), ExtendedDamageType::Basic(DamageType::Bludgeoning)));
         let rv1: RV64 = dmg.get_base_dmg(&HashSet::new()).unwrap();
 
         let rv2: RV64 = RandomVariable::new_dice(6).unwrap();
@@ -403,10 +413,10 @@ mod tests {
     fn test_brutal_crit() {
         let mut dmg = DamageManager::new();
         dmg.set_weapon(DamageDice::D12, DamageType::Slashing);
-        let weapon_dmg = DamageTerm::new(DamageInstance::Die(ExtendedDamageDice::WeaponDice), ExtendedDamageType::WeaponDamage);
+        let weapon_dmg = DamageTerm::new(ExpressionTerm::Die(ExtendedDamageDice::WeaponDice), ExtendedDamageType::WeaponDamage);
         dmg.add_base_dmg(weapon_dmg);
-        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Const(5), ExtendedDamageType::WeaponDamage));
-        let brutal_crit_dmg = DamageTerm::new(DamageInstance::Die(ExtendedDamageDice::SingleWeaponDie), ExtendedDamageType::WeaponDamage);
+        dmg.add_base_dmg(DamageTerm::new(ExpressionTerm::Const(5), ExtendedDamageType::WeaponDamage));
+        let brutal_crit_dmg = DamageTerm::new(ExpressionTerm::Die(ExtendedDamageDice::SingleWeaponDie), ExtendedDamageType::WeaponDamage);
         dmg.add_bonus_crit_dmg(brutal_crit_dmg);
         let rv1: RV64 = dmg.get_base_dmg(&HashSet::new()).unwrap();
 
@@ -423,8 +433,8 @@ mod tests {
     #[test]
     fn test_flame_strike() {
         let mut dmg = DamageManager::new();
-        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Dice(4,DamageDice::D6.into()), DamageType::Fire.into()));
-        dmg.add_base_dmg(DamageTerm::new(DamageInstance::Dice(4,DamageDice::D6.into()), DamageType::Radiant.into()));
+        dmg.add_base_dmg(DamageTerm::new(ExpressionTerm::Dice(4, DamageDice::D6.into()), DamageType::Fire.into()));
+        dmg.add_base_dmg(DamageTerm::new(ExpressionTerm::Dice(4, DamageDice::D6.into()), DamageType::Radiant.into()));
         let rv1: RV64 = dmg.get_base_dmg(&HashSet::new()).unwrap();
         let rv2: RV64 = dmg.get_half_base_dmg(&HashSet::new()).unwrap();
 

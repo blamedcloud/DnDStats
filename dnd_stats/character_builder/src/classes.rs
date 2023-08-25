@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use crate::ability_scores::Ability;
 use crate::feature::{Feature, SaveProficiencies};
@@ -105,5 +106,26 @@ impl ClassName {
             ClassName::Wizard => (Ability::INT, Ability::WIS),
         };
         profs.into()
+    }
+}
+
+impl Display for ClassName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut s = String::new();
+        match self {
+            ClassName::Barbarian => s.push_str("Barbarian"),
+            ClassName::Bard => s.push_str("Bard"),
+            ClassName::Cleric => s.push_str("Cleric"),
+            ClassName::Druid => s.push_str("Druid"),
+            ClassName::Fighter => s.push_str("Fighter"),
+            ClassName::Monk => s.push_str("Monk"),
+            ClassName::Paladin => s.push_str("Paladin"),
+            ClassName::Ranger => s.push_str("Ranger"),
+            ClassName::Rogue => s.push_str("Rogue"),
+            ClassName::Sorcerer => s.push_str("Sorcerer"),
+            ClassName::Warlock => s.push_str("Warlock"),
+            ClassName::Wizard => s.push_str("Wizard"),
+        }
+        write!(f, "{}", s)
     }
 }

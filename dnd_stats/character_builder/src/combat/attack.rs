@@ -8,7 +8,7 @@ use rand_var::rv_traits::{RandVar, sequential};
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::sequential::{Pair, Seq, SeqIter};
-use crate::damage::{DamageDice, DamageInstance, DamageManager, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
+use crate::damage::{DamageDice, ExpressionTerm, DamageManager, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
 use crate::equipment::{OffHand, Weapon, WeaponProperty, WeaponRange};
 use crate::{AttributedBonus, CBError, Character};
 
@@ -197,7 +197,7 @@ impl WeaponAttack {
         let mut damage = DamageManager::new();
         damage.set_weapon(WeaponAttack::get_weapon_die(weapon, num_hands), *weapon.get_dmg_type());
         damage.add_base_dmg(DamageTerm::new(
-            DamageInstance::Die(ExtendedDamageDice::WeaponDice),
+            ExpressionTerm::Die(ExtendedDamageDice::WeaponDice),
             ExtendedDamageType::WeaponDamage,
         ));
 
@@ -214,7 +214,7 @@ impl WeaponAttack {
                 String::from("magic bonus"),
             ));
             damage.add_base_dmg(DamageTerm::new(
-                DamageInstance::Const(b as isize),
+                ExpressionTerm::Const(b as isize),
                 ExtendedDamageType::WeaponDamage,
             ));
         }

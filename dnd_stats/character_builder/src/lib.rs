@@ -189,8 +189,10 @@ impl Character {
         // &Character into attack::cache_char_vals
         let clone = self.clone();
         for (_, co) in self.combat_actions.iter_mut() {
-            if let CombatAction::Attack(a) = &mut co.action {
-                a.cache_char_vals(&clone);
+            match &mut co.action {
+                CombatAction::Attack(wa) => wa.cache_char_vals(&clone),
+                CombatAction::SelfHeal(de) => de.cache_char_terms(&clone),
+                _ => {}
             }
         }
     }

@@ -3,7 +3,7 @@ use crate::ability_scores::Ability;
 use crate::attributed_bonus::{BonusTerm, BonusType};
 use crate::{CBError, Character};
 use crate::combat::{ActionName, ActionType, AttackType, CombatAction, CombatOption};
-use crate::damage::{DamageInstance, DamageTerm, ExtendedDamageType};
+use crate::damage::{ExpressionTerm, DamageTerm, ExtendedDamageType};
 use crate::equipment::{Weapon, WeaponProperty};
 use crate::feature::Feature;
 use crate::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, ResourceName};
@@ -15,7 +15,7 @@ impl GreatWeaponMaster {
             if wa.get_weapon().get_type().is_melee() && wa.get_weapon().has_property(WeaponProperty::Heavy) {
                 let mut new_wa = wa.clone();
                 new_wa.add_accuracy_bonus(BonusTerm::new_attr(BonusType::Constant(-5), String::from("gwm")));
-                new_wa.get_damage_mut().add_base_dmg(DamageTerm::new(DamageInstance::Const(10), ExtendedDamageType::WeaponDamage));
+                new_wa.get_damage_mut().add_base_dmg(DamageTerm::new(ExpressionTerm::Const(10), ExtendedDamageType::WeaponDamage));
                 return Some(CombatOption::new(co.action_type, CombatAction::Attack(new_wa)));
             }
         }
@@ -121,7 +121,7 @@ impl SharpShooter {
             if wa.get_weapon().get_type().is_ranged() {
                 let mut new_wa = wa.clone();
                 new_wa.add_accuracy_bonus(BonusTerm::new_attr(BonusType::Constant(-5), String::from("ss")));
-                new_wa.get_damage_mut().add_base_dmg(DamageTerm::new(DamageInstance::Const(10), ExtendedDamageType::WeaponDamage));
+                new_wa.get_damage_mut().add_base_dmg(DamageTerm::new(ExpressionTerm::Const(10), ExtendedDamageType::WeaponDamage));
                 return Some(CombatOption::new(co.action_type, CombatAction::Attack(new_wa)));
             }
         }

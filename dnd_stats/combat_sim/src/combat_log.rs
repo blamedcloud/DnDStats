@@ -377,7 +377,7 @@ impl<T: RVProb> ProbCombatState<T> {
         }
     }
 
-    fn add_dmg(mut self, dmg: &RandomVariable<T>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
+    pub fn add_dmg(mut self, dmg: &RandomVariable<T>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
         let health = self.classify_dmg(target);
         let hp = self.get_hp(target);
         let bloody_hp = Health::calc_bloodied(hp);

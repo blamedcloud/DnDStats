@@ -234,6 +234,10 @@ impl<T: RVProb> EncounterManager<T> {
                     Err(CSError::InvalidTarget)
                 }
             },
+            CombatAction::SelfHeal(de) => {
+                let heal: RandomVariable<T> = de.get_heal_rv()?;
+                Ok(HandledAction::Children(pcs.add_dmg(&heal, pid, self.is_dead_at_zero(pid))))
+            },
             CombatAction::AdditionalAttacks(aa) => {
                 pcs.get_rm_mut(pid).gain(ResourceName::AT(ActionType::SingleAttack), *aa as usize);
                 Ok(HandledAction::InPlace(pcs))

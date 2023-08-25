@@ -2,6 +2,7 @@ use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use crate::ability_scores::Ability;
 use crate::Character;
+use crate::classes::ClassName;
 
 pub type CharacterDependant = Rc<dyn Fn(&Character) -> i32>;
 
@@ -10,6 +11,7 @@ pub enum BonusType {
     Constant(i32),
     Modifier(Ability),
     Proficiency,
+    ClassLevel(ClassName),
     Dependant(CharacterDependant),
 }
 
@@ -70,6 +72,7 @@ impl BonusTerm {
             BonusType::Constant(c) => *c,
             BonusType::Modifier(a) => character.get_ability_scores().get_score(a).get_mod() as i32,
             BonusType::Proficiency => character.get_prof_bonus() as i32,
+            BonusType::ClassLevel(cn) => character.get_class_level(*cn) as i32,
             BonusType::Dependant(f) => f(character),
         };
         value
@@ -82,6 +85,7 @@ impl Display for BonusTerm {
             BonusType::Constant(c) => write!(f, "{}", c)?,
             BonusType::Modifier(a) => write!(f, "{}mod", a)?,
             BonusType::Proficiency => write!(f, "prof")?,
+            BonusType::ClassLevel(cn) => write!(f, "{} level", *cn)?,
             BonusType::Dependant(_) => {
                 if let Some(name) = &self.name {
                     write!(f, "{}", name)?;

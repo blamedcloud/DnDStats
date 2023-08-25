@@ -1,6 +1,8 @@
 use crate::{CBError, Character};
+use crate::attributed_bonus::{BonusTerm, BonusType};
 use crate::classes::{Class, ClassName, SubClass};
 use crate::combat::{ActionName, ActionType, CombatAction, CombatOption};
+use crate::damage::{DamageDice, DiceExpression, ExpressionTerm, ExtendedDamageDice};
 use crate::feature::{ExtraAttack, Feature};
 use crate::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, ResourceName};
 
@@ -59,8 +61,10 @@ impl SubClass for ChampionFighter {
 pub struct SecondWind;
 impl Feature for SecondWind {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        // TODO: the CombatAction should probably be a Heal or something, rather than ByName.
-        character.combat_actions.insert(ActionName::SecondWind, CombatOption::new(ActionType::BonusAction, CombatAction::ByName));
+        let mut heal = DiceExpression::new();
+        heal.add_term(ExpressionTerm::Die(ExtendedDamageDice::Basic(DamageDice::D10)));
+        heal.add_char_term(BonusTerm::new(BonusType::ClassLevel(ClassName::Fighter)));
+        character.combat_actions.insert(ActionName::SecondWind, CombatOption::new(ActionType::BonusAction, CombatAction::SelfHeal(heal)));
 
         let mut res = Resource::from(ResourceCap::Hard(1));
         res.add_refresh(RefreshTiming::ShortRest, RefreshBy::ToFull);

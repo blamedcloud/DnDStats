@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use crate::Character;
 use crate::combat::attack::WeaponAttack;
+use crate::damage::DiceExpression;
 
 pub mod attack;
 
@@ -17,6 +18,7 @@ pub enum ActionType {
 #[derive(Clone)]
 pub enum CombatAction {
     Attack(WeaponAttack),
+    SelfHeal(DiceExpression),
     AdditionalAttacks(u8),
     ByName,
 }
