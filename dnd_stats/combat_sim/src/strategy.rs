@@ -1,8 +1,9 @@
 use character_builder::combat::{ActionName, ActionType, AttackType};
 use character_builder::resources::ResourceName;
 use character_builder::Square;
-use crate::combat_log::{CombatState, Health};
 use crate::participant::{ParticipantId, TeamMember};
+use crate::prob_combat_state::combat_state::CombatState;
+use crate::prob_combat_state::combat_state::health::Health;
 
 // TODO: add shapes eventually (for spells and such)
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]

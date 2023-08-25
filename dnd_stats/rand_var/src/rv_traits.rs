@@ -169,7 +169,8 @@ where
         if filter_p.len() > 0 {
             let filter_si = SeqIter { items: filter_p };
             let prob_on: T = filter_si.clone().map(|p| self.pdf(p)).sum();
-            let slice_rv = RandVar::build(filter_si, |p| self.pdf(p) * prob_on.clone().reciprocal().unwrap()).unwrap();
+            let prob_on_recip = prob_on.clone().reciprocal().unwrap();
+            let slice_rv = RandVar::build(filter_si, |p| self.pdf(p) * prob_on_recip.clone()).unwrap();
             RVPartition::new(prob_on, slice_rv)
         } else {
             RVPartition::empty()
@@ -746,5 +747,26 @@ mod tests {
         let d20_adv = d20.max_two_trials();
         assert_eq!(Rational64::one(), d20_adv.prob_ge(&d20) + d20_adv.prob_lt(&d20));
         assert_eq!(Rational64::one(), d20_adv.prob_gt(&d20) + d20_adv.prob_lt(&d20) + d20_adv.prob_eq(&d20));
+    }
+
+    #[test]
+    fn test_partitions() {
+        let d20: RV64 = RandomVariable::new_dice(20).unwrap();
+        let mod_3 = d20.partitions(|p| *p % 3);
+        assert_eq!(3, mod_3.len());
+        let part_0 = mod_3.get(&0).unwrap();
+        assert_eq!(Rational64::new(6, 20), part_0.prob);
+        assert_eq!(3, part_0.rv.as_ref().unwrap().lower_bound());
+        assert_eq!(18, part_0.rv.as_ref().unwrap().upper_bound());
+
+        let part_1 = mod_3.get(&1).unwrap();
+        assert_eq!(Rational64::new(7, 20), part_1.prob);
+        assert_eq!(1, part_1.rv.as_ref().unwrap().lower_bound());
+        assert_eq!(19, part_1.rv.as_ref().unwrap().upper_bound());
+
+        let part_2 = mod_3.get(&2).unwrap();
+        assert_eq!(Rational64::new(7, 20), part_2.prob);
+        assert_eq!(2, part_2.rv.as_ref().unwrap().lower_bound());
+        assert_eq!(20, part_2.rv.as_ref().unwrap().upper_bound());
     }
 }

@@ -6,13 +6,14 @@ use character_builder::combat::attack::{ArMRV, Attack, AttackHitType};
 use character_builder::resources::{ResourceManager, ResourceName};
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
-use crate::combat_log::{CombatEvent, CombatStateRV, CombatTiming, ProbCombatState};
 use crate::participant::{Participant, ParticipantId, Team, TeamMember};
+use crate::prob_combat_state::{CombatStateRV, ProbCombatState};
+use crate::prob_combat_state::combat_state::combat_log::combat_event::{CombatEvent, CombatTiming};
 use crate::strategy::{StrategicOption, Strategy, Target};
 
-pub mod combat_log;
 pub mod monster;
 pub mod participant;
+pub mod prob_combat_state;
 pub mod strategy;
 pub mod target_dummy;
 
@@ -89,7 +90,7 @@ impl<T: RVProb> EncounterManager<T> {
     }
 
     fn register_timing(&mut self, ct: CombatTiming) {
-        let event = CombatEvent::Timing(ct);
+        let event = ct.into();
         for pcs in self.cs_rv.get_states_mut() {
             if pcs.is_valid_timing(ct) {
                 pcs.push(event);
@@ -289,10 +290,11 @@ mod tests {
     use character_builder::resources::{create_basic_rm, ResourceManager};
     use rand_var::RV64;
     use rand_var::rv_traits::{NumRandVar, RandVar};
-    use crate::combat_log::{CombatEvent, CombatTiming, Health, RoundId};
     use crate::{EM64, EncounterManager};
     use crate::monster::Monster;
     use crate::participant::{Participant, ParticipantId, Team, TeamMember};
+    use crate::prob_combat_state::combat_state::combat_log::combat_event::{CombatEvent, CombatTiming, RoundId};
+    use crate::prob_combat_state::combat_state::health::Health;
     use crate::strategy::{BasicAttackStr, DoNothing, LinearStrategy, SecondWindStr};
     use crate::target_dummy::TargetDummy;
 
