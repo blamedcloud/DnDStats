@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::rc::Rc;
 use character_builder::combat::{ActionName, ActionType};
 use character_builder::combat::attack::AttackResult;
@@ -19,30 +19,35 @@ impl From<u8> for RoundId {
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
 pub enum CombatTiming {
+    EncounterBegin,
+    EncounterEnd,
     BeginRound(RoundId),
     EndRound(RoundId),
     BeginTurn(ParticipantId),
     EndTurn(ParticipantId),
 }
+
 impl CombatTiming {
-    pub fn get_refresh_timing(&self, pid: ParticipantId) -> RefreshTiming {
+    pub fn get_refresh_timing(&self, pid: ParticipantId) -> Option<RefreshTiming> {
         match self {
-            CombatTiming::BeginRound(_) => RefreshTiming::StartRound,
-            CombatTiming::EndRound(_) => RefreshTiming::EndRound,
+            CombatTiming::EncounterBegin => None,
+            CombatTiming::EncounterEnd => None,
+            CombatTiming::BeginRound(_) => Some(RefreshTiming::StartRound),
+            CombatTiming::EndRound(_) => Some(RefreshTiming::EndRound),
             CombatTiming::BeginTurn(t_pid) => {
                 if pid == *t_pid {
-                    RefreshTiming::StartMyTurn
+                    Some(RefreshTiming::StartMyTurn)
                 } else {
-                    RefreshTiming::StartOtherTurn
+                    Some(RefreshTiming::StartOtherTurn)
                 }
-            }
+            },
             CombatTiming::EndTurn(t_pid) => {
                 if pid == *t_pid {
-                    RefreshTiming::EndMyTurn
+                    Some(RefreshTiming::EndMyTurn)
                 } else {
-                    RefreshTiming::EndOtherTurn
+                    Some(RefreshTiming::EndOtherTurn)
                 }
-            }
+            },
         }
     }
 }
@@ -71,19 +76,26 @@ pub enum Health {
 }
 
 impl Health {
-    pub fn classify_bounds<T: RVProb>(dmg: &RandomVariable<T>, max_hp: isize) -> (Health, Health) {
-        let bloodied = max_hp/2;
+    pub fn classify_bounds<T: RVProb>(dmg: &RandomVariable<T>, max_hp: isize, dead_at_zero: bool) -> (Health, Health) {
+        let bloodied = Health::calc_bloodied(max_hp);
         let lb = dmg.lower_bound();
         let ub = dmg.upper_bound();
 
         let mut lb_h = Health::Healthy;
         if lb >= max_hp {
-            lb_h = Health::ZeroHP;
+            if dead_at_zero {
+                lb_h = Health::Dead;
+            } else {
+                lb_h = Health::ZeroHP;
+            }
         } else if lb >= bloodied {
             lb_h = Health::Bloodied;
         }
 
         let mut ub_h = Health::ZeroHP;
+        if dead_at_zero {
+            ub_h = Health::Dead;
+        }
         if ub < bloodied {
             ub_h = Health::Healthy;
         } else if ub < max_hp {
@@ -91,6 +103,14 @@ impl Health {
         }
 
         (lb_h, ub_h)
+    }
+
+    pub fn calc_bloodied(max_hp: isize) -> isize {
+        if max_hp % 2 == 0 {
+            max_hp / 2
+        } else {
+            (max_hp / 2) + 1
+        }
     }
 }
 
@@ -107,6 +127,10 @@ impl CombatLog {
             parent: None,
             events: Vec::new(),
         }
+    }
+
+    pub fn push(&mut self, ce: CombatEvent) {
+        self.events.push(ce);
     }
 
     pub fn get_local_events(&self) -> &Vec<CombatEvent> {
@@ -130,9 +154,9 @@ impl CombatLog {
         self.parent.as_ref().unwrap()
     }
 
-    pub fn get_last_event(&self) -> Option<&CombatEvent> {
+    pub fn get_last_event(&self) -> Option<CombatEvent> {
         if self.events.len() > 0 {
-            self.events.last()
+            self.events.last().copied()
         } else {
             if self.has_parent() {
                 self.get_parent().get_last_event()
@@ -155,6 +179,8 @@ type ParticipantResources = Vec<ResourceManager>;
 pub struct CombatState {
     logs: CombatLog,
     resources: ParticipantResources,
+    deaths: HashSet<ParticipantId>,
+    last_combat_timing: Option<CombatTiming>,
 }
 
 impl CombatState {
@@ -162,6 +188,8 @@ impl CombatState {
         Self {
             logs: CombatLog::new(),
             resources: ParticipantResources::new(),
+            deaths: HashSet::new(),
+            last_combat_timing: None,
         }
     }
 
@@ -169,7 +197,7 @@ impl CombatState {
         &self.logs
     }
 
-    pub fn get_last_event(&self) -> Option<&CombatEvent> {
+    pub fn get_last_event(&self) -> Option<CombatEvent> {
         self.logs.get_last_event()
     }
 
@@ -180,12 +208,29 @@ impl CombatState {
     pub fn into_child(self) -> Self {
         Self {
             logs: self.logs.into_child(),
-            resources: self.resources
+            resources: self.resources,
+            deaths: self.deaths,
+            last_combat_timing: self.last_combat_timing,
         }
     }
 
+    pub fn is_dead(&self, pid: ParticipantId) -> bool {
+        self.deaths.contains(&pid)
+    }
+
+    pub fn is_alive(&self, pid: ParticipantId) -> bool {
+        !self.is_dead(pid)
+    }
+
+    pub fn get_last_combat_timing(&self) -> Option<CombatTiming> {
+        self.last_combat_timing
+    }
+
     pub fn push(&mut self, ce: CombatEvent) {
-        self.logs.events.push(ce);
+        if let CombatEvent::Timing(ct) = ce {
+            self.last_combat_timing = Some(ct);
+        }
+        self.logs.push(ce);
     }
 }
 
@@ -214,19 +259,25 @@ impl<T: RVProb> ProbCombatState<T> {
     }
 
     pub fn push(&mut self, ce: CombatEvent) {
-        self.state.logs.events.push(ce);
+        self.state.push(ce);
     }
 
     pub fn get_state(&self) -> &CombatState {
         &self.state
     }
 
-    pub fn get_last_event(&self) -> Option<&CombatEvent> {
+    pub fn get_last_event(&self) -> Option<CombatEvent> {
         self.state.get_last_event()
     }
 
     pub fn get_prob(&self) -> &T {
         &self.prob
+    }
+
+    pub fn handle_refresh(&mut self, pid: ParticipantId, rt: RefreshTiming) {
+        if self.is_alive(pid) {
+            self.get_rm_mut(pid).handle_timing(rt);
+        }
     }
 
     pub fn get_rm(&self, pid: ParticipantId) -> &ResourceManager {
@@ -238,6 +289,33 @@ impl<T: RVProb> ProbCombatState<T> {
 
     pub fn get_hp(&self, pid: ParticipantId) -> isize {
         *self.max_hp.get(pid.0).unwrap()
+    }
+
+    pub fn is_dead(&self, pid: ParticipantId) -> bool {
+        self.state.is_dead(pid)
+    }
+
+    pub fn is_alive(&self, pid: ParticipantId) -> bool {
+        self.state.is_alive(pid)
+    }
+
+    pub fn get_latest_timing(&self) -> Option<CombatTiming> {
+        self.state.get_last_combat_timing()
+    }
+
+    pub fn is_valid_timing(&self, ct: CombatTiming) -> bool {
+        let lt = self.get_latest_timing();
+        if lt.is_some() && lt.unwrap() == CombatTiming::EncounterEnd {
+            return false;
+        }
+        match ct {
+            CombatTiming::EncounterBegin => lt.is_none(),
+            CombatTiming::EncounterEnd => true,
+            CombatTiming::BeginRound(_) => true,
+            CombatTiming::EndRound(_) => true,
+            CombatTiming::BeginTurn(pid) => self.is_alive(pid),
+            CombatTiming::EndTurn(pid) => lt.unwrap() == CombatTiming::BeginTurn(pid)
+        }
     }
 
     pub fn get_dmg(&self, pid: ParticipantId) -> &RandomVariable<T> {
@@ -273,19 +351,22 @@ impl<T: RVProb> ProbCombatState<T> {
         vec
     }
 
-    pub fn split_dmg(self, state_rv: MapRandVar<CombatEvent, T>, dmg_map: BTreeMap<CombatEvent, RandomVariable<T>>, target: ParticipantId) -> Vec<Self> {
+    pub fn split_dmg(self, state_rv: MapRandVar<CombatEvent, T>, dmg_map: BTreeMap<CombatEvent, RandomVariable<T>>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
         let children = self.split(state_rv);
         let mut result = Vec::with_capacity(children.len());
         for pcs in children.into_iter() {
-            let ce = *pcs.get_last_event().unwrap();
-            result.extend(pcs.add_dmg(dmg_map.get(&ce).unwrap(), target).into_iter());
+            let ce = pcs.get_last_event().unwrap();
+            result.extend(pcs.add_dmg(dmg_map.get(&ce).unwrap(), target, dead_at_zero).into_iter());
         }
         result
     }
 
     pub fn classify_dmg(&self, pid: ParticipantId) -> Health {
+        if self.state.deaths.contains(&pid) {
+            return Health::Dead;
+        }
         let hp = self.get_hp(pid);
-        let bloody_hp = hp/2;
+        let bloody_hp = Health::calc_bloodied(hp);
         let dmg = self.get_dmg(pid);
         if dmg.upper_bound() < bloody_hp {
             Health::Healthy
@@ -296,14 +377,14 @@ impl<T: RVProb> ProbCombatState<T> {
         }
     }
 
-    fn add_dmg(mut self, dmg: &RandomVariable<T>, target: ParticipantId) -> Vec<Self> {
+    fn add_dmg(mut self, dmg: &RandomVariable<T>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
         let health = self.classify_dmg(target);
         let hp = self.get_hp(target);
-        let bloody_hp = hp/2;
+        let bloody_hp = Health::calc_bloodied(hp);
         let old_dmg = self.get_dmg(target);
         let new_dmg = old_dmg.add_rv(dmg).cap_lb(0).unwrap().cap_ub(hp).unwrap();
 
-        let (new_hlb, new_hub) = Health::classify_bounds(&new_dmg, hp);
+        let (new_hlb, new_hub) = Health::classify_bounds(&new_dmg, hp, dead_at_zero);
         let mut result = Vec::new();
 
         if new_hlb == new_hub {
@@ -343,11 +424,15 @@ impl<T: RVProb> ProbCombatState<T> {
                 );
             }
             if prob_zero_hp > T::zero() {
+                let mut new_health = Health::ZeroHP;
+                if dead_at_zero {
+                    new_health = Health::Dead;
+                }
                 self.child_health_helper(
                     &mut result,
                     child_state.clone(),
                     health,
-                    Health::ZeroHP,
+                    new_health,
                     target,
                     prob_zero_hp,
                     zero_hp_rv.unwrap()
@@ -368,6 +453,9 @@ impl<T: RVProb> ProbCombatState<T> {
         if old_health != new_health {
             state.push(CombatEvent::HP(target, new_health));
         }
+        if new_health == Health::Dead {
+            state.deaths.insert(target);
+        }
         let mut child = Self {
             state,
             max_hp: self.max_hp.clone(),
@@ -375,7 +463,7 @@ impl<T: RVProb> ProbCombatState<T> {
             prob: self.prob.clone() * prob_h
         };
         child.set_dmg(target, h_rv);
-        vec.push(child)
+        vec.push(child);
     }
 
 }
@@ -401,7 +489,7 @@ impl<T: RVProb> CombatStateRV<T> {
 
     pub fn push(&mut self, ce: CombatEvent) {
         for pcs in self.states.iter_mut() {
-            pcs.state.logs.events.push(ce);
+            pcs.state.push(ce);
         }
     }
 

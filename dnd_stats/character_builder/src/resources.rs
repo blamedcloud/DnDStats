@@ -8,6 +8,17 @@ pub enum ResourceName {
     AN(ActionName),
 }
 
+impl From<ActionType> for ResourceName {
+    fn from(value: ActionType) -> Self {
+        ResourceName::AT(value)
+    }
+}
+impl From<ActionName> for ResourceName {
+    fn from(value: ActionName) -> Self {
+        ResourceName::AN(value)
+    }
+}
+
 #[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum RefreshTiming {
     StartRound,
@@ -51,10 +62,10 @@ pub struct Resource {
 }
 
 impl Resource {
-    pub fn new(max: ResourceCap) -> Self {
+    pub fn new(max: ResourceCap, current: usize) -> Self {
         Resource {
             max,
-            current: max.cap(),
+            current,
             refresh_map: HashMap::new(),
             expirations: HashSet::new(),
         }
@@ -70,6 +81,7 @@ impl Resource {
     pub fn get_current(&self) -> usize {
         self.current
     }
+
     pub fn spend(&mut self) {
         if self.current > 0 {
             self.current -= 1;
@@ -108,6 +120,17 @@ impl Resource {
 
     pub fn expires(&self, timing: RefreshTiming) -> bool {
         self.expirations.contains(&timing)
+    }
+}
+
+impl From<ResourceCap> for Resource {
+    fn from(value: ResourceCap) -> Self {
+        Self {
+            max: value,
+            current: value.cap(),
+            refresh_map: HashMap::new(),
+            expirations: HashSet::new(),
+        }
     }
 }
 
@@ -194,7 +217,7 @@ impl ResourceManager {
 
 pub fn create_resource_manager() -> ResourceManager {
     let mut rm = ResourceManager::new();
-    let mut at_res = Resource::new(ResourceCap::Soft(1));
+    let mut at_res = Resource::from(ResourceCap::Soft(1));
     at_res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToFull);
 
     rm.add_perm(ResourceName::AT(ActionType::Action), at_res.clone());
@@ -202,7 +225,7 @@ pub fn create_resource_manager() -> ResourceManager {
     rm.add_perm(ResourceName::AT(ActionType::Reaction), at_res.clone());
     rm.add_perm(ResourceName::AT(ActionType::Movement), at_res);
 
-    let mut sa_res = Resource::new(ResourceCap::Soft(0));
+    let mut sa_res = Resource::from(ResourceCap::Soft(0));
     sa_res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToEmpty);
     sa_res.add_refresh(RefreshTiming::EndMyTurn, RefreshBy::ToEmpty);
     rm.add_perm(ResourceName::AT(ActionType::SingleAttack), sa_res);

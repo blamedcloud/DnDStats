@@ -66,7 +66,18 @@ impl<T: RVProb> EncounterManager<T> {
         self.strategies.push(str);
     }
 
+    pub fn get_state_rv(&self) -> &CombatStateRV<T> {
+        &self.cs_rv
+    }
+
+    pub fn num_participants(&self) -> usize {
+        self.participants.len()
+    }
+
     pub fn simulate_n_rounds(&mut self, n: u8) -> ResultCSE {
+        if self.round_num == 0 {
+            self.register_timing(CombatTiming::EncounterBegin);
+        }
         for _ in 0..n {
             self.round_num += 1;
             self.register_timing(CombatTiming::BeginRound(self.round_num.into()));
@@ -76,19 +87,17 @@ impl<T: RVProb> EncounterManager<T> {
         Ok(())
     }
 
-    pub fn get_state_rv(&self) -> &CombatStateRV<T> {
-        &self.cs_rv
-    }
-
     fn register_timing(&mut self, ct: CombatTiming) {
         let event = CombatEvent::Timing(ct);
         for pcs in self.cs_rv.get_states_mut() {
-            pcs.push(event);
+            if pcs.is_valid_timing(ct) {
+                pcs.push(event);
 
-            for i in 0..self.participants.len() {
-                let pid = ParticipantId(i);
-                let rt = ct.get_refresh_timing(pid);
-                pcs.get_rm_mut(pid).handle_timing(rt);
+                for i in 0..self.participants.len() {
+                    let pid = ParticipantId(i);
+                    let ort = ct.get_refresh_timing(pid);
+                    ort.map(|rt| pcs.handle_refresh(pid, rt));
+                }
             }
         }
     }
@@ -117,7 +126,32 @@ impl<T: RVProb> EncounterManager<T> {
         &self.strategies.get(pid.0).unwrap()
     }
 
-    fn finish_turn(&self, pcs: ProbCombatState<T>, pid: ParticipantId) -> Result<Vec<ProbCombatState<T>>, CSError> {
+    fn is_combat_over(&self, pcs: &mut ProbCombatState<T>) -> bool {
+        if pcs.get_state().get_last_combat_timing().unwrap() == CombatTiming::EncounterEnd {
+            return true;
+        }
+        let mut player_alive = false;
+        let mut enemy_alive = false;
+        for i in 0..self.num_participants() {
+            let pid = ParticipantId(i);
+            if pcs.is_alive(pid) {
+                match self.get_team(pid) {
+                    Team::Players => player_alive = true,
+                    Team::Enemies => enemy_alive = true,
+                }
+            }
+            if player_alive && enemy_alive {
+                return false;
+            }
+        }
+        pcs.push(CombatEvent::Timing(CombatTiming::EncounterEnd));
+        true
+    }
+
+    fn finish_turn(&self, mut pcs: ProbCombatState<T>, pid: ParticipantId) -> Result<Vec<ProbCombatState<T>>, CSError> {
+        if self.is_combat_over(&mut pcs) || pcs.is_dead(pid) {
+            return Ok(vec!(pcs));
+        }
         let strategy = self.get_strategy(pid);
         if let Some(so) = strategy.get_action(pcs.get_state(), &self.participants, pid) {
             if self.possible_action(&pcs, pid, so) {
@@ -145,6 +179,14 @@ impl<T: RVProb> EncounterManager<T> {
 
     fn get_participant(&self, pid: ParticipantId) -> &Box<dyn Participant> {
         &self.participants.get(pid.0).unwrap().participant
+    }
+
+    pub fn get_team(&self, pid: ParticipantId) -> Team {
+        self.participants.get(pid.0).unwrap().team
+    }
+
+    fn is_dead_at_zero(&self, pid: ParticipantId) -> bool {
+        self.get_team(pid) == Team::Enemies
     }
 
     fn possible_action(&self, pcs: &ProbCombatState<T>, pid: ParticipantId, so: StrategicOption) -> bool {
@@ -214,7 +256,8 @@ impl<T: RVProb> EncounterManager<T> {
         let ce_rv: MapRandVar<CombatEvent, T> = outcome_rv.map_keys(|ar| ar.into());
         let ar_dmg_map = wa.get_dmg_map(target.get_resistances())?;
         let ce_dmg_map: BTreeMap<CombatEvent, RandomVariable<T>> = ar_dmg_map.into_iter().map(|(k, v)| (k.into(), v)).collect();
-        Ok(pcs.split_dmg(ce_rv, ce_dmg_map, target_pid))
+        let dead_at_zero = self.is_dead_at_zero(target_pid);
+        Ok(pcs.split_dmg(ce_rv, ce_dmg_map, target_pid, dead_at_zero))
     }
 }
 
@@ -230,9 +273,9 @@ mod tests {
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
     use character_builder::resources::ResourceManager;
     use rand_var::RV64;
-    use rand_var::rv_traits::NumRandVar;
+    use rand_var::rv_traits::{NumRandVar, RandVar};
     use crate::{EM64, EncounterManager};
-    use crate::combat_log::{CombatEvent, CombatTiming, RoundId};
+    use crate::combat_log::{CombatEvent, CombatTiming, Health, RoundId};
     use crate::participant::{Participant, ParticipantId, Team, TeamMember};
     use crate::strategy::{BasicAttacks, DoNothing};
     use crate::target_dummy::TargetDummy;
@@ -273,11 +316,12 @@ mod tests {
         assert!(!logs.has_parent());
 
         let events = logs.get_local_events();
-        assert_eq!(6, events.len());
+        assert_eq!(7, events.len());
         let all_events = logs.get_all_events();
         assert_eq!(all_events, events.clone());
 
         let expected_events = vec!(
+            CombatEvent::Timing(CombatTiming::EncounterBegin),
             CombatEvent::Timing(CombatTiming::BeginRound(RoundId(1))),
             CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(0))),
             CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(0))),
@@ -321,7 +365,7 @@ mod tests {
         let hit_local_events = hit_logs.get_local_events();
         assert_eq!(5, hit_local_events.len());
         let hit_all_events = hit_logs.get_all_events();
-        assert_eq!(10, hit_all_events.len());
+        assert_eq!(11, hit_all_events.len());
 
         let expected_local_events = vec!(
             CombatEvent::AR(AttackResult::Hit),
@@ -333,6 +377,7 @@ mod tests {
         assert_eq!(&expected_local_events, hit_local_events);
 
         let mut expected_events = vec!(
+            CombatEvent::Timing(CombatTiming::EncounterBegin),
             CombatEvent::Timing(CombatTiming::BeginRound(RoundId(1))),
             CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(0))),
             CombatEvent::AN(ActionName::AttackAction),
@@ -365,5 +410,60 @@ mod tests {
         let cs_rv = em.get_state_rv();
         let dmg_rv = cs_rv.get_dmg(ParticipantId(1));
         assert_eq!(atk_dmg.multiple(2), dmg_rv);
+    }
+
+    #[test]
+    fn fighter_vs_orc_stats() {
+        let mut fighter = get_test_fighter_lvl_0();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
+        let orc = TargetDummy::new(15, 13);
+
+        let mut em: EM64 = EncounterManager::new();
+        em.add_player(fighter.clone(), Box::new(BasicAttacks));
+        em.add_participant(TeamMember::new(Team::Enemies, Box::new(orc.clone())), ResourceManager::new(), Box::new(DoNothing));
+        em.simulate_n_rounds(1).unwrap();
+
+        let cs_rv = em.get_state_rv();
+        // miss, hit, hit -> bloody, hit -> kill, crit, crit -> bloody, crit -> kill
+        assert_eq!(7, cs_rv.len());
+
+        let orc_pid = ParticipantId(1);
+        let orc_bld = Health::calc_bloodied(orc.get_max_hp());
+        assert_eq!(8, orc_bld);
+
+        let miss = cs_rv.get_pcs(0).get_dmg(orc_pid);
+        assert_eq!(0, miss.lower_bound());
+        assert_eq!(0, miss.upper_bound());
+
+        let hit_hlt = cs_rv.get_pcs(1).get_dmg(orc_pid);
+        assert_eq!(5, hit_hlt.lower_bound());
+        assert_eq!(orc_bld - 1, hit_hlt.upper_bound());
+
+        let hit_bld = cs_rv.get_pcs(2).get_dmg(orc_pid);
+        assert_eq!(orc_bld, hit_bld.lower_bound());
+        assert_eq!(orc.get_max_hp() - 1, hit_bld.upper_bound());
+
+        let hit_die = cs_rv.get_pcs(3).get_dmg(orc_pid);
+        assert_eq!(orc.get_max_hp(), hit_die.lower_bound());
+        assert_eq!(orc.get_max_hp(), hit_die.upper_bound());
+
+        let crit_hlt = cs_rv.get_pcs(4).get_dmg(orc_pid);
+        assert_eq!(7, crit_hlt.lower_bound());
+        assert_eq!(orc_bld - 1, crit_hlt.upper_bound());
+
+        let crit_bld = cs_rv.get_pcs(5).get_dmg(orc_pid);
+        assert_eq!(orc_bld, crit_bld.lower_bound());
+        assert_eq!(orc.get_max_hp() - 1, crit_bld.upper_bound());
+
+        let crit_die = cs_rv.get_pcs(6).get_dmg(orc_pid);
+        assert_eq!(orc.get_max_hp(), crit_die.lower_bound());
+        assert_eq!(orc.get_max_hp(), crit_die.upper_bound());
+
+        let dmg_rv = cs_rv.get_dmg(orc_pid);
+        let atk_dmg: RV64 = fighter
+            .get_basic_attack().unwrap()
+            .get_attack_dmg_rv(AttackHitType::Normal, orc.get_ac(), orc.get_resistances()).unwrap()
+            .cap_ub(orc.get_max_hp()).unwrap();
+        assert_eq!(atk_dmg, dmg_rv);
     }
 }

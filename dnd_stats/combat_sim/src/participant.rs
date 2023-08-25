@@ -47,7 +47,7 @@ impl TeamMember {
     }
 }
 
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct ParticipantId(pub usize);
 impl From<usize> for ParticipantId {
     fn from(value: usize) -> Self {

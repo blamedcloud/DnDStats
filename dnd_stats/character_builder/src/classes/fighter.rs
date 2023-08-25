@@ -62,7 +62,7 @@ impl Feature for SecondWind {
         // TODO: the CombatAction should probably be a Heal or something, rather than ByName.
         character.combat_actions.insert(ActionName::SecondWind, CombatOption::new(ActionType::BonusAction, CombatAction::ByName));
 
-        let mut res = Resource::new(ResourceCap::Hard(1));
+        let mut res = Resource::from(ResourceCap::Hard(1));
         res.add_refresh(RefreshTiming::ShortRest, RefreshBy::ToFull);
         res.add_refresh(RefreshTiming::LongRest, RefreshBy::ToFull);
         character.resource_manager.add_perm(ResourceName::AN(ActionName::SecondWind), res);
@@ -76,7 +76,7 @@ impl Feature for ActionSurge {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
         character.combat_actions.insert(ActionName::ActionSurge, CombatOption::new(ActionType::FreeAction, CombatAction::ByName));
 
-        let mut res = Resource::new(ResourceCap::Hard(self.0));
+        let mut res = Resource::from(ResourceCap::Hard(self.0));
         res.add_refresh(RefreshTiming::ShortRest, RefreshBy::ToFull);
         res.add_refresh(RefreshTiming::LongRest, RefreshBy::ToFull);
         character.resource_manager.add_perm(ResourceName::AN(ActionName::ActionSurge), res);
@@ -90,7 +90,7 @@ impl Feature for Indomitable {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
         character.combat_actions.insert(ActionName::Indomitable, CombatOption::new(ActionType::FreeAction, CombatAction::ByName));
 
-        let mut res = Resource::new(ResourceCap::Hard(self.0));
+        let mut res = Resource::from(ResourceCap::Hard(self.0));
         res.add_refresh(RefreshTiming::LongRest, RefreshBy::ToFull);
         character.resource_manager.add_perm(ResourceName::AN(ActionName::ActionSurge), res);
 
