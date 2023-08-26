@@ -22,6 +22,7 @@ pub mod transposition;
 pub enum CSError {
     ActionNotHandled,
     InvalidTarget,
+    InvalidAction,
     CBE(CBError)
 }
 impl From<CBError> for CSError {
@@ -263,6 +264,7 @@ impl<T: RVProb> EncounterManager<T> {
                 let heal: RandomVariable<T> = de.get_heal_rv()?;
                 Ok(HandledAction::Children(pcs.add_dmg(&heal, pid, self.is_dead_at_zero(pid))))
             },
+            CombatAction::BonusDamage(_) => Err(CSError::InvalidAction),
             CombatAction::AdditionalAttacks(aa) => {
                 pcs.get_rm_mut(pid).gain(ResourceName::AT(ActionType::SingleAttack), *aa as usize);
                 Ok(HandledAction::InPlace(pcs))
@@ -281,9 +283,10 @@ impl<T: RVProb> EncounterManager<T> {
 
     fn handle_attack(&self, pcs: ProbCombatState<T>, atk: &impl Attack, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<T>>, CBError> {
         let target = self.get_participant(target_pid);
-        let outcome_rv: ArMRV<T> = atk.get_attack_result_rv(AttackHitType::Normal, target.get_ac())?;
-        let ce_rv: MapRandVar<CombatEvent, T> = outcome_rv.map_keys(|ar| ar.into());
+        let ar_rv: ArMRV<T> = atk.get_attack_result_rv(AttackHitType::Normal, target.get_ac())?;
+        let ce_rv: MapRandVar<CombatEvent, T> = ar_rv.map_keys(|ar| ar.into());
         let ar_dmg_map = atk.get_dmg_map(target.get_resistances())?;
+        // TODO: handle bonus damage
         let ce_dmg_map: BTreeMap<CombatEvent, RandomVariable<T>> = ar_dmg_map.into_iter().map(|(k, v)| (k.into(), v)).collect();
         let dead_at_zero = self.is_dead_at_zero(target_pid);
         Ok(pcs.split_dmg(ce_rv, ce_dmg_map, target_pid, dead_at_zero))

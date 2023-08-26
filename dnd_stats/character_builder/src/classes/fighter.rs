@@ -92,6 +92,7 @@ impl Feature for ActionSurge {
 pub struct Indomitable(pub usize);
 impl Feature for Indomitable {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
+        // TODO: change action type to OnSave ?
         character.combat_actions.insert(ActionName::Indomitable, CombatOption::new(ActionType::FreeAction, CombatAction::ByName));
 
         let mut res = Resource::from(ResourceCap::Hard(self.0));

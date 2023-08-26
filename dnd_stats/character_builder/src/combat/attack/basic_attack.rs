@@ -13,7 +13,7 @@ pub struct BasicAttack {
 }
 
 impl BasicAttack {
-    pub fn new(hit_bonus: isize, dmg_type: DamageType, dmg_const: isize, dmg_die: DamageDice, num_dice: u32) -> Self {
+    pub fn new(hit_bonus: isize, dmg_type: DamageType, dmg_const: isize, dmg_die: DamageDice, num_dice: u8) -> Self {
         let mut damage = DamageManager::new();
         let e_dmg_type = ExtendedDamageType::Basic(dmg_type);
         damage.add_base_dmg(DamageTerm::new(ExpressionTerm::Const(dmg_const), e_dmg_type));

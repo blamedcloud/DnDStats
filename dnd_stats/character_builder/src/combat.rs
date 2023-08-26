@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use crate::Character;
 use crate::combat::attack::basic_attack::BasicAttack;
 use crate::combat::attack::weapon_attack::WeaponAttack;
-use crate::damage::DiceExpression;
+use crate::damage::{DamageTerm, DiceExpression};
 
 pub mod attack;
 
@@ -14,6 +14,7 @@ pub enum ActionType {
     Reaction,
     Movement,
     FreeAction,
+    OnHit,
 }
 
 #[derive(Clone)]
@@ -21,6 +22,7 @@ pub enum CombatAction {
     WeaponAttack(WeaponAttack),
     BasicAttack(BasicAttack),
     SelfHeal(DiceExpression),
+    BonusDamage(DamageTerm),
     AdditionalAttacks(u8),
     ByName,
 }
@@ -77,6 +79,7 @@ pub enum ActionName {
     SecondWind,
     ActionSurge,
     Indomitable,
+    SneakAttack,
 }
 
 pub type ActionManager = HashMap<ActionName, CombatOption>;

@@ -41,7 +41,7 @@ impl DamageDice {
     }
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum ExtendedDamageDice {
     Basic(DamageDice),
     WeaponDice,
@@ -97,14 +97,14 @@ impl From<DamageType> for ExtendedDamageType {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ExpressionTerm {
     Die(ExtendedDamageDice),
-    Dice(u32, ExtendedDamageDice),
+    Dice(u8, ExtendedDamageDice),
     Const(isize),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct DamageTerm {
     expr: ExpressionTerm,
     dmg_type: ExtendedDamageType,

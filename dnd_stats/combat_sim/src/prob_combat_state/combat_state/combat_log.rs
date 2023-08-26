@@ -42,6 +42,8 @@ impl CombatLogParent {
     }
 }
 
+// TODO: add an alt-history ~ Option<Vec<Vec<CombatEvent>>> instead of multiple parents
+// I think that would make the transposition code simpler
 #[derive(Debug, Clone)]
 pub struct CombatLog {
     parent: CombatLogParent,

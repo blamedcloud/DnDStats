@@ -4,8 +4,10 @@ use crate::ability_scores::Ability;
 use crate::feature::{Feature, SaveProficiencies};
 use crate::{CBError, Character, HitDice};
 use crate::classes::fighter::FighterClass;
+use crate::classes::rogue::RogueClass;
 
 pub mod fighter;
+pub mod rogue;
 
 pub trait Class {
     fn get_class_name(&self) -> ClassName;
@@ -69,6 +71,7 @@ impl ClassName {
     pub fn get_class(&self) -> Result<Box<dyn Class>, CBError> {
         match self {
             ClassName::Fighter => Ok(Box::new(FighterClass)),
+            ClassName::Rogue => Ok(Box::new(RogueClass)),
             _ => Err(CBError::NotImplemented)
         }
     }
