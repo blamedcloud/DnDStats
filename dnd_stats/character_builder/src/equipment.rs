@@ -9,7 +9,7 @@ pub enum ArmorType {
     HeavyArmor,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Armor {
     armor_type: ArmorType,
     name: String,
@@ -416,7 +416,7 @@ pub enum OffHand {
     Free,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Equipment {
     armor: Armor,
     main_hand: Weapon,

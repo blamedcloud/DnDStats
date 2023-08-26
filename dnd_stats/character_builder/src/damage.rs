@@ -127,7 +127,7 @@ impl DamageTerm {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct DiceExpression {
     dice_terms: Vec<ExtendedDamageDice>,
     const_term: isize,
@@ -244,7 +244,7 @@ impl DiceExpression {
 
 type DamageExpression = HashMap<ExtendedDamageType, DiceExpression>;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct DamageManager {
     base_dmg: DamageExpression,
     bonus_crit_dmg: DamageExpression,

@@ -39,7 +39,7 @@ impl Class for FighterClass {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct ChampionFighter;
 impl SubClass for ChampionFighter {
     fn get_class_name(&self) -> ClassName {

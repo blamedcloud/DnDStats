@@ -124,7 +124,6 @@ impl AbilityScores {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use character_builder::combat::{ActionName, ActionType, AttackType};
 use character_builder::resources::ResourceName;
 use character_builder::Square;
@@ -27,10 +28,11 @@ impl From<ActionName> for StrategicOption {
     }
 }
 
-pub trait Strategy {
+pub trait Strategy : Debug {
     fn get_action(&self, state: &CombatState, participants: &Vec<TeamMember>, me: ParticipantId) -> Option<StrategicOption>;
 }
 
+#[derive(Debug)]
 pub struct LinearStrategy {
     strategies: Vec<Box<dyn Strategy>>
 }
@@ -59,6 +61,7 @@ impl Strategy for LinearStrategy {
     }
 }
 
+#[derive(Debug)]
 pub struct DoNothing;
 impl Strategy for DoNothing {
     fn get_action(&self, _: &CombatState, _: &Vec<TeamMember>, _: ParticipantId) -> Option<StrategicOption> {
@@ -77,6 +80,7 @@ pub fn get_first_target(state: &CombatState, participants: &Vec<TeamMember>, me:
     None
 }
 
+#[derive(Debug)]
 pub struct BasicAttackStr;
 impl Strategy for BasicAttackStr {
     fn get_action(&self, state: &CombatState, participants: &Vec<TeamMember>, me: ParticipantId) -> Option<StrategicOption> {
@@ -95,6 +99,7 @@ impl Strategy for BasicAttackStr {
     }
 }
 
+#[derive(Debug)]
 pub struct SecondWindStr;
 impl Strategy for SecondWindStr {
     fn get_action(&self, state: &CombatState, _: &Vec<TeamMember>, me: ParticipantId) -> Option<StrategicOption> {

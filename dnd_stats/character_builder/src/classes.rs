@@ -1,4 +1,4 @@
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 use crate::ability_scores::Ability;
 use crate::feature::{Feature, SaveProficiencies};
@@ -20,7 +20,7 @@ pub trait Class {
     }
 }
 
-pub trait SubClass {
+pub trait SubClass : Debug {
     fn get_class_name(&self) -> ClassName;
     fn get_static_features(&self, level: u8) -> Result<Vec<Box<dyn Feature>>, CBError>;
 }
@@ -51,7 +51,7 @@ impl Feature for SubclassFeatures {
     }
 }
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ClassName {
     Barbarian,
     Bard,

@@ -97,7 +97,7 @@ impl HitDice {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Character {
     name: String,
     ability_scores: AbilityScores,

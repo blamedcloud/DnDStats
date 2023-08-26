@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 use num::{BigRational, Rational64};
-use character_builder::{CBError, Character};
+use character_builder::CBError;
 use character_builder::combat::{ActionName, ActionType, CombatAction};
 use character_builder::combat::attack::{ArMRV, Attack, AttackHitType};
-use character_builder::resources::{ResourceManager, ResourceName};
+use character_builder::resources::ResourceName;
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
-use crate::participant::{Participant, ParticipantId, Team, TeamMember};
+use crate::participant::{Participant, ParticipantId, ParticipantManager, Team};
 use crate::prob_combat_state::{CombatStateRV, ProbCombatState};
 use crate::prob_combat_state::combat_state::combat_log::combat_event::{CombatEvent, CombatTiming};
 use crate::strategy::{StrategicOption, Strategy, Target};
@@ -31,49 +31,36 @@ impl From<CBError> for CSError {
     }
 }
 
-pub enum HandledAction<T: RVProb> {
-    InPlace(ProbCombatState<T>),
-    Children(Vec<ProbCombatState<T>>)
+pub enum HandledAction<'pm, T: RVProb> {
+    InPlace(ProbCombatState<'pm, T>),
+    Children(Vec<ProbCombatState<'pm, T>>)
 }
 
-type ResultHA<T> = Result<HandledAction<T>, CSError>;
+type ResultHA<'pm, T> = Result<HandledAction<'pm, T>, CSError>;
 type ResultCSE = Result<(), CSError>;
 
-pub struct EncounterManager<T: RVProb> {
-    participants: Vec<TeamMember>, // in order of initiative
-    strategies: Vec<Box<dyn Strategy>>,
+pub struct EncounterManager<'pm, T: RVProb> {
+    participants: &'pm ParticipantManager,
     round_num: u8,
-    cs_rv: CombatStateRV<T>,
+    cs_rv: CombatStateRV<'pm, T>,
     merge_transpositions: bool,
 }
 
-pub type EM64 = EncounterManager<Rational64>;
-pub type EMBig = EncounterManager<BigRational>;
+pub type EM64<'pm> = EncounterManager<'pm, Rational64>;
+pub type EMBig<'pm> = EncounterManager<'pm, BigRational>;
 
-impl<T: RVProb> EncounterManager<T> {
-    pub fn new() -> Self {
+impl<'pm, T: RVProb> EncounterManager<'pm, T> {
+    pub fn new(pm: &'pm ParticipantManager) -> Self {
         Self {
-            participants: Vec::new(),
-            strategies: Vec::new(),
+            participants: pm,
             round_num: 0,
-            cs_rv: CombatStateRV::new(),
+            cs_rv: CombatStateRV::new(pm),
             merge_transpositions: false,
         }
     }
 
     pub fn set_do_merges(&mut self, merges: bool) {
         self.merge_transpositions = merges
-    }
-
-    pub fn add_player(&mut self, character: Character, str: Box<dyn Strategy>) {
-        let rm = character.get_resource_manager().clone();
-        self.add_participant(TeamMember::new(Team::Players, Box::new(character)), rm, str);
-    }
-
-    pub fn add_participant(&mut self, tm: TeamMember, rm: ResourceManager, str: Box<dyn Strategy>) {
-        self.cs_rv.add_participant(rm, tm.participant.get_max_hp());
-        self.participants.push(tm);
-        self.strategies.push(str);
     }
 
     pub fn get_state_rv(&self) -> &CombatStateRV<T> {
@@ -141,10 +128,10 @@ impl<T: RVProb> EncounterManager<T> {
     }
 
     fn get_strategy(&self, pid: ParticipantId) -> &Box<dyn Strategy> {
-        &self.strategies.get(pid.0).unwrap()
+        self.participants.get_strategy(pid)
     }
 
-    fn is_combat_over(&self, pcs: &mut ProbCombatState<T>) -> bool {
+    fn is_combat_over(&self, pcs: &mut ProbCombatState<'pm, T>) -> bool {
         if pcs.get_state().get_last_combat_timing().unwrap() == CombatTiming::EncounterEnd {
             return true;
         }
@@ -166,12 +153,12 @@ impl<T: RVProb> EncounterManager<T> {
         true
     }
 
-    fn finish_turn(&self, mut pcs: ProbCombatState<T>, pid: ParticipantId) -> Result<Vec<ProbCombatState<T>>, CSError> {
+    fn finish_turn(&self, mut pcs: ProbCombatState<'pm, T>, pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
         if self.is_combat_over(&mut pcs) || pcs.is_dead(pid) {
             return Ok(vec!(pcs));
         }
         let strategy = self.get_strategy(pid);
-        if let Some(so) = strategy.get_action(pcs.get_state(), &self.participants, pid) {
+        if let Some(so) = strategy.get_action(pcs.get_state(), self.participants.get_participants(), pid) {
             if self.possible_action(&pcs, pid, so) {
                 let handled_action = self.handle_action(pcs, pid, so)?;
                 match handled_action {
@@ -196,18 +183,18 @@ impl<T: RVProb> EncounterManager<T> {
     }
 
     fn get_participant(&self, pid: ParticipantId) -> &Box<dyn Participant> {
-        &self.participants.get(pid.0).unwrap().participant
+        &self.participants.get_participant(pid).participant
     }
 
     pub fn get_team(&self, pid: ParticipantId) -> Team {
-        self.participants.get(pid.0).unwrap().team
+        self.participants.get_participant(pid).team
     }
 
     fn is_dead_at_zero(&self, pid: ParticipantId) -> bool {
         self.get_team(pid) == Team::Enemies
     }
 
-    fn possible_action(&self, pcs: &ProbCombatState<T>, pid: ParticipantId, so: StrategicOption) -> bool {
+    fn possible_action(&self, pcs: &ProbCombatState<'pm, T>, pid: ParticipantId, so: StrategicOption) -> bool {
         let an = so.action_name;
         let participant = self.get_participant(pid);
         let has_action = participant.get_action_manager().contains_key(&an);
@@ -234,7 +221,7 @@ impl<T: RVProb> EncounterManager<T> {
         has_action && valid_target && has_resources
     }
 
-    fn handle_action(&self, mut pcs: ProbCombatState<T>, pid: ParticipantId, so: StrategicOption) -> ResultHA<T> {
+    fn handle_action(&self, mut pcs: ProbCombatState<'pm, T>, pid: ParticipantId, so: StrategicOption) -> ResultHA<'pm, T> {
         let an = so.action_name;
         let participant = self.get_participant(pid);
         let co = participant.get_action_manager().get(&an).unwrap();
@@ -281,7 +268,7 @@ impl<T: RVProb> EncounterManager<T> {
         }
     }
 
-    fn handle_attack(&self, pcs: ProbCombatState<T>, atk: &impl Attack, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<T>>, CBError> {
+    fn handle_attack(&self, pcs: ProbCombatState<'pm, T>, atk: &impl Attack, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CBError> {
         let target = self.get_participant(target_pid);
         let ar_rv: ArMRV<T> = atk.get_attack_result_rv(AttackHitType::Normal, target.get_ac())?;
         let ce_rv: MapRandVar<CombatEvent, T> = ar_rv.map_keys(|ar| ar.into());
@@ -310,7 +297,7 @@ mod tests {
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use crate::{EM64, EncounterManager};
     use crate::monster::Monster;
-    use crate::participant::{Participant, ParticipantId, Team, TeamMember};
+    use crate::participant::{Participant, ParticipantId, ParticipantManager, Team, TeamMember};
     use crate::prob_combat_state::combat_state::combat_log::combat_event::{CombatEvent, CombatTiming, RoundId};
     use crate::prob_combat_state::combat_state::health::Health;
     use crate::strategy::{BasicAttackStr, DoNothing, LinearStrategy, SecondWindStr};
@@ -337,35 +324,39 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         let dummy = TargetDummy::new(isize::MAX, 14);
 
-        let mut em: EM64 = EncounterManager::new();
-        em.add_player(fighter, Box::new(DoNothing));
-        em.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy)), ResourceManager::new(),Box::new(DoNothing));
+        let mut pm = ParticipantManager::new();
+        pm.add_player(fighter, Box::new(DoNothing));
+        pm.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy)), ResourceManager::new(),Box::new(DoNothing));
+
+        let mut em: EM64 = EncounterManager::new(&pm);
         em.simulate_n_rounds(1).unwrap();
 
-        let cs_rv = em.get_state_rv();
-        assert_eq!(1, cs_rv.len());
+        {
+            let cs_rv = em.get_state_rv();
+            assert_eq!(1, cs_rv.len());
 
-        let pcs = cs_rv.get_pcs(0);
-        assert_eq!(Rational64::one(), *pcs.get_prob());
+            let pcs = cs_rv.get_pcs(0);
+            assert_eq!(Rational64::one(), *pcs.get_prob());
 
-        let logs = pcs.get_state().get_logs();
-        assert!(!logs.has_parent());
+            let logs = pcs.get_state().get_logs();
+            assert!(!logs.has_parent());
 
-        let events = logs.get_local_events();
-        assert_eq!(7, events.len());
-        let all_events = logs.get_all_events();
-        assert_eq!(all_events, events.clone());
+            let events = logs.get_local_events();
+            assert_eq!(7, events.len());
+            let all_events = logs.get_all_events();
+            assert_eq!(all_events, events.clone());
 
-        let expected_events = vec!(
-            CombatEvent::Timing(CombatTiming::EncounterBegin),
-            CombatEvent::Timing(CombatTiming::BeginRound(RoundId(1))),
-            CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(0))),
-            CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(0))),
-            CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(1))),
-            CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(1))),
-            CombatEvent::Timing(CombatTiming::EndRound(RoundId(1)))
-        );
-        assert_eq!(all_events, expected_events);
+            let expected_events = vec!(
+                CombatEvent::Timing(CombatTiming::EncounterBegin),
+                CombatEvent::Timing(CombatTiming::BeginRound(RoundId(1))),
+                CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(0))),
+                CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(0))),
+                CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(1))),
+                CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(1))),
+                CombatEvent::Timing(CombatTiming::EndRound(RoundId(1)))
+            );
+            assert_eq!(all_events, expected_events);
+        }
     }
 
     #[test]
@@ -374,56 +365,60 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         let dummy = TargetDummy::new(isize::MAX, 14);
 
-        let mut em: EM64 = EncounterManager::new();
-        em.add_player(fighter.clone(), Box::new(BasicAttackStr));
-        em.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy.clone())), ResourceManager::new(),Box::new(DoNothing));
+        let mut pm = ParticipantManager::new();
+        pm.add_player(fighter.clone(), Box::new(BasicAttackStr));
+        pm.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy.clone())), ResourceManager::new(),Box::new(DoNothing));
+
+        let mut em: EM64 = EncounterManager::new(&pm);
         em.simulate_n_rounds(1).unwrap();
 
-        let cs_rv = em.get_state_rv();
-        assert_eq!(3, cs_rv.len());
+        {
+            let cs_rv = em.get_state_rv();
+            assert_eq!(3, cs_rv.len());
 
-        let index_rv = cs_rv.get_index_rv();
-        let ar_rv: RV64 = fighter.get_weapon_attack().unwrap()
-            .get_attack_result_rv(AttackHitType::Normal, dummy.get_ac()).unwrap()
-            .map_keys(|ar| {
-                match ar {
-                    AttackResult::Miss => 0,
-                    AttackResult::Hit => 1,
-                    AttackResult::Crit => 2
-                }
-            }).into_rv();
-        assert_eq!(ar_rv, index_rv);
+            let index_rv = cs_rv.get_index_rv();
+            let ar_rv: RV64 = fighter.get_weapon_attack().unwrap()
+                .get_attack_result_rv(AttackHitType::Normal, dummy.get_ac()).unwrap()
+                .map_keys(|ar| {
+                    match ar {
+                        AttackResult::Miss => 0,
+                        AttackResult::Hit => 1,
+                        AttackResult::Crit => 2
+                    }
+                }).into_rv();
+            assert_eq!(ar_rv, index_rv);
 
-        let hit_pcs = cs_rv.get_pcs(1);
-        let hit_logs = hit_pcs.get_state().get_logs();
-        assert!(hit_logs.has_parent());
+            let hit_pcs = cs_rv.get_pcs(1);
+            let hit_logs = hit_pcs.get_state().get_logs();
+            assert!(hit_logs.has_parent());
 
-        let hit_local_events = hit_logs.get_local_events();
-        assert_eq!(5, hit_local_events.len());
-        let hit_all_events = hit_logs.get_all_events();
-        assert_eq!(11, hit_all_events.len());
+            let hit_local_events = hit_logs.get_local_events();
+            assert_eq!(5, hit_local_events.len());
+            let hit_all_events = hit_logs.get_all_events();
+            assert_eq!(11, hit_all_events.len());
 
-        let expected_local_events = vec!(
-            CombatEvent::AR(AttackResult::Hit),
-            CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(0))),
-            CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(1))),
-            CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(1))),
-            CombatEvent::Timing(CombatTiming::EndRound(RoundId(1)))
-        );
-        assert_eq!(&expected_local_events, hit_local_events);
+            let expected_local_events = vec!(
+                CombatEvent::AR(AttackResult::Hit),
+                CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(0))),
+                CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(1))),
+                CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(1))),
+                CombatEvent::Timing(CombatTiming::EndRound(RoundId(1)))
+            );
+            assert_eq!(&expected_local_events, hit_local_events);
 
-        let mut expected_events = vec!(
-            CombatEvent::Timing(CombatTiming::EncounterBegin),
-            CombatEvent::Timing(CombatTiming::BeginRound(RoundId(1))),
-            CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(0))),
-            CombatEvent::AN(ActionName::AttackAction),
-            CombatEvent::AN(ActionName::PrimaryAttack(AttackType::Normal)),
-            CombatEvent::Attack(ParticipantId(0), ParticipantId(1))
-        );
-        assert_eq!(&expected_events, hit_logs.get_first_parent().unwrap().get_local_events());
+            let mut expected_events = vec!(
+                CombatEvent::Timing(CombatTiming::EncounterBegin),
+                CombatEvent::Timing(CombatTiming::BeginRound(RoundId(1))),
+                CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(0))),
+                CombatEvent::AN(ActionName::AttackAction),
+                CombatEvent::AN(ActionName::PrimaryAttack(AttackType::Normal)),
+                CombatEvent::Attack(ParticipantId(0), ParticipantId(1))
+            );
+            assert_eq!(&expected_events, hit_logs.get_first_parent().unwrap().get_local_events());
 
-        expected_events.extend(expected_local_events.into_iter());
-        assert_eq!(expected_events, hit_all_events);
+            expected_events.extend(expected_local_events.into_iter());
+            assert_eq!(expected_events, hit_all_events);
+        }
     }
 
     #[test]
@@ -432,9 +427,11 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         let dummy = TargetDummy::new(isize::MAX, 14);
 
-        let mut em: EM64 = EncounterManager::new();
-        em.add_player(fighter.clone(), Box::new(BasicAttackStr));
-        em.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy.clone())), ResourceManager::new(),Box::new(DoNothing));
+        let mut pm = ParticipantManager::new();
+        pm.add_player(fighter.clone(), Box::new(BasicAttackStr));
+        pm.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy.clone())), ResourceManager::new(),Box::new(DoNothing));
+
+        let mut em: EM64 = EncounterManager::new(&pm);
         em.simulate_n_rounds(1).unwrap();
 
         let cs_rv = em.get_state_rv();
@@ -454,53 +451,57 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         let orc = TargetDummy::new(15, 13);
 
-        let mut em: EM64 = EncounterManager::new();
-        em.add_player(fighter.clone(), Box::new(BasicAttackStr));
-        em.add_participant(TeamMember::new(Team::Enemies, Box::new(orc.clone())), ResourceManager::new(), Box::new(DoNothing));
+        let mut pm = ParticipantManager::new();
+        pm.add_player(fighter.clone(), Box::new(BasicAttackStr));
+        pm.add_participant(TeamMember::new(Team::Enemies, Box::new(orc.clone())), ResourceManager::new(), Box::new(DoNothing));
+
+        let mut em: EM64 = EncounterManager::new(&pm);
         em.simulate_n_rounds(1).unwrap();
 
-        let cs_rv = em.get_state_rv();
-        // miss, hit, hit -> bloody, hit -> kill, crit, crit -> bloody, crit -> kill
-        assert_eq!(7, cs_rv.len());
+        {
+            let cs_rv = em.get_state_rv();
+            // miss, hit, hit -> bloody, hit -> kill, crit, crit -> bloody, crit -> kill
+            assert_eq!(7, cs_rv.len());
 
-        let orc_pid = ParticipantId(1);
-        let orc_bld = Health::calc_bloodied(orc.get_max_hp());
-        assert_eq!(8, orc_bld);
+            let orc_pid = ParticipantId(1);
+            let orc_bld = Health::calc_bloodied(orc.get_max_hp());
+            assert_eq!(8, orc_bld);
 
-        let miss = cs_rv.get_pcs(0).get_dmg(orc_pid);
-        assert_eq!(0, miss.lower_bound());
-        assert_eq!(0, miss.upper_bound());
+            let miss = cs_rv.get_pcs(0).get_dmg(orc_pid);
+            assert_eq!(0, miss.lower_bound());
+            assert_eq!(0, miss.upper_bound());
 
-        let hit_hlt = cs_rv.get_pcs(1).get_dmg(orc_pid);
-        assert_eq!(5, hit_hlt.lower_bound());
-        assert_eq!(orc_bld - 1, hit_hlt.upper_bound());
+            let hit_hlt = cs_rv.get_pcs(1).get_dmg(orc_pid);
+            assert_eq!(5, hit_hlt.lower_bound());
+            assert_eq!(orc_bld - 1, hit_hlt.upper_bound());
 
-        let hit_bld = cs_rv.get_pcs(2).get_dmg(orc_pid);
-        assert_eq!(orc_bld, hit_bld.lower_bound());
-        assert_eq!(orc.get_max_hp() - 1, hit_bld.upper_bound());
+            let hit_bld = cs_rv.get_pcs(2).get_dmg(orc_pid);
+            assert_eq!(orc_bld, hit_bld.lower_bound());
+            assert_eq!(orc.get_max_hp() - 1, hit_bld.upper_bound());
 
-        let hit_die = cs_rv.get_pcs(3).get_dmg(orc_pid);
-        assert_eq!(orc.get_max_hp(), hit_die.lower_bound());
-        assert_eq!(orc.get_max_hp(), hit_die.upper_bound());
+            let hit_die = cs_rv.get_pcs(3).get_dmg(orc_pid);
+            assert_eq!(orc.get_max_hp(), hit_die.lower_bound());
+            assert_eq!(orc.get_max_hp(), hit_die.upper_bound());
 
-        let crit_hlt = cs_rv.get_pcs(4).get_dmg(orc_pid);
-        assert_eq!(7, crit_hlt.lower_bound());
-        assert_eq!(orc_bld - 1, crit_hlt.upper_bound());
+            let crit_hlt = cs_rv.get_pcs(4).get_dmg(orc_pid);
+            assert_eq!(7, crit_hlt.lower_bound());
+            assert_eq!(orc_bld - 1, crit_hlt.upper_bound());
 
-        let crit_bld = cs_rv.get_pcs(5).get_dmg(orc_pid);
-        assert_eq!(orc_bld, crit_bld.lower_bound());
-        assert_eq!(orc.get_max_hp() - 1, crit_bld.upper_bound());
+            let crit_bld = cs_rv.get_pcs(5).get_dmg(orc_pid);
+            assert_eq!(orc_bld, crit_bld.lower_bound());
+            assert_eq!(orc.get_max_hp() - 1, crit_bld.upper_bound());
 
-        let crit_die = cs_rv.get_pcs(6).get_dmg(orc_pid);
-        assert_eq!(orc.get_max_hp(), crit_die.lower_bound());
-        assert_eq!(orc.get_max_hp(), crit_die.upper_bound());
+            let crit_die = cs_rv.get_pcs(6).get_dmg(orc_pid);
+            assert_eq!(orc.get_max_hp(), crit_die.lower_bound());
+            assert_eq!(orc.get_max_hp(), crit_die.upper_bound());
 
-        let dmg_rv = cs_rv.get_dmg(orc_pid);
-        let atk_dmg: RV64 = fighter
-            .get_weapon_attack().unwrap()
-            .get_attack_dmg_rv(AttackHitType::Normal, orc.get_ac(), orc.get_resistances()).unwrap()
-            .cap_ub(orc.get_max_hp()).unwrap();
-        assert_eq!(atk_dmg, dmg_rv);
+            let dmg_rv = cs_rv.get_dmg(orc_pid);
+            let atk_dmg: RV64 = fighter
+                .get_weapon_attack().unwrap()
+                .get_attack_dmg_rv(AttackHitType::Normal, orc.get_ac(), orc.get_resistances()).unwrap()
+                .cap_ub(orc.get_max_hp()).unwrap();
+            assert_eq!(atk_dmg, dmg_rv);
+        }
     }
 
     #[test]
@@ -509,10 +510,12 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         let orc = TargetDummy::new(15, 13);
 
-        let mut em: EM64 = EncounterManager::new();
+        let mut pm = ParticipantManager::new();
+        pm.add_player(fighter.clone(), Box::new(BasicAttackStr));
+        pm.add_participant(TeamMember::new(Team::Enemies, Box::new(orc.clone())), ResourceManager::new(), Box::new(DoNothing));
+
+        let mut em: EM64 = EncounterManager::new(&pm);
         em.set_do_merges(true);
-        em.add_player(fighter.clone(), Box::new(BasicAttackStr));
-        em.add_participant(TeamMember::new(Team::Enemies, Box::new(orc.clone())), ResourceManager::new(), Box::new(DoNothing));
         em.simulate_n_rounds(1).unwrap();
 
         let cs_rv = em.get_state_rv();
@@ -539,37 +542,41 @@ mod tests {
         let ba = BasicAttack::new(5, DamageType::Slashing, 3, DamageDice::D12, 1);
         let orc = Monster::new(15, 13, ba, 1);
 
-        let mut em: EM64 = EncounterManager::new();
-        em.add_participant(TeamMember::new(Team::Enemies, Box::new(orc.clone())), create_basic_rm(), Box::new(BasicAttackStr));
-        em.add_player(fighter.clone(), Box::new(fighter_str));
+        let mut pm = ParticipantManager::new();
+        pm.add_participant(TeamMember::new(Team::Enemies, Box::new(orc.clone())), create_basic_rm(), Box::new(BasicAttackStr));
+        pm.add_player(fighter.clone(), Box::new(fighter_str));
+
+        let mut em: EM64 = EncounterManager::new(&pm);
         em.simulate_n_rounds(1).unwrap();
 
-        let cs_rv = em.get_state_rv();
-        assert_eq!(59, cs_rv.len());
+        {
+            let cs_rv = em.get_state_rv();
+            assert_eq!(59, cs_rv.len());
 
-        let branch = cs_rv.get_pcs(16);
-        let full_log = branch.get_state().get_logs().get_all_events();
+            let branch = cs_rv.get_pcs(16);
+            let full_log = branch.get_state().get_logs().get_all_events();
 
-        let expected_events = vec!(
-            CombatEvent::Timing(CombatTiming::EncounterBegin),
-            CombatEvent::Timing(CombatTiming::BeginRound(RoundId(1))),
-            CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(0))),
-            CombatEvent::AN(ActionName::AttackAction),
-            CombatEvent::AN(ActionName::PrimaryAttack(AttackType::Normal)),
-            CombatEvent::Attack(ParticipantId(0), ParticipantId(1)),
-            CombatEvent::AR(AttackResult::Hit),
-            CombatEvent::HP(ParticipantId(1), Health::Bloodied),
-            CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(0))),
-            CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(1))),
-            CombatEvent::AN(ActionName::AttackAction),
-            CombatEvent::AN(ActionName::PrimaryAttack(AttackType::Normal)),
-            CombatEvent::Attack(ParticipantId(1), ParticipantId(0)),
-            CombatEvent::AR(AttackResult::Hit),
-            CombatEvent::AN(ActionName::SecondWind),
-            CombatEvent::HP(ParticipantId(1), Health::Healthy),
-            CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(1))),
-            CombatEvent::Timing(CombatTiming::EndRound(RoundId(1))),
-        );
-        assert_eq!(expected_events, full_log);
+            let expected_events = vec!(
+                CombatEvent::Timing(CombatTiming::EncounterBegin),
+                CombatEvent::Timing(CombatTiming::BeginRound(RoundId(1))),
+                CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(0))),
+                CombatEvent::AN(ActionName::AttackAction),
+                CombatEvent::AN(ActionName::PrimaryAttack(AttackType::Normal)),
+                CombatEvent::Attack(ParticipantId(0), ParticipantId(1)),
+                CombatEvent::AR(AttackResult::Hit),
+                CombatEvent::HP(ParticipantId(1), Health::Bloodied),
+                CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(0))),
+                CombatEvent::Timing(CombatTiming::BeginTurn(ParticipantId(1))),
+                CombatEvent::AN(ActionName::AttackAction),
+                CombatEvent::AN(ActionName::PrimaryAttack(AttackType::Normal)),
+                CombatEvent::Attack(ParticipantId(1), ParticipantId(0)),
+                CombatEvent::AR(AttackResult::Hit),
+                CombatEvent::AN(ActionName::SecondWind),
+                CombatEvent::HP(ParticipantId(1), Health::Healthy),
+                CombatEvent::Timing(CombatTiming::EndTurn(ParticipantId(1))),
+                CombatEvent::Timing(CombatTiming::EndRound(RoundId(1))),
+            );
+            assert_eq!(expected_events, full_log);
+        }
     }
 }

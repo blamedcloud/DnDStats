@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use character_builder::resources::ResourceManager;
-use crate::participant::ParticipantId;
+use crate::participant::{ParticipantId, ParticipantManager};
 use crate::prob_combat_state::combat_state::combat_log::combat_event::{CombatEvent, CombatTiming};
 use crate::prob_combat_state::combat_state::combat_log::CombatLog;
 use crate::prob_combat_state::combat_state::health::Health;
@@ -22,19 +22,16 @@ type ParticipantResources = Vec<ResourceManager>;
 type ParticipantHealth = Vec<Health>;
 
 impl CombatState {
-    pub fn new() -> Self {
+    pub fn new(pm: &ParticipantManager) -> Self {
+        let resources = pm.get_initial_rms();
+        let health = vec![Health::Healthy; pm.len()];
         Self {
             logs: CombatLog::new(),
-            resources: ParticipantResources::new(),
-            health: ParticipantHealth::new(),
+            resources,
+            health,
             deaths: HashSet::new(),
             last_combat_timing: None,
         }
-    }
-
-    pub fn add_participant(&mut self, rm: ResourceManager) {
-        self.resources.push(rm);
-        self.health.push(Health::Healthy); // TODO: full health?
     }
 
     pub fn get_logs(&self) -> &CombatLog {

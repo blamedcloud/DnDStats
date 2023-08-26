@@ -124,7 +124,6 @@ pub type AoMRV64 = MapRandVar<Pair<AttackResult, isize>, Rational64>;
 pub type AoMRVBig = MapRandVar<Pair<AttackResult, isize>, BigRational>;
 
 pub trait Attack {
-
     fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, CBError>;
     fn get_accuracy_rv<T: RVProb>(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, CBError>;
 

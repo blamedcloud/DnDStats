@@ -60,7 +60,7 @@ impl Class for RogueClass {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct ScoutRogue;
 impl SubClass for ScoutRogue {
     fn get_class_name(&self) -> ClassName {

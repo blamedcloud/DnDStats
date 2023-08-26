@@ -1,10 +1,11 @@
 use std::collections::BTreeMap;
+use std::ptr;
 use character_builder::combat::{ActionName, ActionType};
 use character_builder::resources::{RefreshTiming, ResourceManager, ResourceName};
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::{NumRandVar, RandVar};
-use crate::participant::ParticipantId;
+use crate::participant::{ParticipantId, ParticipantManager};
 use crate::prob_combat_state::combat_state::combat_log::combat_event::{CombatEvent, CombatTiming};
 use crate::prob_combat_state::combat_state::CombatState;
 use crate::prob_combat_state::combat_state::health::Health;
@@ -13,30 +14,27 @@ use crate::transposition::Transposition;
 pub mod combat_state;
 
 #[derive(Debug, Clone)]
-pub struct ProbCombatState<T: RVProb> {
+pub struct ProbCombatState<'pm, T: RVProb> {
+    participants: &'pm ParticipantManager,
     state: CombatState,
-    max_hp: ParticipantMaxHP,
     dmg: ParticipantDmg<T>,
     prob: T,
 }
 
-type ParticipantMaxHP = Vec<isize>;
 type ParticipantDmg<T> = Vec<RandomVariable<T>>;
 
-impl<T: RVProb> ProbCombatState<T> {
-    pub fn new() -> Self {
+impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
+    pub fn new(pm: &'pm ParticipantManager) -> Self {
+        let mut dmg = Vec::with_capacity(pm.len());
+        for _ in 0..pm.len() {
+            dmg.push(RandomVariable::new_constant(0).unwrap());
+        }
         Self {
-            state: CombatState::new(),
-            max_hp: ParticipantMaxHP::new(),
-            dmg: ParticipantDmg::new(),
+            participants: pm,
+            state: CombatState::new(pm),
+            dmg,
             prob: T::one(),
         }
-    }
-
-    pub fn add_participant(&mut self, rm: ResourceManager, hp: isize) {
-        self.state.add_participant(rm);
-        self.max_hp.push(hp);
-        self.dmg.push(RandomVariable::new_constant(0).unwrap());
     }
 
     pub fn push(&mut self, ce: CombatEvent) {
@@ -69,7 +67,7 @@ impl<T: RVProb> ProbCombatState<T> {
     }
 
     pub fn get_hp(&self, pid: ParticipantId) -> isize {
-        *self.max_hp.get(pid.0).unwrap()
+        self.participants.get_participant(pid).participant.get_max_hp()
     }
 
     pub fn is_dead(&self, pid: ParticipantId) -> bool {
@@ -123,8 +121,8 @@ impl<T: RVProb> ProbCombatState<T> {
             let mut ce_state = child_state.clone();
             ce_state.push(ce);
             vec.push(Self {
+                participants: self.participants,
                 state: ce_state,
-                max_hp: self.max_hp.clone(),
                 dmg: self.dmg.clone(),
                 prob: self.prob.clone() * rv.pdf(ce)
             })
@@ -180,8 +178,8 @@ impl<T: RVProb> ProbCombatState<T> {
                     state.set_health(target, new_health);
                 }
                 let mut child = Self {
+                    participants: self.participants,
                     state,
-                    max_hp: self.max_hp.clone(),
                     dmg: self.dmg.clone(),
                     prob: self.prob.clone() * partition.prob
                 };
@@ -193,13 +191,13 @@ impl<T: RVProb> ProbCombatState<T> {
     }
 }
 
-impl<T: RVProb> Transposition for ProbCombatState<T> {
+impl<'pm, T: RVProb> Transposition for ProbCombatState<'pm, T> {
     fn is_transposition(&self, other: &Self) -> bool {
         let valid_state = CombatState::is_transposition(&self.state, &other.state);
-        let valid_hp = self.max_hp == other.max_hp;
         let valid_dmg = self.dmg.len() == other.dmg.len();
         let valid_prob = self.prob.clone() + other.prob.clone() <= T::one();
-        valid_state && valid_hp && valid_dmg && valid_prob
+        let valid_part = ptr::eq(self.participants, other.participants);
+        valid_state && valid_dmg && valid_prob && valid_part
     }
 
     fn merge_left(&mut self, other: Self) {
@@ -238,22 +236,16 @@ impl<T: RVProb> Transposition for ProbCombatState<T> {
 }
 
 #[derive(Debug)]
-pub struct CombatStateRV<T: RVProb> {
-    states: Vec<ProbCombatState<T>>,
+pub struct CombatStateRV<'pm, T: RVProb> {
+    states: Vec<ProbCombatState<'pm, T>>,
 }
 
-impl<T: RVProb> CombatStateRV<T> {
-    pub fn new() -> Self {
+impl<'pm, T: RVProb> CombatStateRV<'pm, T> {
+    pub fn new(pm: &'pm ParticipantManager) -> Self {
         let mut states = Vec::new();
-        states.push(ProbCombatState::new());
+        states.push(ProbCombatState::new(pm));
         Self {
             states,
-        }
-    }
-
-    pub fn add_participant(&mut self, rm: ResourceManager, hp: isize) {
-        for pcs in self.states.iter_mut() {
-            pcs.add_participant(rm.clone(), hp);
         }
     }
 
@@ -267,17 +259,17 @@ impl<T: RVProb> CombatStateRV<T> {
         self.states.len()
     }
 
-    pub fn get_pcs(&self, i: usize) -> &ProbCombatState<T> {
+    pub fn get_pcs(&self, i: usize) -> &ProbCombatState<'pm, T> {
         &self.states.get(i).unwrap()
     }
-    pub fn get_pcs_mut(&mut self, i: usize) -> &mut ProbCombatState<T> {
+    pub fn get_pcs_mut(&mut self, i: usize) -> &mut ProbCombatState<'pm, T> {
         self.states.get_mut(i).unwrap()
     }
 
-    pub fn get_states(&self) -> &Vec<ProbCombatState<T>> {
+    pub fn get_states(&self) -> &Vec<ProbCombatState<'pm, T>> {
         &self.states
     }
-    pub fn get_states_mut(&mut self) -> &mut Vec<ProbCombatState<T>> {
+    pub fn get_states_mut(&mut self) -> &mut Vec<ProbCombatState<'pm, T>> {
         &mut self.states
     }
 
@@ -326,8 +318,8 @@ impl<T: RVProb> CombatStateRV<T> {
     }
 }
 
-impl<T: RVProb> From<Vec<ProbCombatState<T>>> for CombatStateRV<T> {
-    fn from(value: Vec<ProbCombatState<T>>) -> Self {
+impl<'pm, T: RVProb> From<Vec<ProbCombatState<'pm, T>>> for CombatStateRV<'pm, T> {
+    fn from(value: Vec<ProbCombatState<'pm, T>>) -> Self {
         Self {
             states: value,
         }

@@ -4,7 +4,7 @@ use character_builder::combat::attack::basic_attack::BasicAttack;
 use character_builder::damage::DamageType;
 use crate::participant::Participant;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Monster {
     max_hp: isize,
     ac: isize,

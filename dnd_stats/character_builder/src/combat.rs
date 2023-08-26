@@ -17,7 +17,7 @@ pub enum ActionType {
     OnHit,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum CombatAction {
     WeaponAttack(WeaponAttack),
     BasicAttack(BasicAttack),
@@ -27,7 +27,7 @@ pub enum CombatAction {
     ByName,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CombatOption {
     pub action_type: ActionType,
     pub action: CombatAction,

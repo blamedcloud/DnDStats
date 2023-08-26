@@ -22,7 +22,7 @@ pub enum HandType {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct WeaponAttack {
     weapon: Weapon,
     num_hands: NumHands,

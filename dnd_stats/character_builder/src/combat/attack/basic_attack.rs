@@ -6,7 +6,7 @@ use crate::CBError;
 use crate::combat::attack::{AccMRV, Attack, AttackHitType, AttackResult, D20Type};
 use crate::damage::{DamageDice, DamageManager, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct BasicAttack {
     damage: DamageManager,
     hit_bonus: isize,

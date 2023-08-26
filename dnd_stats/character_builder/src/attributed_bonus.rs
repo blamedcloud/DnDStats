@@ -1,4 +1,4 @@
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 use crate::ability_scores::Ability;
 use crate::Character;
@@ -101,7 +101,13 @@ impl Display for BonusTerm {
     }
 }
 
-#[derive(Clone)]
+impl Debug for BonusTerm {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct AttributedBonus {
     name: String, // TODO: rather than use a string, this might be better as an enum eventually?
     terms: Vec<BonusTerm>,
