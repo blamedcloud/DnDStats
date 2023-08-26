@@ -8,11 +8,9 @@ use crate::participant::ParticipantId;
 use crate::prob_combat_state::combat_state::combat_log::combat_event::{CombatEvent, CombatTiming};
 use crate::prob_combat_state::combat_state::CombatState;
 use crate::prob_combat_state::combat_state::health::Health;
+use crate::transposition::Transposition;
 
 pub mod combat_state;
-
-type ParticipantMaxHP = Vec<isize>;
-type ParticipantDmg<T> = Vec<RandomVariable<T>>;
 
 #[derive(Debug, Clone)]
 pub struct ProbCombatState<T: RVProb> {
@@ -21,6 +19,9 @@ pub struct ProbCombatState<T: RVProb> {
     dmg: ParticipantDmg<T>,
     prob: T,
 }
+
+type ParticipantMaxHP = Vec<isize>;
+type ParticipantDmg<T> = Vec<RandomVariable<T>>;
 
 impl<T: RVProb> ProbCombatState<T> {
     pub fn new() -> Self {
@@ -192,6 +193,51 @@ impl<T: RVProb> ProbCombatState<T> {
     }
 }
 
+impl<T: RVProb> Transposition for ProbCombatState<T> {
+    fn is_transposition(&self, other: &Self) -> bool {
+        let valid_state = CombatState::is_transposition(&self.state, &other.state);
+        let valid_hp = self.max_hp == other.max_hp;
+        let valid_dmg = self.dmg.len() == other.dmg.len();
+        let valid_prob = self.prob.clone() + other.prob.clone() <= T::one();
+        valid_state && valid_hp && valid_dmg && valid_prob
+    }
+
+    fn merge_left(&mut self, other: Self) {
+        let new_prob = self.prob.clone() + other.prob.clone();
+        let mut new_dmg = Vec::with_capacity(self.dmg.len());
+        let left_mult = self.prob.clone() * new_prob.clone().reciprocal().unwrap();
+        let right_mult = other.prob * new_prob.clone().reciprocal().unwrap();
+        for i in 0..self.dmg.len() {
+            let left_dmg = self.dmg.get(i).unwrap();
+            let right_dmg = other.dmg.get(i).unwrap();
+            let mut pdf_map: BTreeMap<isize, T> = BTreeMap::new();
+            for dmg in left_dmg.valid_p() {
+                let dmg_prob = left_mult.clone() * left_dmg.pdf(dmg);
+                if pdf_map.contains_key(&dmg) {
+                    let old_prob = pdf_map.get(&dmg).unwrap().clone();
+                    pdf_map.insert(dmg, old_prob + dmg_prob);
+                } else {
+                    pdf_map.insert(dmg, dmg_prob);
+                }
+            }
+            for dmg in right_dmg.valid_p() {
+                let dmg_prob = right_mult.clone() * right_dmg.pdf(dmg);
+                if pdf_map.contains_key(&dmg) {
+                    let old_prob = pdf_map.get(&dmg).unwrap().clone();
+                    pdf_map.insert(dmg, old_prob + dmg_prob);
+                } else {
+                    pdf_map.insert(dmg, dmg_prob);
+                }
+            }
+            new_dmg.push(MapRandVar::from_map(pdf_map).unwrap().into_rv());
+        }
+        self.state.merge_left(other.state);
+        self.dmg = new_dmg;
+        self.prob = new_prob;
+    }
+}
+
+#[derive(Debug)]
 pub struct CombatStateRV<T: RVProb> {
     states: Vec<ProbCombatState<T>>,
 }
@@ -257,6 +303,26 @@ impl<T: RVProb> CombatStateRV<T> {
             }
         }
         MapRandVar::from_map(pdf_map).unwrap().into_rv()
+    }
+
+    pub fn merge_states(&mut self) {
+        let mut new_states = Vec::with_capacity(self.len());
+        while self.states.len() > 0 {
+            let pcs2 = self.states.pop().unwrap();
+            let mut is_merged = false;
+            for i in 0..self.states.len() {
+                if ProbCombatState::is_transposition(self.states.get(i).unwrap(), &pcs2) {
+                    self.states[i].merge_left(pcs2.clone());
+                    is_merged = true;
+                    break;
+                }
+            }
+            if !is_merged {
+                new_states.push(pcs2);
+            }
+        }
+        new_states.reverse();
+        self.states = new_states;
     }
 }
 

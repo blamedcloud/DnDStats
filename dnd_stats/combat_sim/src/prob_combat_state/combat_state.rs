@@ -4,6 +4,7 @@ use crate::participant::ParticipantId;
 use crate::prob_combat_state::combat_state::combat_log::combat_event::{CombatEvent, CombatTiming};
 use crate::prob_combat_state::combat_state::combat_log::CombatLog;
 use crate::prob_combat_state::combat_state::health::Health;
+use crate::transposition::Transposition;
 
 pub mod combat_log;
 pub mod health;
@@ -90,5 +91,26 @@ impl CombatState {
             self.last_combat_timing = Some(ct);
         }
         self.logs.push(ce);
+    }
+}
+
+impl Transposition for CombatState {
+    fn is_transposition(&self, other: &Self) -> bool {
+        if self.logs.is_transposition(&other.logs) {
+            if self.resources == other.resources {
+                if self.health == other.health {
+                    if self.deaths == other.deaths {
+                        if self.last_combat_timing == other.last_combat_timing {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn merge_left(&mut self, other: Self) {
+        self.logs.merge_left(other.logs);
     }
 }

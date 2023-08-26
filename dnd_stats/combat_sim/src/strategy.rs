@@ -61,7 +61,7 @@ impl Strategy for LinearStrategy {
 
 pub struct DoNothing;
 impl Strategy for DoNothing {
-    fn get_action(&self, _state: &CombatState, _participants: &Vec<TeamMember>, _me: ParticipantId) -> Option<StrategicOption> {
+    fn get_action(&self, _: &CombatState, _: &Vec<TeamMember>, _: ParticipantId) -> Option<StrategicOption> {
         None
     }
 }

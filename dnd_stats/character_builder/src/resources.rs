@@ -53,7 +53,7 @@ impl ResourceCap {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Resource {
     max: ResourceCap,
     current: usize,
@@ -134,7 +134,7 @@ impl From<ResourceCap> for Resource {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ResourceManager {
     perm_resources: HashMap<ResourceName, Resource>,
     temp_resources: HashMap<ResourceName, Resource>,
@@ -219,10 +219,13 @@ pub fn create_basic_rm() -> ResourceManager {
     let mut rm = ResourceManager::new();
     let mut at_res = Resource::from(ResourceCap::Soft(1));
     at_res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToFull);
+    rm.add_perm(ResourceName::AT(ActionType::Reaction), at_res.clone());
 
+    // clearing the action resources at the end of the turn is a small
+    // optimization to make state merging more likely to happen.
+    at_res.add_refresh(RefreshTiming::EndMyTurn, RefreshBy::ToEmpty);
     rm.add_perm(ResourceName::AT(ActionType::Action), at_res.clone());
     rm.add_perm(ResourceName::AT(ActionType::BonusAction), at_res.clone());
-    rm.add_perm(ResourceName::AT(ActionType::Reaction), at_res.clone());
     rm.add_perm(ResourceName::AT(ActionType::Movement), at_res);
 
     let mut sa_res = Resource::from(ResourceCap::Soft(0));

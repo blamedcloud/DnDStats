@@ -16,6 +16,7 @@ pub mod participant;
 pub mod prob_combat_state;
 pub mod strategy;
 pub mod target_dummy;
+pub mod transposition;
 
 #[derive(Debug)]
 pub enum CSError {
@@ -42,6 +43,7 @@ pub struct EncounterManager<T: RVProb> {
     strategies: Vec<Box<dyn Strategy>>,
     round_num: u8,
     cs_rv: CombatStateRV<T>,
+    merge_transpositions: bool,
 }
 
 pub type EM64 = EncounterManager<Rational64>;
@@ -54,7 +56,12 @@ impl<T: RVProb> EncounterManager<T> {
             strategies: Vec::new(),
             round_num: 0,
             cs_rv: CombatStateRV::new(),
+            merge_transpositions: false,
         }
+    }
+
+    pub fn set_do_merges(&mut self, merges: bool) {
+        self.merge_transpositions = merges
     }
 
     pub fn add_player(&mut self, character: Character, str: Box<dyn Strategy>) {
@@ -85,8 +92,15 @@ impl<T: RVProb> EncounterManager<T> {
             self.register_timing(CombatTiming::BeginRound(self.round_num.into()));
             self.simulate_round()?;
             self.register_timing(CombatTiming::EndRound(self.round_num.into()));
+            self.handle_merges();
         }
         Ok(())
+    }
+
+    fn handle_merges(&mut self) {
+        if self.merge_transpositions {
+            self.cs_rv.merge_states();
+        }
     }
 
     fn register_timing(&mut self, ct: CombatTiming) {
@@ -110,6 +124,7 @@ impl<T: RVProb> EncounterManager<T> {
             self.register_timing(CombatTiming::BeginTurn(pid));
             self.simulate_turn(pid)?;
             self.register_timing(CombatTiming::EndTurn(pid));
+            self.handle_merges();
         }
         Ok(())
     }
@@ -402,7 +417,7 @@ mod tests {
             CombatEvent::AN(ActionName::PrimaryAttack(AttackType::Normal)),
             CombatEvent::Attack(ParticipantId(0), ParticipantId(1))
         );
-        assert_eq!(&expected_events, hit_logs.get_parent().get_local_events());
+        assert_eq!(&expected_events, hit_logs.get_first_parent().unwrap().get_local_events());
 
         expected_events.extend(expected_local_events.into_iter());
         assert_eq!(expected_events, hit_all_events);
@@ -477,6 +492,31 @@ mod tests {
         assert_eq!(orc.get_max_hp(), crit_die.lower_bound());
         assert_eq!(orc.get_max_hp(), crit_die.upper_bound());
 
+        let dmg_rv = cs_rv.get_dmg(orc_pid);
+        let atk_dmg: RV64 = fighter
+            .get_weapon_attack().unwrap()
+            .get_attack_dmg_rv(AttackHitType::Normal, orc.get_ac(), orc.get_resistances()).unwrap()
+            .cap_ub(orc.get_max_hp()).unwrap();
+        assert_eq!(atk_dmg, dmg_rv);
+    }
+
+    #[test]
+    fn fighter_vs_orc_merged() {
+        let mut fighter = get_test_fighter_lvl_0();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
+        let orc = TargetDummy::new(15, 13);
+
+        let mut em: EM64 = EncounterManager::new();
+        em.set_do_merges(true);
+        em.add_player(fighter.clone(), Box::new(BasicAttackStr));
+        em.add_participant(TeamMember::new(Team::Enemies, Box::new(orc.clone())), ResourceManager::new(), Box::new(DoNothing));
+        em.simulate_n_rounds(1).unwrap();
+
+        let cs_rv = em.get_state_rv();
+        //healthy, bloodied, killed
+        assert_eq!(3, cs_rv.len());
+
+        let orc_pid = ParticipantId(1);
         let dmg_rv = cs_rv.get_dmg(orc_pid);
         let atk_dmg: RV64 = fighter
             .get_weapon_attack().unwrap()
