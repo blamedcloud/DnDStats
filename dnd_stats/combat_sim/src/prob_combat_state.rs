@@ -4,7 +4,7 @@ use character_builder::combat::{ActionName, ActionType};
 use character_builder::resources::{RefreshTiming, ResourceManager, ResourceName};
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
-use rand_var::rv_traits::{NumRandVar, RandVar};
+use rand_var::rv_traits::{NumRandVar, RandVar, RVPartition};
 use crate::participant::{ParticipantId, ParticipantManager};
 use crate::prob_combat_state::combat_state::combat_log::combat_event::{CombatEvent, CombatTiming};
 use crate::prob_combat_state::combat_state::CombatState;
@@ -66,7 +66,7 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         self.state.get_rm_mut(pid)
     }
 
-    pub fn get_hp(&self, pid: ParticipantId) -> isize {
+    pub fn get_max_hp(&self, pid: ParticipantId) -> isize {
         self.participants.get_participant(pid).participant.get_max_hp()
     }
 
@@ -114,6 +114,13 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         }
     }
 
+    pub fn get_health(&self, pid: ParticipantId) -> Health {
+        self.state.get_health(pid)
+    }
+    fn set_health(&mut self, pid: ParticipantId, h: Health) {
+        self.state.set_health(pid, h);
+    }
+
     pub fn split(self, rv: MapRandVar<CombatEvent, T>) -> Vec<Self> {
         let mut vec = Vec::with_capacity(rv.len());
         let child_state = self.state.into_child();
@@ -140,17 +147,10 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         result
     }
 
-    fn set_health(&mut self, pid: ParticipantId, h: Health) {
-        self.state.set_health(pid, h);
-    }
-
-    pub fn get_health(&self, pid: ParticipantId) -> Health {
-        self.state.get_health(pid)
-    }
 
     pub fn add_dmg(mut self, dmg: &RandomVariable<T>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
         let old_health = self.get_health(target);
-        let hp = self.get_hp(target);
+        let hp = self.get_max_hp(target);
         let bloody_hp = Health::calc_bloodied(hp);
         let old_dmg = self.get_dmg(target);
         let new_dmg = old_dmg.add_rv(dmg).cap_lb(0).unwrap().cap_ub(hp).unwrap();
@@ -200,38 +200,20 @@ impl<'pm, T: RVProb> Transposition for ProbCombatState<'pm, T> {
         valid_state && valid_dmg && valid_prob && valid_part
     }
 
-    fn merge_left(&mut self, other: Self) {
-        let new_prob = self.prob.clone() + other.prob.clone();
+    fn merge_left(&mut self, mut other: Self) {
         let mut new_dmg = Vec::with_capacity(self.dmg.len());
-        let left_mult = self.prob.clone() * new_prob.clone().reciprocal().unwrap();
-        let right_mult = other.prob * new_prob.clone().reciprocal().unwrap();
-        for i in 0..self.dmg.len() {
-            let left_dmg = self.dmg.get(i).unwrap();
-            let right_dmg = other.dmg.get(i).unwrap();
-            let mut pdf_map: BTreeMap<isize, T> = BTreeMap::new();
-            for dmg in left_dmg.valid_p() {
-                let dmg_prob = left_mult.clone() * left_dmg.pdf(dmg);
-                if pdf_map.contains_key(&dmg) {
-                    let old_prob = pdf_map.get(&dmg).unwrap().clone();
-                    pdf_map.insert(dmg, old_prob + dmg_prob);
-                } else {
-                    pdf_map.insert(dmg, dmg_prob);
-                }
-            }
-            for dmg in right_dmg.valid_p() {
-                let dmg_prob = right_mult.clone() * right_dmg.pdf(dmg);
-                if pdf_map.contains_key(&dmg) {
-                    let old_prob = pdf_map.get(&dmg).unwrap().clone();
-                    pdf_map.insert(dmg, old_prob + dmg_prob);
-                } else {
-                    pdf_map.insert(dmg, dmg_prob);
-                }
-            }
-            new_dmg.push(MapRandVar::from_map(pdf_map).unwrap().into_rv());
+        while self.dmg.len() > 0 {
+            let left_dmg = self.dmg.pop().unwrap();
+            let right_dmg = other.dmg.pop().unwrap();
+            let left_part = RVPartition::new(self.prob.clone(), left_dmg);
+            let right_part = RVPartition::new(other.prob.clone(), right_dmg);
+            let new_part = left_part + right_part;
+            new_dmg.push(new_part.rv.unwrap());
         }
+        new_dmg.reverse();
         self.state.merge_left(other.state);
         self.dmg = new_dmg;
-        self.prob = new_prob;
+        self.prob = self.prob.clone() + other.prob;
     }
 }
 

@@ -129,18 +129,21 @@ where
         if seq_iter.items.len() == 0 {
             return Err(RVError::InvalidBounds);
         }
-        let length = seq_iter.items.len();
         let lb = seq_iter.items.first().unwrap().clone();
         let ub = seq_iter.items.last().unwrap().clone();
-        let mut pdf_vec = Vec::with_capacity(length);
+        let mut pdf_vec = Vec::with_capacity((ub - lb + 1) as usize);
         let mut total = T::zero();
-        for i in seq_iter {
-            let f_i = f(i);
-            if f_i < T::zero() {
-                return Err(RVError::NegProb);
+        for i in lb..=ub {
+            if seq_iter.items.contains(&i) {
+                let f_i = f(i);
+                if f_i < T::zero() {
+                    return Err(RVError::NegProb);
+                }
+                total = total + f_i.clone();
+                pdf_vec.push(f_i);
+            } else {
+                pdf_vec.push(T::zero());
             }
-            total = total + f_i.clone();
-            pdf_vec.push(f_i);
         }
         if T::one() != total {
             return Err(RVError::CDFNotOne);

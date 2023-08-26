@@ -20,23 +20,13 @@ pub enum RVError {
     Other(String),
 }
 
-pub struct RVPartition<P, T, RV>
-where
-    P: Ord + Clone,
-    T: Prob,
-    RV: RandVar<P, T>
-{
+pub struct RVPartition<P: Ord + Clone, T: Prob, RV: RandVar<P, T>> {
     pub prob: T,
     pub rv: Option<RV>,
     _p: PhantomData<P>,
 }
 
-impl<P, T, RV> RVPartition<P, T, RV>
-where
-    P: Ord + Clone,
-    T: Prob,
-    RV: RandVar<P, T>
-{
+impl<P: Ord + Clone, T: Prob, RV: RandVar<P, T>> RVPartition<P, T, RV> {
     pub fn new(prob: T, rv: RV) -> Self {
         Self {
             prob,
@@ -51,6 +41,62 @@ where
             rv: None,
             _p: PhantomData
         }
+    }
+}
+
+impl<P: Ord + Clone, T: Prob + Reciprocal, RV: RandVar<P, T>> Add for RVPartition<P, T, RV> {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        if rhs.rv.is_none() {
+            return self;
+        }
+        if self.rv.is_none() {
+            return rhs;
+        }
+        let new_prob = self.prob.clone() + rhs.prob.clone();
+        let new_prob_recip = new_prob.clone().reciprocal().unwrap();
+
+        let left_mult = self.prob * new_prob_recip.clone();
+        let left_rv = self.rv.unwrap();
+
+        let right_mult = rhs.prob * new_prob_recip;
+        let right_rv = rhs.rv.unwrap();
+
+        let mut all_p = BTreeSet::new();
+        let mut pdf_map: BTreeMap<P, T> = BTreeMap::new();
+
+        for p in left_rv.valid_p() {
+            all_p.insert(p.clone());
+            let t = left_mult.clone() * left_rv.pdf_ref(&p);
+            if pdf_map.contains_key(&p) {
+                let old_t = pdf_map.get(&p).unwrap().clone();
+                pdf_map.insert(p, old_t + t);
+            } else {
+                pdf_map.insert(p, t);
+            }
+        }
+
+        for p in right_rv.valid_p() {
+            all_p.insert(p.clone());
+            let t = right_mult.clone() * right_rv.pdf_ref(&p);
+            if pdf_map.contains_key(&p) {
+                let old_t = pdf_map.get(&p).unwrap().clone();
+                pdf_map.insert(p, old_t + t);
+            } else {
+                pdf_map.insert(p, t);
+            }
+        }
+
+        let all_p_si = SeqIter { items: all_p };
+        let new_rv = RandVar::build(all_p_si, |p| {
+            if pdf_map.contains_key(&p) {
+                pdf_map.get(&p).unwrap().clone()
+            } else {
+                T::zero()
+            }
+        }).unwrap();
+        RVPartition::new(new_prob, new_rv)
     }
 }
 
@@ -752,21 +798,30 @@ mod tests {
     #[test]
     fn test_partitions() {
         let d20: RV64 = RandomVariable::new_dice(20).unwrap();
-        let mod_3 = d20.partitions(|p| *p % 3);
+        let mut mod_3 = d20.partitions(|p| *p % 3);
         assert_eq!(3, mod_3.len());
-        let part_0 = mod_3.get(&0).unwrap();
+        let part_0 = mod_3.remove(&0).unwrap();
         assert_eq!(Rational64::new(6, 20), part_0.prob);
         assert_eq!(3, part_0.rv.as_ref().unwrap().lower_bound());
         assert_eq!(18, part_0.rv.as_ref().unwrap().upper_bound());
 
-        let part_1 = mod_3.get(&1).unwrap();
+        let part_1 = mod_3.remove(&1).unwrap();
         assert_eq!(Rational64::new(7, 20), part_1.prob);
         assert_eq!(1, part_1.rv.as_ref().unwrap().lower_bound());
         assert_eq!(19, part_1.rv.as_ref().unwrap().upper_bound());
 
-        let part_2 = mod_3.get(&2).unwrap();
+        let part_2 = mod_3.remove(&2).unwrap();
         assert_eq!(Rational64::new(7, 20), part_2.prob);
         assert_eq!(2, part_2.rv.as_ref().unwrap().lower_bound());
         assert_eq!(20, part_2.rv.as_ref().unwrap().upper_bound());
+
+        let part_0_1 = part_0 + part_1;
+        assert_eq!(Rational64::new(13, 20), part_0_1.prob);
+        assert_eq!(1, part_0_1.rv.as_ref().unwrap().lower_bound());
+        assert_eq!(19, part_0_1.rv.as_ref().unwrap().upper_bound());
+
+        let part_all = part_0_1 + part_2;
+        assert_eq!(Rational64::one(), part_all.prob);
+        assert_eq!(d20, part_all.rv.unwrap());
     }
 }
