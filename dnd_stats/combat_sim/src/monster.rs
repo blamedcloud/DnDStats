@@ -39,7 +39,7 @@ pub fn create_basic_attack_am<T: RVProb>(ba: BasicAttack, num_attacks: u8) -> Ac
     am
 }
 
-impl<T: RVProb + Debug> Participant<T> for Monster<T> {
+impl<T: RVProb> Participant<T> for Monster<T> {
     fn get_ac(&self) -> isize {
         self.ac
     }

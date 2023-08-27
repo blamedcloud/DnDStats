@@ -9,13 +9,13 @@ use crate::resources::ResourceName;
 use crate::strategy::{StrategicOption, Strategy, StrategyBuilder, Target};
 use crate::triggers::{TriggeredAction, TriggerType};
 
-pub struct PairStrBuilder<T: RVProb + Debug, S1: StrategyBuilder<T>, S2: StrategyBuilder<T>> {
+pub struct PairStrBuilder<T: RVProb, S1: StrategyBuilder<T>, S2: StrategyBuilder<T>> {
     _t: PhantomData<T>,
     str1: S1,
     str2: S2,
 }
 
-impl <T: RVProb + Debug, S1: StrategyBuilder<T>, S2: StrategyBuilder<T>> PairStrBuilder<T, S1, S2> {
+impl <T: RVProb, S1: StrategyBuilder<T>, S2: StrategyBuilder<T>> PairStrBuilder<T, S1, S2> {
     pub fn new(s1: S1, s2: S2) -> Self {
         Self {
             _t: PhantomData,
@@ -25,7 +25,7 @@ impl <T: RVProb + Debug, S1: StrategyBuilder<T>, S2: StrategyBuilder<T>> PairStr
     }
 }
 
-impl<T: RVProb + Debug, S1: StrategyBuilder<T>, S2: StrategyBuilder<T>> StrategyBuilder<T> for PairStrBuilder<T, S1, S2> {
+impl<T: RVProb, S1: StrategyBuilder<T>, S2: StrategyBuilder<T>> StrategyBuilder<T> for PairStrBuilder<T, S1, S2> {
     fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember<T>>, me: ParticipantId) -> Box<dyn Strategy<T> + 'pm> {
         let strategies = vec!(
             self.str1.build_strategy(participants, me),
@@ -42,7 +42,7 @@ pub struct LinearStrategy<'pm, T: RVProb> {
     strategies: Vec<Box<dyn Strategy<T> + 'pm>>,
 }
 
-impl<'pm, T: RVProb + Debug> Strategy<T> for LinearStrategy<'pm, T> {
+impl<'pm, T: RVProb> Strategy<T> for LinearStrategy<'pm, T> {
     fn get_participants(&self) -> &Vec<TeamMember<T>> {
         self.strategies.first().unwrap().get_participants()
     }
@@ -73,7 +73,7 @@ impl<'pm, T: RVProb + Debug> Strategy<T> for LinearStrategy<'pm, T> {
 
 
 pub struct DoNothingBuilder;
-impl<T: RVProb + Debug> StrategyBuilder<T> for DoNothingBuilder {
+impl<T: RVProb> StrategyBuilder<T> for DoNothingBuilder {
     fn build_strategy<'pm>(self, _: &'pm Vec<TeamMember<T>>, _: ParticipantId) -> Box<dyn Strategy<T> + 'pm> {
         Box::new(DoNothing)
     }
@@ -111,7 +111,7 @@ pub fn get_first_target<T: RVProb>(state: &CombatState, participants: &Vec<TeamM
 }
 
 pub struct BasicAtkStrBuilder;
-impl<T: RVProb + Debug> StrategyBuilder<T> for BasicAtkStrBuilder {
+impl<T: RVProb> StrategyBuilder<T> for BasicAtkStrBuilder {
     fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember<T>>, me: ParticipantId) -> Box<dyn Strategy<T> + 'pm> {
         let str = BasicAttackStr {
             participants,
@@ -127,7 +127,7 @@ pub struct BasicAttackStr<'pm, T: RVProb> {
     me: ParticipantId,
 }
 
-impl<'pm, T: RVProb + Debug> Strategy<T> for BasicAttackStr<'pm, T> {
+impl<'pm, T: RVProb> Strategy<T> for BasicAttackStr<'pm, T> {
     fn get_participants(&self) -> &Vec<TeamMember<T>> {
         self.participants
     }
@@ -159,7 +159,7 @@ impl<'pm, T: RVProb + Debug> Strategy<T> for BasicAttackStr<'pm, T> {
 }
 
 pub struct SecondWindStrBuilder;
-impl<T: RVProb + Debug> StrategyBuilder<T> for SecondWindStrBuilder {
+impl<T: RVProb> StrategyBuilder<T> for SecondWindStrBuilder {
     fn build_strategy<'pm>(self, _: &'pm Vec<TeamMember<T>>, me: ParticipantId) -> Box<dyn Strategy<T> + 'pm> {
         let str = SecondWindStr {
             _t: PhantomData,
@@ -174,7 +174,7 @@ pub struct SecondWindStr<T> {
     _t: PhantomData<T>,
     me: ParticipantId
 }
-impl<T:RVProb + Debug> Strategy<T> for SecondWindStr<T> {
+impl<T:RVProb> Strategy<T> for SecondWindStr<T> {
     fn get_participants(&self) -> &Vec<TeamMember<T>> {
         panic!("Should never call this!");
     }

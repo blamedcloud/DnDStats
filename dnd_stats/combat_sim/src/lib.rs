@@ -65,7 +65,7 @@ pub struct EncounterManager<'sm ,'pm, T: RVProb> {
 pub type EM64<'sm, 'pm> = EncounterManager<'sm, 'pm, Rational64>;
 pub type EMBig<'sm, 'pm, 'tm> = EncounterManager<'sm, 'pm, BigRational>;
 
-impl<'sm, 'pm, T: RVProb + Debug> EncounterManager<'sm, 'pm, T> {
+impl<'sm, 'pm, T: RVProb> EncounterManager<'sm, 'pm, T> {
     pub fn new(sm: &'sm StrategyManager<'pm, T>) -> Result<Self, CSError> {
         if !sm.is_compiled() {
             return Err(CSError::CCE(CCError::SMNotCompiled));

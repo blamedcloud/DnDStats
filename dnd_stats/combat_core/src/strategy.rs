@@ -31,7 +31,7 @@ impl From<ActionName> for StrategicOption {
     }
 }
 
-pub trait StrategyBuilder<T: RVProb + Debug> {
+pub trait StrategyBuilder<T: RVProb> {
     fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember<T>>, me: ParticipantId) -> Box<dyn Strategy<T> + 'pm>;
 }
 
@@ -50,7 +50,7 @@ pub struct StrategyManager<'pm, T: RVProb> {
     compiled: bool
 }
 
-impl<'pm, T: RVProb + Debug> StrategyManager<'pm, T> {
+impl<'pm, T: RVProb> StrategyManager<'pm, T> {
     pub fn new(pm: &'pm ParticipantManager<T>) -> Result<Self, CCError> {
         if !pm.is_compiled() {
             return Err(CCError::PMNotCompiled);

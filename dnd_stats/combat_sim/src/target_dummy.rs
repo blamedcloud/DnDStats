@@ -27,7 +27,7 @@ impl<T: RVProb> TargetDummy<T> {
     }
 }
 
-impl<T: RVProb + Debug> Participant<T> for TargetDummy<T> {
+impl<T: RVProb> Participant<T> for TargetDummy<T> {
     fn get_ac(&self) -> isize {
         self.ac
     }

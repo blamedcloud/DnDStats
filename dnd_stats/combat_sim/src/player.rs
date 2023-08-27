@@ -54,7 +54,7 @@ impl<T: RVProb> From<Character> for Player<T> {
     }
 }
 
-impl<T: RVProb + Debug> Participant<T> for Player<T> {
+impl<T: RVProb> Participant<T> for Player<T> {
     fn get_ac(&self) -> isize {
         self.ac
     }
