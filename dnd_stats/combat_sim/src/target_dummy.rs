@@ -5,14 +5,13 @@ use combat_core::damage::DamageType;
 use combat_core::participant::Participant;
 use combat_core::resources::ResourceManager;
 use rand_var::rv_traits::prob_type::RVProb;
-use crate::CSError;
 
 #[derive(Debug, Clone)]
 pub struct TargetDummy<T: RVProb> {
     max_hp: isize,
     ac: isize,
     resistances: HashSet<DamageType>,
-    action_manager: ActionManager<T, CSError>,
+    action_manager: ActionManager<T>,
     resource_manager: ResourceManager,
 }
 
@@ -28,7 +27,7 @@ impl<T: RVProb> TargetDummy<T> {
     }
 }
 
-impl<T: RVProb + Debug> Participant<T, CSError> for TargetDummy<T> {
+impl<T: RVProb + Debug> Participant<T> for TargetDummy<T> {
     fn get_ac(&self) -> isize {
         self.ac
     }
@@ -41,7 +40,7 @@ impl<T: RVProb + Debug> Participant<T, CSError> for TargetDummy<T> {
         &self.resistances
     }
 
-    fn get_action_manager(&self) -> &ActionManager<T, CSError> {
+    fn get_action_manager(&self) -> &ActionManager<T> {
         &self.action_manager
     }
 

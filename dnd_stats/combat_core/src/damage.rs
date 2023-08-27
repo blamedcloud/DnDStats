@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use rand_var::RandomVariable;
 use rand_var::rv_traits::NumRandVar;
 use rand_var::rv_traits::prob_type::RVProb;
+use crate::CCError;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum DamageDice {
@@ -123,11 +124,11 @@ impl DamageTerm {
     }
 }
 
-pub trait DamageRV<T: RVProb, E> : Debug {
-    fn get_rv(&self) -> Result<RandomVariable<T>, E>;
+pub trait DamageRV<T: RVProb> : Debug {
+    fn get_rv(&self) -> Result<RandomVariable<T>, CCError>;
 
     // healing is currently just negative damage
-    fn get_heal_rv(&self) -> Result<RandomVariable<T>, E> {
+    fn get_heal_rv(&self) -> Result<RandomVariable<T>, CCError> {
         let rv_base = self.get_rv();
         rv_base.map(|rv| rv.opposite_rv())
     }

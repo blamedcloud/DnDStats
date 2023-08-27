@@ -1,21 +1,24 @@
 use std::collections::BTreeMap;
+use std::fmt::Debug;
 use std::rc::Rc;
 use num::{BigRational, Rational64};
 use character_builder::CBError;
 use combat_core::actions::{ActionName, ActionType, CombatAction};
 use combat_core::attack::{ArMRV, Attack, AttackHitType};
+use combat_core::CCError;
 use combat_core::combat_event::{CombatEvent, CombatTiming};
 use combat_core::participant::{Participant, ParticipantId, ParticipantManager, Team};
 use combat_core::resources::ResourceName;
-use combat_core::strategy::{StrategicOption, Strategy, Target};
+use combat_core::strategy::{StrategicOption, Strategy, StrategyManager, Target};
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::RVError;
-use crate::prob_combat_state::{CombatStateRV, ProbCombatState};
+use crate::combat_state_rv::CombatStateRV;
+use crate::combat_state_rv::prob_combat_state::ProbCombatState;
 
+pub mod combat_state_rv;
 pub mod monster;
 pub mod player;
-pub mod prob_combat_state;
 pub mod target_dummy;
 
 #[derive(Debug, Clone)]
@@ -23,16 +26,23 @@ pub enum CSError {
     ActionNotHandled,
     InvalidTarget,
     InvalidAction,
-    CBE(CBError)
+    RVE(RVError),
+    CCE(CCError),
+    CBE(CBError),
 }
 impl From<CBError> for CSError {
     fn from(value: CBError) -> Self {
         CSError::CBE(value)
     }
 }
+impl From<CCError> for CSError {
+    fn from(value: CCError) -> Self {
+        CSError::CCE(value)
+    }
+}
 impl From<RVError> for CSError {
     fn from(value: RVError) -> Self {
-        CSError::CBE(CBError::RVError(value))
+        CSError::RVE(value)
     }
 }
 
@@ -44,36 +54,34 @@ pub enum HandledAction<'pm, T: RVProb> {
 type ResultHA<'pm, T> = Result<HandledAction<'pm, T>, CSError>;
 type ResultCSE = Result<(), CSError>;
 
-pub struct EncounterManager<'pm, T: RVProb> {
-    participants: &'pm ParticipantManager<T, CSError>,
+pub struct EncounterManager<'sm ,'pm, T: RVProb> {
+    participants: &'pm ParticipantManager<T>,
+    strategies: &'sm StrategyManager<'pm, T>,
     round_num: u8,
     cs_rv: CombatStateRV<'pm, T>,
     merge_transpositions: bool,
 }
 
-pub type EM64<'pm> = EncounterManager<'pm, Rational64>;
-pub type EMBig<'pm> = EncounterManager<'pm, BigRational>;
+pub type EM64<'sm, 'pm> = EncounterManager<'sm, 'pm, Rational64>;
+pub type EMBig<'sm, 'pm, 'tm> = EncounterManager<'sm, 'pm, BigRational>;
 
-impl<'pm, T: RVProb> EncounterManager<'pm, T> {
-    pub fn new(pm: &'pm ParticipantManager<T, CSError>) -> Self {
-        Self {
+impl<'sm, 'pm, T: RVProb + Debug> EncounterManager<'sm, 'pm, T> {
+    pub fn new(sm: &'sm StrategyManager<'pm, T>) -> Result<Self, CSError> {
+        if !sm.is_compiled() {
+            return Err(CSError::CCE(CCError::SMNotCompiled));
+        }
+        let pm = sm.get_pm();
+        Ok(Self {
             participants: pm,
+            strategies: sm,
             round_num: 0,
             cs_rv: CombatStateRV::new(pm),
             merge_transpositions: false,
-        }
+        })
     }
 
     pub fn set_do_merges(&mut self, merges: bool) {
         self.merge_transpositions = merges
-    }
-
-    pub fn get_state_rv(&self) -> &CombatStateRV<T> {
-        &self.cs_rv
-    }
-
-    pub fn num_participants(&self) -> usize {
-        self.participants.len()
     }
 
     pub fn simulate_n_rounds(&mut self, n: u8) -> ResultCSE {
@@ -88,6 +96,18 @@ impl<'pm, T: RVProb> EncounterManager<'pm, T> {
             self.handle_merges();
         }
         Ok(())
+    }
+
+    pub fn get_state_rv(&self) -> &CombatStateRV<T> {
+        &self.cs_rv
+    }
+
+    pub fn num_participants(&self) -> usize {
+        self.participants.len()
+    }
+
+    pub fn get_team(&self, pid: ParticipantId) -> Team {
+        self.participants.get_participant(pid).team
     }
 
     fn handle_merges(&mut self) {
@@ -132,8 +152,8 @@ impl<'pm, T: RVProb> EncounterManager<'pm, T> {
         Ok(())
     }
 
-    fn get_strategy(&self, pid: ParticipantId) -> &Box<dyn Strategy<T, CSError>> {
-        self.participants.get_strategy(pid)
+    fn get_strategy(&self, pid: ParticipantId) -> &Box<dyn Strategy<T> + 'pm> {
+        self.strategies.get_strategy(pid)
     }
 
     fn is_combat_over(&self, pcs: &mut ProbCombatState<'pm, T>) -> bool {
@@ -163,7 +183,7 @@ impl<'pm, T: RVProb> EncounterManager<'pm, T> {
             return Ok(vec!(pcs));
         }
         let strategy = self.get_strategy(pid);
-        if let Some(so) = strategy.get_action(pcs.get_state(), self.participants.get_participants(), pid) {
+        if let Some(so) = strategy.get_action(pcs.get_state()) {
             if self.possible_action(&pcs, pid, so) {
                 let handled_action = self.handle_action(pcs, pid, so)?;
                 match handled_action {
@@ -187,12 +207,8 @@ impl<'pm, T: RVProb> EncounterManager<'pm, T> {
         }
     }
 
-    fn get_participant(&self, pid: ParticipantId) -> &Box<dyn Participant<T, CSError>> {
+    fn get_participant(&self, pid: ParticipantId) -> &Box<dyn Participant<T>> {
         &self.participants.get_participant(pid).participant
-    }
-
-    pub fn get_team(&self, pid: ParticipantId) -> Team {
-        self.participants.get_participant(pid).team
     }
 
     fn is_dead_at_zero(&self, pid: ParticipantId) -> bool {
@@ -265,7 +281,7 @@ impl<'pm, T: RVProb> EncounterManager<'pm, T> {
         }
     }
 
-    fn handle_attack(&self, pcs: ProbCombatState<'pm, T>, atk: &Rc<dyn Attack<T, CSError>>, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
+    fn handle_attack(&self, pcs: ProbCombatState<'pm, T>, atk: &Rc<dyn Attack<T>>, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
         let target = self.get_participant(target_pid);
         let ar_rv: ArMRV<T> = atk.get_ar_rv(AttackHitType::Normal, target.get_ac())?;
         let ce_rv: MapRandVar<CombatEvent, T> = ar_rv.map_keys(|ar| ar.into());
@@ -292,7 +308,8 @@ mod tests {
     use combat_core::damage::{DamageDice, DamageType};
     use combat_core::health::Health;
     use combat_core::participant::{Participant, ParticipantId, ParticipantManager};
-    use combat_core::strategy::{BasicAttackStr, DoNothing, LinearStrategy, SecondWindStr};
+    use combat_core::strategy::strategy_impls::{BasicAtkStrBuilder, DoNothingBuilder, PairStrBuilder, SecondWindStrBuilder};
+    use combat_core::strategy::StrategyManager;
     use rand_var::RV64;
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use crate::{EM64, EncounterManager};
@@ -323,10 +340,15 @@ mod tests {
 
         let player = Player::from(fighter);
         let mut pm = ParticipantManager::new();
-        pm.add_player(Box::new(player), Box::new(DoNothing));
-        pm.add_enemy(Box::new(dummy), Box::new(DoNothing));
+        pm.add_player(Box::new(player)).unwrap();
+        pm.add_enemy(Box::new(dummy)).unwrap();
+        pm.compile();
 
-        let mut em: EM64 = EncounterManager::new(&pm);
+        let mut sm = StrategyManager::new(&pm).unwrap();
+        sm.add_participant(DoNothingBuilder).unwrap();
+        sm.add_participant(DoNothingBuilder).unwrap();
+
+        let mut em: EM64 = EncounterManager::new(&sm).unwrap();
         em.simulate_n_rounds(1).unwrap();
 
         {
@@ -365,10 +387,15 @@ mod tests {
 
         let player = Player::from(fighter.clone());
         let mut pm = ParticipantManager::new();
-        pm.add_player(Box::new(player), Box::new(BasicAttackStr));
-        pm.add_enemy(Box::new(dummy.clone()), Box::new(DoNothing));
+        pm.add_player(Box::new(player)).unwrap();
+        pm.add_enemy(Box::new(dummy.clone())).unwrap();
+        pm.compile();
 
-        let mut em: EM64 = EncounterManager::new(&pm);
+        let mut sm = StrategyManager::new(&pm).unwrap();
+        sm.add_participant(BasicAtkStrBuilder).unwrap();
+        sm.add_participant(DoNothingBuilder).unwrap();
+
+        let mut em: EM64 = EncounterManager::new(&sm).unwrap();
         em.simulate_n_rounds(1).unwrap();
 
         {
@@ -428,10 +455,15 @@ mod tests {
 
         let player = Player::from(fighter.clone());
         let mut pm = ParticipantManager::new();
-        pm.add_player(Box::new(player), Box::new(BasicAttackStr));
-        pm.add_enemy(Box::new(dummy.clone()), Box::new(DoNothing));
+        pm.add_player(Box::new(player)).unwrap();
+        pm.add_enemy(Box::new(dummy.clone())).unwrap();
+        pm.compile();
 
-        let mut em: EM64 = EncounterManager::new(&pm);
+        let mut sm = StrategyManager::new(&pm).unwrap();
+        sm.add_participant(BasicAtkStrBuilder).unwrap();
+        sm.add_participant(DoNothingBuilder).unwrap();
+
+        let mut em: EM64 = EncounterManager::new(&sm).unwrap();
         em.simulate_n_rounds(1).unwrap();
 
         let cs_rv = em.get_state_rv();
@@ -453,10 +485,15 @@ mod tests {
 
         let player = Player::from(fighter.clone());
         let mut pm = ParticipantManager::new();
-        pm.add_player(Box::new(player), Box::new(BasicAttackStr));
-        pm.add_enemy(Box::new(orc.clone()), Box::new(DoNothing));
+        pm.add_player(Box::new(player)).unwrap();
+        pm.add_enemy(Box::new(orc.clone())).unwrap();
+        pm.compile();
 
-        let mut em: EM64 = EncounterManager::new(&pm);
+        let mut sm = StrategyManager::new(&pm).unwrap();
+        sm.add_participant(BasicAtkStrBuilder).unwrap();
+        sm.add_participant(DoNothingBuilder).unwrap();
+
+        let mut em: EM64 = EncounterManager::new(&sm).unwrap();
         em.simulate_n_rounds(1).unwrap();
 
         {
@@ -513,10 +550,15 @@ mod tests {
 
         let player = Player::from(fighter.clone());
         let mut pm = ParticipantManager::new();
-        pm.add_player(Box::new(player), Box::new(BasicAttackStr));
-        pm.add_enemy(Box::new(orc.clone()), Box::new(DoNothing));
+        pm.add_player(Box::new(player)).unwrap();
+        pm.add_enemy(Box::new(orc.clone())).unwrap();
+        pm.compile();
 
-        let mut em: EM64 = EncounterManager::new(&pm);
+        let mut sm = StrategyManager::new(&pm).unwrap();
+        sm.add_participant(BasicAtkStrBuilder).unwrap();
+        sm.add_participant(DoNothingBuilder).unwrap();
+
+        let mut em: EM64 = EncounterManager::new(&sm).unwrap();
         em.set_do_merges(true);
         em.simulate_n_rounds(1).unwrap();
 
@@ -537,19 +579,22 @@ mod tests {
     fn fighter_vs_orc_strategy() {
         let mut fighter = get_test_fighter_lvl_0();
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
-        let mut fighter_str = LinearStrategy::new();
-        fighter_str.add_strategy(Box::new(BasicAttackStr));
-        fighter_str.add_strategy(Box::new(SecondWindStr));
+        let fighter_str = PairStrBuilder::new(BasicAtkStrBuilder, SecondWindStrBuilder);
         let player = Player::from(fighter.clone());
 
         let ba = BasicAttack::new(5, DamageType::Slashing, 3, DamageDice::D12, 1);
         let orc = Monster::new(15, 13, ba, 1);
 
         let mut pm = ParticipantManager::new();
-        pm.add_enemy(Box::new(orc.clone()), Box::new(BasicAttackStr));
-        pm.add_player(Box::new(player), Box::new(fighter_str));
+        pm.add_enemy(Box::new(orc.clone())).unwrap();
+        pm.add_player(Box::new(player)).unwrap();
+        pm.compile();
 
-        let mut em: EM64 = EncounterManager::new(&pm);
+        let mut sm = StrategyManager::new(&pm).unwrap();
+        sm.add_participant(BasicAtkStrBuilder).unwrap();
+        sm.add_participant(fighter_str).unwrap();
+
+        let mut em: EM64 = EncounterManager::new(&sm).unwrap();
         em.simulate_n_rounds(1).unwrap();
 
         {

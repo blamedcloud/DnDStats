@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, HashSet};
 use combat_core::attack::{AccMRV, AoMRV, ArMRV, Attack, AttackHitType, AttackResult, D20Type};
+use combat_core::CCError;
 use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 use rand_var::RandomVariable;
 use rand_var::rv_traits::prob_type::RVProb;
-use rand_var::rv_traits::RVError;
 use rand_var::rv_traits::sequential::Pair;
 use crate::ability_scores::Ability;
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType};
@@ -212,12 +212,12 @@ impl WeaponAttack {
     }
 }
 
-impl<T: RVProb, E: From<RVError> + From<CBError>> Attack<T, E> for WeaponAttack {
-    fn get_dmg_map(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, E> {
+impl<T: RVProb> Attack<T> for WeaponAttack {
+    fn get_dmg_map(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, CCError> {
         Ok(self.get_damage().get_attack_dmg_map(resistances)?)
     }
 
-    fn get_acc_rv(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, E> {
+    fn get_acc_rv(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, CCError> {
         let rv = hit_type.get_rv(self.get_d20_type());
         if let None = self.get_hit_bonus().get_saved_value() {
             return Err(CBError::NoCache.into());

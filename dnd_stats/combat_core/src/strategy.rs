@@ -1,11 +1,13 @@
 use std::fmt::Debug;
 use rand_var::rv_traits::prob_type::RVProb;
-use crate::actions::{ActionName, ActionType, AttackType};
+use crate::actions::{ActionName};
+use crate::CCError;
 use crate::combat_state::CombatState;
-use crate::health::Health;
 use crate::movement::Square;
-use crate::participant::{ParticipantId, TeamMember};
-use crate::resources::ResourceName;
+use crate::participant::{ParticipantId, ParticipantManager, TeamMember};
+use crate::triggers::{TriggeredAction, TriggerType};
+
+pub mod strategy_impls;
 
 // TODO: add shapes eventually (for spells and such)
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
@@ -29,87 +31,68 @@ impl From<ActionName> for StrategicOption {
     }
 }
 
-pub trait Strategy<T: RVProb, E> : Debug {
-    fn get_action(&self, state: &CombatState, participants: &Vec<TeamMember<T, E>>, me: ParticipantId) -> Option<StrategicOption>;
+pub trait StrategyBuilder<T: RVProb + Debug> {
+    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember<T>>, me: ParticipantId) -> Box<dyn Strategy<T> + 'pm>;
 }
 
-#[derive(Debug)]
-pub struct LinearStrategy<T: RVProb, E: Debug> {
-    strategies: Vec<Box<dyn Strategy<T, E>>>
+pub trait Strategy<T: RVProb> : Debug {
+    fn get_participants(&self) -> &Vec<TeamMember<T>>;
+    fn get_me(&self) -> ParticipantId;
+
+    fn get_action(&self, state: &CombatState) -> Option<StrategicOption>;
+
+    fn handle_trigger(&self, tt: TriggerType, state: &CombatState) -> Vec<TriggeredAction>;
 }
 
-impl<T: RVProb, E: Debug> LinearStrategy<T, E> {
-    pub fn new() -> Self {
-        Self {
+pub struct StrategyManager<'pm, T: RVProb> {
+    pm: &'pm ParticipantManager<T>,
+    strategies: Vec<Box<dyn Strategy<T> + 'pm>>,
+    compiled: bool
+}
+
+impl<'pm, T: RVProb + Debug> StrategyManager<'pm, T> {
+    pub fn new(pm: &'pm ParticipantManager<T>) -> Result<Self, CCError> {
+        if !pm.is_compiled() {
+            return Err(CCError::PMNotCompiled);
+        }
+        Ok(Self {
+            pm,
             strategies: Vec::new(),
-        }
+            compiled: false,
+        })
     }
 
-    pub fn add_strategy(&mut self, str: Box<dyn Strategy<T, E>>) {
+    pub fn add_participant(&mut self, str_bldr: impl StrategyBuilder<T>) -> Result<(), CCError> {
+        if self.compiled {
+            return Err(CCError::SMPushAfterCompile);
+        }
+        let str = str_bldr.build_strategy(self.pm.get_participants(), ParticipantId(self.strategies.len()));
         self.strategies.push(str);
-    }
-}
 
-impl<T: RVProb + Debug, E: Debug> Strategy<T, E> for LinearStrategy<T, E> {
-    fn get_action(&self, state: &CombatState, participants: &Vec<TeamMember<T, E>>, me: ParticipantId) -> Option<StrategicOption> {
-        for str in self.strategies.iter() {
-            let so = str.get_action(state, participants, me);
-            if so.is_some() {
-                return so;
-            }
+        if self.len() == self.pm.len() {
+            self.compile();
         }
-        None
-    }
-}
 
-#[derive(Debug)]
-pub struct DoNothing;
-impl<T: RVProb, E> Strategy<T, E> for DoNothing {
-    fn get_action(&self, _: &CombatState, _: &Vec<TeamMember<T, E>>, _: ParticipantId) -> Option<StrategicOption> {
-        None
+        Ok(())
     }
-}
 
-pub fn get_first_target<T: RVProb, E>(state: &CombatState, participants: &Vec<TeamMember<T, E>>, me: ParticipantId) -> Option<Target> {
-    let my_team = participants.get(me.0).unwrap().team;
-    for i in 0..participants.len() {
-        let pid = ParticipantId(i);
-        if participants[i].team != my_team && state.is_alive(pid) {
-            return Some(Target::Participant(pid))
-        }
+    pub fn get_pm(&self) -> &'pm ParticipantManager<T> {
+        self.pm
     }
-    None
-}
 
-#[derive(Debug)]
-pub struct BasicAttackStr;
-impl<T:RVProb, E> Strategy<T, E> for BasicAttackStr {
-    fn get_action(&self, state: &CombatState, participants: &Vec<TeamMember<T, E>>, me: ParticipantId) -> Option<StrategicOption> {
-        let my_rm = state.get_rm(me);
-        if my_rm.get_current(ResourceName::AT(ActionType::Action)) > 0 {
-            return Some(ActionName::AttackAction.into())
-        }
-        if my_rm.get_current(ResourceName::AT(ActionType::SingleAttack)) > 0 {
-            let target = get_first_target(state, participants, me);
-            return Some(StrategicOption {
-                action_name: ActionName::PrimaryAttack(AttackType::Normal),
-                target
-            })
-        }
-        None
+    pub fn is_compiled(&self) -> bool {
+        self.compiled
     }
-}
 
-#[derive(Debug)]
-pub struct SecondWindStr;
-impl<T:RVProb, E> Strategy<T, E> for SecondWindStr {
-    fn get_action(&self, state: &CombatState, _: &Vec<TeamMember<T, E>>, me: ParticipantId) -> Option<StrategicOption> {
-        let my_rm = state.get_rm(me);
-        let has_ba = my_rm.get_current(ResourceName::AT(ActionType::BonusAction)) > 0;
-        let has_sw = my_rm.get_current(ResourceName::AN(ActionName::SecondWind)) > 0;
-        if has_ba && has_sw && state.get_health(me) == Health::Bloodied {
-            return Some(ActionName::SecondWind.into())
-        }
-        None
+    fn compile(&mut self) {
+        self.compiled = true;
+    }
+
+    pub fn len(&self) -> usize {
+        self.strategies.len()
+    }
+
+    pub fn get_strategy(&self, pid: ParticipantId) -> &Box<dyn Strategy<T> + 'pm> {
+        self.strategies.get(pid.0).unwrap()
     }
 }

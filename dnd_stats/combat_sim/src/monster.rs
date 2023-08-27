@@ -7,14 +7,13 @@ use combat_core::damage::DamageType;
 use combat_core::participant::Participant;
 use combat_core::resources::{create_basic_rm, ResourceManager};
 use rand_var::rv_traits::prob_type::RVProb;
-use crate::CSError;
 
 #[derive(Debug, Clone)]
 pub struct Monster<T: RVProb> {
     max_hp: isize,
     ac: isize,
     resistances: HashSet<DamageType>,
-    action_manager: ActionManager<T, CSError>,
+    action_manager: ActionManager<T>,
     resource_manager: ResourceManager,
 }
 
@@ -30,7 +29,7 @@ impl<T: RVProb> Monster<T> {
     }
 }
 
-pub fn create_basic_attack_am<T: RVProb>(ba: BasicAttack, num_attacks: u8) -> ActionManager<T, CSError> {
+pub fn create_basic_attack_am<T: RVProb>(ba: BasicAttack, num_attacks: u8) -> ActionManager<T> {
     let mut am = ActionManager::new();
     am.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CombatAction::AdditionalAttacks(num_attacks)));
 
@@ -40,7 +39,7 @@ pub fn create_basic_attack_am<T: RVProb>(ba: BasicAttack, num_attacks: u8) -> Ac
     am
 }
 
-impl<T: RVProb + Debug> Participant<T, CSError> for Monster<T> {
+impl<T: RVProb + Debug> Participant<T> for Monster<T> {
     fn get_ac(&self) -> isize {
         self.ac
     }
@@ -53,7 +52,7 @@ impl<T: RVProb + Debug> Participant<T, CSError> for Monster<T> {
         &self.resistances
     }
 
-    fn get_action_manager(&self) -> &ActionManager<T, CSError> {
+    fn get_action_manager(&self) -> &ActionManager<T> {
         &self.action_manager
     }
 

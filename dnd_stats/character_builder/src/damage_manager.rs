@@ -1,9 +1,10 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Debug;
 use combat_core::attack::AttackResult;
+use combat_core::CCError;
 use combat_core::damage::{DamageDice, DamageFeature, DamageRV, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 use rand_var::RandomVariable;
-use rand_var::rv_traits::{NumRandVar, RandVar, RVError};
+use rand_var::rv_traits::{NumRandVar, RandVar};
 use rand_var::rv_traits::prob_type::RVProb;
 use crate::attributed_bonus::{AttributedBonus, BonusTerm};
 use crate::{CBError, Character};
@@ -117,8 +118,8 @@ impl DiceExpression {
     }
 }
 
-impl<T: RVProb, E: From<RVError> + From<CBError>> DamageRV<T, E> for DiceExpression {
-    fn get_rv(&self) -> Result<RandomVariable<T>, E> {
+impl<T: RVProb> DamageRV<T> for DiceExpression {
+    fn get_rv(&self) -> Result<RandomVariable<T>, CCError> {
         Ok(self.get_rv_base()?)
     }
 }

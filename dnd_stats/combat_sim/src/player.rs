@@ -7,7 +7,6 @@ use combat_core::damage::DamageType;
 use combat_core::participant::Participant;
 use combat_core::resources::ResourceManager;
 use rand_var::rv_traits::prob_type::RVProb;
-use crate::CSError;
 
 #[derive(Debug, Clone)]
 pub struct Player<T: RVProb> {
@@ -15,7 +14,7 @@ pub struct Player<T: RVProb> {
     ac: isize,
     max_hp: isize,
     resistances: HashSet<DamageType>,
-    action_manager: ActionManager<T, CSError>,
+    action_manager: ActionManager<T>,
     resource_manager: ResourceManager,
 }
 
@@ -33,7 +32,7 @@ impl<T: RVProb> From<Character> for Player<T> {
             let cab = co.action;
             let at = co.action_type;
             let req_t = co.req_target;
-            let ca: CombatAction<T, CSError> = match cab {
+            let ca: CombatAction<T> = match cab {
                 CABuilder::WeaponAttack(wa) => CombatAction::Attack(Rc::new(wa)),
                 CABuilder::SelfHeal(de) => CombatAction::SelfHeal(Rc::new(de)),
                 CABuilder::BonusDamage(dt) => CombatAction::BonusDamage(dt),
@@ -55,7 +54,7 @@ impl<T: RVProb> From<Character> for Player<T> {
     }
 }
 
-impl<T: RVProb + Debug> Participant<T, CSError> for Player<T> {
+impl<T: RVProb + Debug> Participant<T> for Player<T> {
     fn get_ac(&self) -> isize {
         self.ac
     }
@@ -68,7 +67,7 @@ impl<T: RVProb + Debug> Participant<T, CSError> for Player<T> {
         &self.resistances
     }
 
-    fn get_action_manager(&self) -> &ActionManager<T, CSError> {
+    fn get_action_manager(&self) -> &ActionManager<T> {
         &self.action_manager
     }
 

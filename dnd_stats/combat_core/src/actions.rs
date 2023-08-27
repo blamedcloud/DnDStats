@@ -25,9 +25,9 @@ pub enum CABuilder<A, D> {
 }
 
 #[derive(Debug, Clone)]
-pub enum CombatAction<T: RVProb, E> {
-    Attack(Rc<dyn Attack<T, E>>),
-    SelfHeal(Rc<dyn DamageRV<T, E>>),
+pub enum CombatAction<T: RVProb> {
+    Attack(Rc<dyn Attack<T>>),
+    SelfHeal(Rc<dyn DamageRV<T>>),
     BonusDamage(DamageTerm),
     AdditionalAttacks(u8),
     ByName,
@@ -58,8 +58,8 @@ impl<CA> CombatOption<CA> {
     }
 }
 
-impl<T: RVProb, E> From<(ActionType, CombatAction<T, E>)> for CombatOption<CombatAction<T, E>> {
-    fn from(value: (ActionType, CombatAction<T, E>)) -> Self {
+impl<T: RVProb> From<(ActionType, CombatAction<T>)> for CombatOption<CombatAction<T>> {
+    fn from(value: (ActionType, CombatAction<T>)) -> Self {
         CombatOption {
             action_type: value.0,
             action: value.1,
@@ -89,4 +89,4 @@ pub enum ActionName {
 }
 
 pub type ActionBuilder<A, D> = HashMap<ActionName, CombatOption<CABuilder<A, D>>>;
-pub type ActionManager<T, E> = HashMap<ActionName, CombatOption<CombatAction<T, E>>>;
+pub type ActionManager<T> = HashMap<ActionName, CombatOption<CombatAction<T>>>;

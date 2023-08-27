@@ -100,7 +100,6 @@ impl Feature for SneakAttack {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use combat_core::actions::{ActionName, CABuilder};
@@ -114,7 +113,7 @@ mod tests {
     use crate::tests::get_dex_based;
 
     #[test]
-    fn lvl_20_fighter() {
+    fn lvl_20_rogue() {
         let equipment = Equipment::new(
             Armor::studded_leather(),
             Weapon::dagger(),

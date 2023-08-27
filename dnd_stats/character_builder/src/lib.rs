@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::rc::Rc;
 use combat_core::actions::{ActionBuilder, ActionName, ActionType, AttackType, CABuilder, CombatOption};
+use combat_core::CCError;
 use combat_core::damage::DamageType;
 use combat_core::resources::{create_basic_rm, ResourceManager};
 use rand_var::rv_traits::RVError;
@@ -40,7 +41,14 @@ impl From<RVError> for CBError {
         CBError::RVError(value)
     }
 }
-
+use std::fmt::Write;
+impl From<CBError> for CCError {
+    fn from(value: CBError) -> Self {
+        let mut s = String::new();
+        write!(s, "{:?}", value).unwrap();
+        CCError::Other(s)
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum HitDice {
