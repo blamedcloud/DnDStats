@@ -1,24 +1,24 @@
 use std::collections::BTreeMap;
+use std::rc::Rc;
 use num::{BigRational, Rational64};
 use character_builder::CBError;
-use character_builder::combat::{ActionName, ActionType, CombatAction};
-use character_builder::combat::attack::{ArMRV, Attack, AttackHitType};
-use character_builder::resources::ResourceName;
+use combat_core::actions::{ActionName, ActionType, CombatAction};
+use combat_core::attack::{ArMRV, Attack, AttackHitType};
+use combat_core::combat_event::{CombatEvent, CombatTiming};
+use combat_core::participant::{Participant, ParticipantId, ParticipantManager, Team};
+use combat_core::resources::ResourceName;
+use combat_core::strategy::{StrategicOption, Strategy, Target};
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
-use crate::participant::{Participant, ParticipantId, ParticipantManager, Team};
+use rand_var::rv_traits::RVError;
 use crate::prob_combat_state::{CombatStateRV, ProbCombatState};
-use crate::prob_combat_state::combat_state::combat_log::combat_event::{CombatEvent, CombatTiming};
-use crate::strategy::{StrategicOption, Strategy, Target};
 
 pub mod monster;
-pub mod participant;
+pub mod player;
 pub mod prob_combat_state;
-pub mod strategy;
 pub mod target_dummy;
-pub mod transposition;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CSError {
     ActionNotHandled,
     InvalidTarget,
@@ -28,6 +28,11 @@ pub enum CSError {
 impl From<CBError> for CSError {
     fn from(value: CBError) -> Self {
         CSError::CBE(value)
+    }
+}
+impl From<RVError> for CSError {
+    fn from(value: RVError) -> Self {
+        CSError::CBE(CBError::RVError(value))
     }
 }
 
@@ -40,7 +45,7 @@ type ResultHA<'pm, T> = Result<HandledAction<'pm, T>, CSError>;
 type ResultCSE = Result<(), CSError>;
 
 pub struct EncounterManager<'pm, T: RVProb> {
-    participants: &'pm ParticipantManager,
+    participants: &'pm ParticipantManager<T, CSError>,
     round_num: u8,
     cs_rv: CombatStateRV<'pm, T>,
     merge_transpositions: bool,
@@ -50,7 +55,7 @@ pub type EM64<'pm> = EncounterManager<'pm, Rational64>;
 pub type EMBig<'pm> = EncounterManager<'pm, BigRational>;
 
 impl<'pm, T: RVProb> EncounterManager<'pm, T> {
-    pub fn new(pm: &'pm ParticipantManager) -> Self {
+    pub fn new(pm: &'pm ParticipantManager<T, CSError>) -> Self {
         Self {
             participants: pm,
             round_num: 0,
@@ -127,7 +132,7 @@ impl<'pm, T: RVProb> EncounterManager<'pm, T> {
         Ok(())
     }
 
-    fn get_strategy(&self, pid: ParticipantId) -> &Box<dyn Strategy> {
+    fn get_strategy(&self, pid: ParticipantId) -> &Box<dyn Strategy<T, CSError>> {
         self.participants.get_strategy(pid)
     }
 
@@ -182,7 +187,7 @@ impl<'pm, T: RVProb> EncounterManager<'pm, T> {
         }
     }
 
-    fn get_participant(&self, pid: ParticipantId) -> &Box<dyn Participant> {
+    fn get_participant(&self, pid: ParticipantId) -> &Box<dyn Participant<T, CSError>> {
         &self.participants.get_participant(pid).participant
     }
 
@@ -231,18 +236,10 @@ impl<'pm, T: RVProb> EncounterManager<'pm, T> {
         pcs.push(CombatEvent::AN(an));
 
         match &co.action {
-            CombatAction::WeaponAttack(wa) => {
+            CombatAction::Attack(atk) => {
                 if let Target::Participant(target_pid) = so.target.unwrap() {
                     pcs.push(CombatEvent::Attack(pid, target_pid));
-                    Ok(HandledAction::Children(self.handle_attack(pcs, wa, target_pid)?))
-                } else {
-                    Err(CSError::InvalidTarget)
-                }
-            },
-            CombatAction::BasicAttack(ba) => {
-                if let Target::Participant(target_pid) = so.target.unwrap() {
-                    pcs.push(CombatEvent::Attack(pid, target_pid));
-                    Ok(HandledAction::Children(self.handle_attack(pcs, ba, target_pid)?))
+                    Ok(HandledAction::Children(self.handle_attack(pcs, atk, target_pid)?))
                 } else {
                     Err(CSError::InvalidTarget)
                 }
@@ -268,9 +265,9 @@ impl<'pm, T: RVProb> EncounterManager<'pm, T> {
         }
     }
 
-    fn handle_attack(&self, pcs: ProbCombatState<'pm, T>, atk: &impl Attack, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CBError> {
+    fn handle_attack(&self, pcs: ProbCombatState<'pm, T>, atk: &Rc<dyn Attack<T, CSError>>, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
         let target = self.get_participant(target_pid);
-        let ar_rv: ArMRV<T> = atk.get_attack_result_rv(AttackHitType::Normal, target.get_ac())?;
+        let ar_rv: ArMRV<T> = atk.get_ar_rv(AttackHitType::Normal, target.get_ac())?;
         let ce_rv: MapRandVar<CombatEvent, T> = ar_rv.map_keys(|ar| ar.into());
         let ar_dmg_map = atk.get_dmg_map(target.get_resistances())?;
         // TODO: handle bonus damage
@@ -284,23 +281,23 @@ impl<'pm, T: RVProb> EncounterManager<'pm, T> {
 mod tests {
     use num::{One, Rational64};
     use character_builder::ability_scores::AbilityScores;
+    use character_builder::basic_attack::BasicAttack;
     use character_builder::Character;
     use character_builder::classes::ClassName;
-    use character_builder::combat::attack::{Attack, AttackHitType, AttackResult};
-    use character_builder::combat::{ActionName, AttackType};
-    use character_builder::combat::attack::basic_attack::BasicAttack;
-    use character_builder::damage::{DamageDice, DamageType};
     use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
-    use character_builder::resources::{create_basic_rm, ResourceManager};
+    use combat_core::actions::{ActionName, AttackType};
+    use combat_core::attack::{AttackHitType, AttackResult};
+    use combat_core::combat_event::{CombatEvent, CombatTiming, RoundId};
+    use combat_core::damage::{DamageDice, DamageType};
+    use combat_core::health::Health;
+    use combat_core::participant::{Participant, ParticipantId, ParticipantManager};
+    use combat_core::strategy::{BasicAttackStr, DoNothing, LinearStrategy, SecondWindStr};
     use rand_var::RV64;
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use crate::{EM64, EncounterManager};
     use crate::monster::Monster;
-    use crate::participant::{Participant, ParticipantId, ParticipantManager, Team, TeamMember};
-    use crate::prob_combat_state::combat_state::combat_log::combat_event::{CombatEvent, CombatTiming, RoundId};
-    use crate::prob_combat_state::combat_state::health::Health;
-    use crate::strategy::{BasicAttackStr, DoNothing, LinearStrategy, SecondWindStr};
+    use crate::player::Player;
     use crate::target_dummy::TargetDummy;
 
     pub fn get_str_based() -> AbilityScores {
@@ -324,9 +321,10 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         let dummy = TargetDummy::new(isize::MAX, 14);
 
+        let player = Player::from(fighter);
         let mut pm = ParticipantManager::new();
-        pm.add_player(fighter, Box::new(DoNothing));
-        pm.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy)), ResourceManager::new(),Box::new(DoNothing));
+        pm.add_player(Box::new(player), Box::new(DoNothing));
+        pm.add_enemy(Box::new(dummy), Box::new(DoNothing));
 
         let mut em: EM64 = EncounterManager::new(&pm);
         em.simulate_n_rounds(1).unwrap();
@@ -365,9 +363,10 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         let dummy = TargetDummy::new(isize::MAX, 14);
 
+        let player = Player::from(fighter.clone());
         let mut pm = ParticipantManager::new();
-        pm.add_player(fighter.clone(), Box::new(BasicAttackStr));
-        pm.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy.clone())), ResourceManager::new(),Box::new(DoNothing));
+        pm.add_player(Box::new(player), Box::new(BasicAttackStr));
+        pm.add_enemy(Box::new(dummy.clone()), Box::new(DoNothing));
 
         let mut em: EM64 = EncounterManager::new(&pm);
         em.simulate_n_rounds(1).unwrap();
@@ -427,9 +426,10 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         let dummy = TargetDummy::new(isize::MAX, 14);
 
+        let player = Player::from(fighter.clone());
         let mut pm = ParticipantManager::new();
-        pm.add_player(fighter.clone(), Box::new(BasicAttackStr));
-        pm.add_participant(TeamMember::new(Team::Enemies, Box::new(dummy.clone())), ResourceManager::new(),Box::new(DoNothing));
+        pm.add_player(Box::new(player), Box::new(BasicAttackStr));
+        pm.add_enemy(Box::new(dummy.clone()), Box::new(DoNothing));
 
         let mut em: EM64 = EncounterManager::new(&pm);
         em.simulate_n_rounds(1).unwrap();
@@ -451,9 +451,10 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         let orc = TargetDummy::new(15, 13);
 
+        let player = Player::from(fighter.clone());
         let mut pm = ParticipantManager::new();
-        pm.add_player(fighter.clone(), Box::new(BasicAttackStr));
-        pm.add_participant(TeamMember::new(Team::Enemies, Box::new(orc.clone())), ResourceManager::new(), Box::new(DoNothing));
+        pm.add_player(Box::new(player), Box::new(BasicAttackStr));
+        pm.add_enemy(Box::new(orc.clone()), Box::new(DoNothing));
 
         let mut em: EM64 = EncounterManager::new(&pm);
         em.simulate_n_rounds(1).unwrap();
@@ -510,9 +511,10 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         let orc = TargetDummy::new(15, 13);
 
+        let player = Player::from(fighter.clone());
         let mut pm = ParticipantManager::new();
-        pm.add_player(fighter.clone(), Box::new(BasicAttackStr));
-        pm.add_participant(TeamMember::new(Team::Enemies, Box::new(orc.clone())), ResourceManager::new(), Box::new(DoNothing));
+        pm.add_player(Box::new(player), Box::new(BasicAttackStr));
+        pm.add_enemy(Box::new(orc.clone()), Box::new(DoNothing));
 
         let mut em: EM64 = EncounterManager::new(&pm);
         em.set_do_merges(true);
@@ -524,8 +526,8 @@ mod tests {
 
         let orc_pid = ParticipantId(1);
         let dmg_rv = cs_rv.get_dmg(orc_pid);
-        let atk_dmg: RV64 = fighter
-            .get_weapon_attack().unwrap()
+        let wa = fighter.get_weapon_attack().unwrap();
+        let atk_dmg: RV64 = wa
             .get_attack_dmg_rv(AttackHitType::Normal, orc.get_ac(), orc.get_resistances()).unwrap()
             .cap_ub(orc.get_max_hp()).unwrap();
         assert_eq!(atk_dmg, dmg_rv);
@@ -538,13 +540,14 @@ mod tests {
         let mut fighter_str = LinearStrategy::new();
         fighter_str.add_strategy(Box::new(BasicAttackStr));
         fighter_str.add_strategy(Box::new(SecondWindStr));
+        let player = Player::from(fighter.clone());
 
         let ba = BasicAttack::new(5, DamageType::Slashing, 3, DamageDice::D12, 1);
         let orc = Monster::new(15, 13, ba, 1);
 
         let mut pm = ParticipantManager::new();
-        pm.add_participant(TeamMember::new(Team::Enemies, Box::new(orc.clone())), create_basic_rm(), Box::new(BasicAttackStr));
-        pm.add_player(fighter.clone(), Box::new(fighter_str));
+        pm.add_enemy(Box::new(orc.clone()), Box::new(BasicAttackStr));
+        pm.add_player(Box::new(player), Box::new(fighter_str));
 
         let mut em: EM64 = EncounterManager::new(&pm);
         em.simulate_n_rounds(1).unwrap();

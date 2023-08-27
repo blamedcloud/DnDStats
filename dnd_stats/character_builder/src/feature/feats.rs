@@ -1,22 +1,22 @@
 use std::clone::Clone;
+use combat_core::actions::{ActionName, ActionType, AttackType, CABuilder, CombatOption};
+use combat_core::damage::{DamageTerm, ExpressionTerm, ExtendedDamageType};
+use combat_core::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, ResourceName};
 use crate::ability_scores::Ability;
 use crate::attributed_bonus::{BonusTerm, BonusType};
-use crate::{CBError, Character};
-use crate::combat::{ActionName, ActionType, AttackType, CombatAction, CombatOption};
-use crate::damage::{ExpressionTerm, DamageTerm, ExtendedDamageType};
+use crate::{CBError, Character, CharacterCO};
 use crate::equipment::{Weapon, WeaponProperty};
 use crate::feature::Feature;
-use crate::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, ResourceName};
 
 pub struct GreatWeaponMaster;
 impl GreatWeaponMaster {
-    pub fn get_new_co(co: &CombatOption) -> Option<CombatOption> {
-        if let CombatAction::WeaponAttack(wa) = &co.action {
+    pub fn get_new_co(co: &CharacterCO) -> Option<CharacterCO> {
+        if let CABuilder::WeaponAttack(wa) = &co.action {
             if wa.get_weapon().get_type().is_melee() && wa.get_weapon().has_property(WeaponProperty::Heavy) {
                 let mut new_wa = wa.clone();
                 new_wa.add_accuracy_bonus(BonusTerm::new_attr(BonusType::Constant(-5), String::from("gwm")));
                 new_wa.get_damage_mut().add_base_dmg(DamageTerm::new(ExpressionTerm::Const(10), ExtendedDamageType::WeaponDamage));
-                return Some(CombatOption::new(co.action_type, CombatAction::WeaponAttack(new_wa)));
+                return Some(CombatOption::new(co.action_type, CABuilder::WeaponAttack(new_wa)));
             }
         }
         None
@@ -24,7 +24,7 @@ impl GreatWeaponMaster {
 }
 impl Feature for GreatWeaponMaster {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        let mut new_actions: Vec<(ActionName, CombatOption)> = Vec::new();
+        let mut new_actions: Vec<(ActionName, CharacterCO)> = Vec::new();
         for (ca, co) in character.combat_actions.iter() {
             match ca {
                 ActionName::PrimaryAttack(AttackType::Normal) => {
@@ -51,7 +51,7 @@ impl Feature for GreatWeaponMaster {
         for (ca, co) in new_actions.into_iter() {
             character.combat_actions.insert(ca, co);
         }
-        character.combat_actions.insert(ActionName::BonusGWMAttack, CombatOption::new(ActionType::BonusAction, CombatAction::AdditionalAttacks(1)));
+        character.combat_actions.insert(ActionName::BonusGWMAttack, CombatOption::new(ActionType::BonusAction, CABuilder::AdditionalAttacks(1)));
 
         let mut res = Resource::new(ResourceCap::Soft(1), 0);
         res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToEmpty);
@@ -73,11 +73,11 @@ impl PolearmMaster {
         }
     }
 
-    pub fn get_new_co(co: &CombatOption) -> Option<CombatOption> {
-        if let CombatAction::WeaponAttack(wa) = &co.action {
+    pub fn get_new_co(co: &CharacterCO) -> Option<CharacterCO> {
+        if let CABuilder::WeaponAttack(wa) = &co.action {
             if PolearmMaster::is_valid_weapon(wa.get_weapon()) {
                 let new_wa = wa.as_pam_attack();
-                return Some(CombatOption::new(ActionType::BonusAction, CombatAction::WeaponAttack(new_wa)));
+                return Some(CombatOption::new(ActionType::BonusAction, CABuilder::WeaponAttack(new_wa)));
             }
         }
         None
@@ -85,7 +85,7 @@ impl PolearmMaster {
 }
 impl Feature for PolearmMaster {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        let mut new_actions: Vec<(ActionName, CombatOption)> = Vec::new();
+        let mut new_actions: Vec<(ActionName, CharacterCO)> = Vec::new();
         for (ca, co) in character.combat_actions.iter() {
             match ca {
                 ActionName::PrimaryAttack(at) => {
@@ -116,13 +116,13 @@ impl Feature for Resilient {
 
 pub struct SharpShooter;
 impl SharpShooter {
-    pub fn get_new_co(co: &CombatOption) -> Option<CombatOption> {
-        if let CombatAction::WeaponAttack(wa) = &co.action {
+    pub fn get_new_co(co: &CharacterCO) -> Option<CharacterCO> {
+        if let CABuilder::WeaponAttack(wa) = &co.action {
             if wa.get_weapon().get_type().is_ranged() {
                 let mut new_wa = wa.clone();
                 new_wa.add_accuracy_bonus(BonusTerm::new_attr(BonusType::Constant(-5), String::from("ss")));
                 new_wa.get_damage_mut().add_base_dmg(DamageTerm::new(ExpressionTerm::Const(10), ExtendedDamageType::WeaponDamage));
-                return Some(CombatOption::new(co.action_type, CombatAction::WeaponAttack(new_wa)));
+                return Some(CombatOption::new(co.action_type, CABuilder::WeaponAttack(new_wa)));
             }
         }
         None
@@ -130,7 +130,7 @@ impl SharpShooter {
 }
 impl Feature for SharpShooter {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        let mut new_actions: Vec<(ActionName, CombatOption)> = Vec::new();
+        let mut new_actions: Vec<(ActionName, CharacterCO)> = Vec::new();
         for (ca, co) in character.combat_actions.iter() {
             match ca {
                 ActionName::PrimaryAttack(AttackType::Normal) => {
@@ -159,22 +159,22 @@ impl Feature for SharpShooter {
 mod tests {
     use std::collections::HashSet;
     use num::{BigInt, BigRational, FromPrimitive};
+    use combat_core::actions::{ActionName, AttackType, CABuilder};
+    use combat_core::attack::{AccMRV64, AttackHitType};
     use rand_var::RVBig;
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use rand_var::rv_traits::sequential::Pair;
-    use crate::Character;
+    use crate::{Character, CharacterCO};
     use crate::ability_scores::Ability;
     use crate::classes::{ChooseSubClass, ClassName};
     use crate::classes::fighter::ChampionFighter;
-    use crate::combat::{ActionName, AttackType, CombatAction, CombatOption};
-    use crate::combat::attack::{AccMRV64, Attack, AttackHitType};
-    use crate::combat::attack::weapon_attack::WeaponAttack;
     use crate::equipment::{Armor, Equipment, OffHand, Weapon};
     use crate::feature::feats::{GreatWeaponMaster, PolearmMaster, Resilient, SharpShooter};
     use crate::tests::{get_dex_based, get_str_based};
+    use crate::weapon_attack::WeaponAttack;
 
-    fn get_attack(option: &CombatOption) -> &WeaponAttack {
-        if let CombatAction::WeaponAttack(wa) = &option.action {
+    fn get_attack(option: &CharacterCO) -> &WeaponAttack {
+        if let CABuilder::WeaponAttack(wa) = &option.action {
             wa
         } else {
             panic!("should be an attack");

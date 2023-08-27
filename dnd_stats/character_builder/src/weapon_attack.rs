@@ -1,12 +1,14 @@
 use std::collections::{BTreeMap, HashSet};
+use combat_core::attack::{AccMRV, AoMRV, ArMRV, Attack, AttackHitType, AttackResult, D20Type};
+use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 use rand_var::RandomVariable;
 use rand_var::rv_traits::prob_type::RVProb;
+use rand_var::rv_traits::RVError;
 use rand_var::rv_traits::sequential::Pair;
 use crate::ability_scores::Ability;
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType};
 use crate::{CBError, Character};
-use crate::combat::attack::{AccMRV, Attack, AttackHitType, AttackResult, D20Type};
-use crate::damage::{DamageDice, DamageManager, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
+use crate::damage_manager::DamageManager;
 use crate::equipment::{OffHand, Weapon, WeaponProperty, WeaponRange};
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -154,10 +156,22 @@ impl WeaponAttack {
         self.d20_rv = d20type;
     }
 
+    pub fn get_d20_type(&self) -> &D20Type {
+        &self.d20_rv
+    }
+
+    fn get_crit_lb(&self) -> isize {
+        self.crit_lb
+    }
+
     pub fn set_crit_lb(&mut self, crit: isize) {
         if crit > 1 && crit <= 20 {
             self.crit_lb = crit;
         }
+    }
+
+    pub fn get_hit_bonus(&self) -> &AttributedBonus {
+        &self.hit_bonus
     }
 
     pub fn get_damage(&self) -> &DamageManager {
@@ -166,24 +180,54 @@ impl WeaponAttack {
     pub fn get_damage_mut(&mut self) -> &mut DamageManager {
         &mut self.damage
     }
-}
 
-impl Attack for WeaponAttack {
-    fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, CBError> {
-        self.damage.get_attack_dmg_map(resistances)
+    pub fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, CBError> {
+        Ok(self.damage.get_attack_dmg_map(resistances)?)
     }
 
-    fn get_accuracy_rv<T: RVProb>(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, CBError> {
+    pub fn get_accuracy_rv<T: RVProb>(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, CBError> {
         let rv = hit_type.get_rv(&self.d20_rv);
         if let None = self.hit_bonus.get_saved_value() {
-            return Err(CBError::NoCache);
+            return Err(CBError::NoCache.into());
         }
         let hit_const = self.hit_bonus.get_saved_value().unwrap() as isize;
         Ok(rv.into_mrv().map_keys(|roll| Pair(roll, roll + hit_const)))
     }
 
+    pub fn get_attack_result_rv<T: RVProb>(&self, hit_type: AttackHitType, target_ac: isize) -> Result<ArMRV<T>, CBError> {
+        let hit_rv = self.get_accuracy_rv(hit_type)?;
+        Ok(hit_rv.map_keys(|hit| AttackResult::from(hit, target_ac, self.get_crit_lb())))
+    }
+
+    pub fn get_attack_dmg_rv<T: RVProb>(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CBError> {
+        let attack_result_rv = self.get_attack_result_rv(hit_type, target_ac)?;
+        let dmg_map = self.get_dmg_map(resistances)?;
+        Ok(attack_result_rv.consolidate(&dmg_map)?.into())
+    }
+
+    pub fn get_attack_outcome_rv<T: RVProb>(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<AoMRV<T>, CBError> {
+        let attack_result_rv = self.get_attack_result_rv(hit_type, target_ac)?;
+        let dmg_map = self.get_dmg_map(resistances)?;
+        Ok(attack_result_rv.projection(&dmg_map)?)
+    }
+}
+
+impl<T: RVProb, E: From<RVError> + From<CBError>> Attack<T, E> for WeaponAttack {
+    fn get_dmg_map(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, E> {
+        Ok(self.get_damage().get_attack_dmg_map(resistances)?)
+    }
+
+    fn get_acc_rv(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, E> {
+        let rv = hit_type.get_rv(self.get_d20_type());
+        if let None = self.get_hit_bonus().get_saved_value() {
+            return Err(CBError::NoCache.into());
+        }
+        let hit_const = self.get_hit_bonus().get_saved_value().unwrap() as isize;
+        Ok(rv.into_mrv().map_keys(|roll| Pair(roll, roll + hit_const)))
+    }
+
     fn get_crit_lb(&self) -> isize {
-        self.crit_lb
+        self.get_crit_lb()
     }
 }
 
@@ -191,9 +235,9 @@ impl Attack for WeaponAttack {
 mod tests {
     use std::collections::BTreeMap;
     use num::{BigRational, FromPrimitive};
+    use combat_core::attack::ArMRVBig;
     use rand_var::{MRVBig, RVBig};
     use rand_var::rv_traits::{RandVar, NumRandVar};
-    use crate::combat::attack::ArMRVBig;
     use crate::tests::get_test_fighter;
     use super::*;
 

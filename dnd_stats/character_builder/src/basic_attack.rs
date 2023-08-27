@@ -1,10 +1,12 @@
 use std::collections::{BTreeMap, HashSet};
+use combat_core::attack::{AccMRV, Attack, AttackHitType, AttackResult, D20Type};
+use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 use rand_var::RandomVariable;
 use rand_var::rv_traits::prob_type::RVProb;
+use rand_var::rv_traits::RVError;
 use rand_var::rv_traits::sequential::Pair;
 use crate::CBError;
-use crate::combat::attack::{AccMRV, Attack, AttackHitType, AttackResult, D20Type};
-use crate::damage::{DamageDice, DamageManager, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
+use crate::damage_manager::DamageManager;
 
 #[derive(Debug, Clone)]
 pub struct BasicAttack {
@@ -26,12 +28,12 @@ impl BasicAttack {
     }
 }
 
-impl Attack for BasicAttack {
-    fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, CBError> {
-        self.damage.get_attack_dmg_map(resistances)
+impl<T: RVProb, E: From<RVError> + From<CBError>> Attack<T, E> for BasicAttack {
+    fn get_dmg_map(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, E> {
+        Ok(self.damage.get_attack_dmg_map(resistances)?)
     }
 
-    fn get_accuracy_rv<T: RVProb>(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, CBError> {
+    fn get_acc_rv(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, E> {
         let rv = hit_type.get_rv(&D20Type::D20);
         Ok(rv.into_mrv().map_keys(|roll| Pair(roll, roll + self.hit_bonus)))
     }

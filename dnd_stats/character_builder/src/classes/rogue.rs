@@ -1,10 +1,10 @@
+use combat_core::actions::{ActionName, ActionType, CABuilder, CombatOption};
+use combat_core::damage::{DamageDice, DamageTerm, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
+use combat_core::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, ResourceName};
 use crate::{CBError, Character};
 use crate::ability_scores::Ability;
 use crate::classes::{Class, ClassName, SubClass};
-use crate::combat::{ActionName, ActionType, CombatAction, CombatOption};
-use crate::damage::{DamageDice, DamageTerm, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 use crate::feature::{Feature, SaveProficiencies};
-use crate::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, ResourceName};
 
 pub struct RogueClass;
 impl RogueClass {
@@ -86,7 +86,7 @@ impl Feature for SneakAttack {
             ExpressionTerm::Dice(self.0, ExtendedDamageDice::Basic(DamageDice::D6)),
             ExtendedDamageType::WeaponDamage
         );
-        let co = CombatOption::new(ActionType::OnHit, CombatAction::BonusDamage(damage));
+        let co = CombatOption::new(ActionType::OnHit, CABuilder::BonusDamage(damage));
         character.combat_actions.insert(ActionName::SneakAttack, co);
 
         let mut res = Resource::from(ResourceCap::Hard(1));
@@ -103,12 +103,12 @@ impl Feature for SneakAttack {
 
 #[cfg(test)]
 mod tests {
+    use combat_core::actions::{ActionName, CABuilder};
+    use combat_core::damage::{DamageDice, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
     use crate::ability_scores::Ability;
     use crate::Character;
     use crate::classes::{ChooseSubClass, ClassName};
     use crate::classes::rogue::ScoutRogue;
-    use crate::combat::{ActionName, CombatAction};
-    use crate::damage::{DamageDice, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
     use crate::equipment::{Armor, Equipment, OffHand, Weapon};
     use crate::feature::AbilityScoreIncrease;
     use crate::tests::get_dex_based;
@@ -146,7 +146,7 @@ mod tests {
         assert_eq!(20, rogue.ability_scores.constitution.get_score());
         assert_eq!(17, rogue.ability_scores.wisdom.get_score());
         let sna = &rogue.combat_actions.get(&ActionName::SneakAttack).unwrap().action;
-        if let CombatAction::BonusDamage(dt) = sna {
+        if let CABuilder::BonusDamage(dt) = sna {
             assert_eq!(ExtendedDamageType::WeaponDamage, *dt.get_dmg_type());
             assert_eq!(ExpressionTerm::Dice(10, ExtendedDamageDice::Basic(DamageDice::D6)), *dt.get_expr())
         } else {

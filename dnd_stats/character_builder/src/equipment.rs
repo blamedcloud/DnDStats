@@ -1,5 +1,5 @@
-use crate::damage::{DamageDice, DamageType};
-use crate::Feet;
+use combat_core::damage::{DamageDice, DamageType};
+use combat_core::movement::Feet;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum ArmorType {

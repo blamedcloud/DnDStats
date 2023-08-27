@@ -1,6 +1,6 @@
 use std::cmp;
 use std::collections::{HashMap, HashSet};
-use crate::combat::{ActionName, ActionType};
+use crate::actions::{ActionName, ActionType};
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ResourceName {

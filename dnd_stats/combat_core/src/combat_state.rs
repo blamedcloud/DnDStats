@@ -1,30 +1,25 @@
 use std::collections::HashSet;
-use character_builder::resources::ResourceManager;
-use crate::participant::{ParticipantId, ParticipantManager};
-use crate::prob_combat_state::combat_state::combat_log::combat_event::{CombatEvent, CombatTiming};
-use crate::prob_combat_state::combat_state::combat_log::CombatLog;
-use crate::prob_combat_state::combat_state::health::Health;
+use crate::combat_event::{CombatEvent, CombatTiming};
+use crate::combat_state::combat_log::CombatLog;
+use crate::health::Health;
+use crate::participant::ParticipantId;
+use crate::resources::ResourceManager;
 use crate::transposition::Transposition;
 
 pub mod combat_log;
-pub mod health;
 
 #[derive(Debug, Clone)]
 pub struct CombatState {
     logs: CombatLog,
-    resources: ParticipantResources,
-    health: ParticipantHealth,
+    resources: Vec<ResourceManager>,
+    health: Vec<Health>,
     deaths: HashSet<ParticipantId>,
     last_combat_timing: Option<CombatTiming>,
 }
 
-type ParticipantResources = Vec<ResourceManager>;
-type ParticipantHealth = Vec<Health>;
-
 impl CombatState {
-    pub fn new(pm: &ParticipantManager) -> Self {
-        let resources = pm.get_initial_rms();
-        let health = vec![Health::Healthy; pm.len()];
+    pub fn new(resources: Vec<ResourceManager>) -> Self {
+        let health = vec![Health::Healthy; resources.len()];
         Self {
             logs: CombatLog::new(),
             resources,

@@ -1,5 +1,5 @@
 [package]
-name = "character_builder"
+name = "combat_core"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,4 +8,3 @@ edition = "2021"
 [dependencies]
 num = "0.4"
 rand_var = { path = "../rand_var" }
-combat_core = { path = "../combat_core" }

@@ -1,21 +1,21 @@
 use std::collections::BTreeMap;
 use std::ptr;
-use character_builder::combat::{ActionName, ActionType};
-use character_builder::resources::{RefreshTiming, ResourceManager, ResourceName};
+use combat_core::actions::{ActionName, ActionType};
+use combat_core::combat_event::{CombatEvent, CombatTiming};
+use combat_core::combat_state::CombatState;
+use combat_core::health::Health;
+use combat_core::participant::{ParticipantId, ParticipantManager};
+use combat_core::resources::{RefreshTiming, ResourceManager, ResourceName};
+use combat_core::transposition::Transposition;
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::{NumRandVar, RandVar, RVPartition};
-use crate::participant::{ParticipantId, ParticipantManager};
-use crate::prob_combat_state::combat_state::combat_log::combat_event::{CombatEvent, CombatTiming};
-use crate::prob_combat_state::combat_state::CombatState;
-use crate::prob_combat_state::combat_state::health::Health;
-use crate::transposition::Transposition;
+use crate::CSError;
 
-pub mod combat_state;
 
 #[derive(Debug, Clone)]
 pub struct ProbCombatState<'pm, T: RVProb> {
-    participants: &'pm ParticipantManager,
+    participants: &'pm ParticipantManager<T, CSError>,
     state: CombatState,
     dmg: ParticipantDmg<T>,
     prob: T,
@@ -24,14 +24,14 @@ pub struct ProbCombatState<'pm, T: RVProb> {
 type ParticipantDmg<T> = Vec<RandomVariable<T>>;
 
 impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
-    pub fn new(pm: &'pm ParticipantManager) -> Self {
+    pub fn new(pm: &'pm ParticipantManager<T, CSError>) -> Self {
         let mut dmg = Vec::with_capacity(pm.len());
         for _ in 0..pm.len() {
             dmg.push(RandomVariable::new_constant(0).unwrap());
         }
         Self {
             participants: pm,
-            state: CombatState::new(pm),
+            state: CombatState::new(pm.get_initial_rms()),
             dmg,
             prob: T::one(),
         }
@@ -223,7 +223,7 @@ pub struct CombatStateRV<'pm, T: RVProb> {
 }
 
 impl<'pm, T: RVProb> CombatStateRV<'pm, T> {
-    pub fn new(pm: &'pm ParticipantManager) -> Self {
+    pub fn new(pm: &'pm ParticipantManager<T, CSError>) -> Self {
         let mut states = Vec::new();
         states.push(ProbCombatState::new(pm));
         Self {

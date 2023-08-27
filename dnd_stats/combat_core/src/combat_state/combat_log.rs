@@ -1,8 +1,6 @@
 use std::rc::Rc;
-use crate::prob_combat_state::combat_state::combat_log::combat_event::CombatEvent;
+use crate::combat_event::CombatEvent;
 use crate::transposition::Transposition;
-
-pub mod combat_event;
 
 #[derive(Debug, Clone)]
 pub enum CombatLogParent {

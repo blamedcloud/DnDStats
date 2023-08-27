@@ -1,28 +1,29 @@
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
-use std::ops::Add;
+use std::fmt::Debug;
 use std::rc::Rc;
+use combat_core::actions::{ActionBuilder, ActionName, ActionType, AttackType, CABuilder, CombatOption};
+use combat_core::damage::DamageType;
+use combat_core::resources::{create_basic_rm, ResourceManager};
 use rand_var::rv_traits::RVError;
 use crate::ability_scores::AbilityScores;
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType, CharacterDependant};
 use crate::classes::{ClassName, SubClass};
-use crate::combat::{ActionManager, ActionName, AttackType, CombatAction, CombatOption, create_character_am};
-use crate::combat::attack::weapon_attack::WeaponAttack;
-use crate::damage::DamageType;
+use crate::damage_manager::DiceExpression;
 use crate::equipment::{ArmorType, Equipment};
 use crate::feature::Feature;
-use crate::resources::{create_basic_rm, ResourceManager};
+use crate::weapon_attack::WeaponAttack;
 
 pub mod ability_scores;
 pub mod attributed_bonus;
+pub mod basic_attack;
 pub mod classes;
-pub mod combat;
-pub mod damage;
+pub mod damage_manager;
 pub mod equipment;
 pub mod feature;
-pub mod resources;
+pub mod weapon_attack;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CBError {
     NoCache,
     NoWeaponSet,
@@ -40,34 +41,6 @@ impl From<RVError> for CBError {
     }
 }
 
-#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
-pub struct Feet(i32);
-#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
-pub struct Square(i32);
-
-impl Add<Square> for Square {
-    type Output = Square;
-
-    fn add(self, other: Square) -> Square {
-        Square(self.0 + other.0)
-    }
-}
-
-impl Add<Square> for Feet {
-    type Output = Feet;
-
-    fn add(self, other: Square) -> Feet {
-        Feet(self.0 + (other.0 * 5))
-    }
-}
-
-impl Add<Feet> for Feet {
-    type Output = Feet;
-
-    fn add(self, other: Feet) -> Feet {
-        Feet(self.0 + other.0)
-    }
-}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum HitDice {
@@ -97,6 +70,8 @@ impl HitDice {
     }
 }
 
+pub type CharacterCO = CombatOption<CABuilder<WeaponAttack, DiceExpression>>;
+
 #[derive(Debug, Clone)]
 pub struct Character {
     name: String,
@@ -106,7 +81,7 @@ pub struct Character {
     sub_classes: HashMap<ClassName, Rc<dyn SubClass>>,
     equipment: Equipment,
     armor_class: AttributedBonus,
-    combat_actions: ActionManager,
+    combat_actions: ActionBuilder<WeaponAttack, DiceExpression>,
     resource_manager: ResourceManager,
     resistances: HashSet<DamageType>,
 }
@@ -121,12 +96,12 @@ impl Character {
             sub_classes: HashMap::new(),
             equipment,
             armor_class: AttributedBonus::new(String::from("AC")),
-            combat_actions: ActionManager::new(),
+            combat_actions: ActionBuilder::new(),
             resource_manager: create_basic_rm(),
             resistances: HashSet::new(),
         };
         character.calc_ac();
-        character.combat_actions = create_character_am(&character);
+        character.combat_actions = create_character_ab(&character);
         character
     }
 
@@ -190,8 +165,8 @@ impl Character {
         let clone = self.clone();
         for (_, co) in self.combat_actions.iter_mut() {
             match &mut co.action {
-                CombatAction::WeaponAttack(wa) => wa.cache_char_vals(&clone),
-                CombatAction::SelfHeal(de) => de.cache_char_terms(&clone),
+                CABuilder::WeaponAttack(wa) => wa.cache_char_vals(&clone),
+                CABuilder::SelfHeal(de) => de.cache_char_terms(&clone),
                 _ => {}
             }
         }
@@ -228,9 +203,7 @@ impl Character {
     pub fn get_ability_scores(&self) -> &AbilityScores {
         &self.ability_scores
     }
-    // fn get_ability_scores_mut(&mut self) -> &mut AbilityScores {
-    //     &mut self.ability_scores
-    // }
+
 
     pub fn get_class_levels(&self) -> &Vec<ClassName> {
         &self.class_lvls
@@ -271,9 +244,6 @@ impl Character {
     pub fn get_equipment(&self) -> &Equipment {
         &self.equipment
     }
-    // fn get_equipment_mut(&mut self) -> &mut Equipment {
-    //     &mut self.equipment
-    // }
 
     pub fn get_ac(&self) -> i32 {
         self.armor_class.get_value(&self)
@@ -281,7 +251,7 @@ impl Character {
 
     pub fn get_weapon_attack(&self) -> Option<&WeaponAttack> {
         self.combat_actions.get(&ActionName::PrimaryAttack(AttackType::Normal)).and_then(|co| {
-            if let CombatAction::WeaponAttack(wa) = &co.action {
+            if let CABuilder::WeaponAttack(wa) = &co.action {
                 Some(wa)
             } else {
                 None
@@ -291,7 +261,7 @@ impl Character {
 
     pub fn get_offhand_attack(&self) -> Option<&WeaponAttack> {
         self.combat_actions.get(&ActionName::OffhandAttack(AttackType::Normal)).and_then(|co| {
-            if let CombatAction::WeaponAttack(wa) = &co.action {
+            if let CABuilder::WeaponAttack(wa) = &co.action {
                 Some(wa)
             } else {
                 None
@@ -299,11 +269,11 @@ impl Character {
         })
     }
 
-    pub fn get_action_manager(&self) -> &ActionManager {
+    pub fn get_action_builder(&self) -> &ActionBuilder<WeaponAttack, DiceExpression> {
         &self.combat_actions
     }
 
-    pub fn get_combat_option(&self, an: ActionName) -> Option<&CombatOption> {
+    pub fn get_combat_option(&self, an: ActionName) -> Option<&CharacterCO> {
         self.combat_actions.get(&an)
     }
 
@@ -314,7 +284,7 @@ impl Character {
     pub fn get_resource_manager(&self) -> &ResourceManager {
         &self.resource_manager
     }
-    pub fn get_resource_manager_mut(&mut self) -> &mut ResourceManager {
+    pub fn get_resource_manager_mut(&mut self) -> &mut ResourceManager { // TODO: remove this if possible?
         &mut self.resource_manager
     }
 
@@ -322,6 +292,23 @@ impl Character {
         &self.resistances
     }
 }
+
+
+pub fn create_character_ab(character: &Character) -> ActionBuilder<WeaponAttack, DiceExpression> {
+    let mut am = ActionBuilder::new();
+    am.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CABuilder::AdditionalAttacks(1)));
+
+    let wa = WeaponAttack::primary_weapon(character);
+    let pa_co = CombatOption::new_target(ActionType::SingleAttack, CABuilder::WeaponAttack(wa), true);
+    am.insert(ActionName::PrimaryAttack(AttackType::Normal), pa_co);
+
+    if let Some(owa) = WeaponAttack::offhand_weapon(character) {
+        let oa_co = CombatOption::new_target(ActionType::BonusAction, CABuilder::WeaponAttack(owa), true);
+        am.insert(ActionName::OffhandAttack(AttackType::Normal), oa_co);
+    }
+    am
+}
+
 
 #[cfg(test)]
 mod tests {

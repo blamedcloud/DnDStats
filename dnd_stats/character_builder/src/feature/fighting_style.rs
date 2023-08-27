@@ -1,11 +1,11 @@
 use std::rc::Rc;
+use combat_core::actions::CABuilder;
+use combat_core::damage::{DamageFeature, ExtendedDamageType};
 use crate::attributed_bonus::{BonusTerm, BonusType, CharacterDependant};
 use crate::{CBError, Character};
-use crate::combat::attack::weapon_attack::{HandType, NumHands};
-use crate::combat::CombatAction;
-use crate::damage::{DamageFeature, ExtendedDamageType};
 use crate::equipment::ArmorType;
 use crate::feature::Feature;
+use crate::weapon_attack::{HandType, NumHands};
 
 pub enum FightingStyles {
     Archery,
@@ -21,7 +21,7 @@ pub struct FightingStyle(pub FightingStyles);
 impl FightingStyle {
     pub fn archery(character: &mut Character) {
         for (_, co) in character.combat_actions.iter_mut() {
-            if let CombatAction::WeaponAttack(attack) = &mut co.action {
+            if let CABuilder::WeaponAttack(attack) = &mut co.action {
                 if attack.get_weapon().get_type().is_ranged() {
                     attack.add_accuracy_bonus(BonusTerm::new_attr(BonusType::Constant(2), String::from("archery FS")));
                 }
@@ -37,7 +37,7 @@ impl FightingStyle {
 
     pub fn dueling(character: &mut Character) {
         for (_, co) in character.combat_actions.iter_mut() {
-            if let CombatAction::WeaponAttack(attack) = &mut co.action {
+            if let CABuilder::WeaponAttack(attack) = &mut co.action {
                 if attack.get_num_hands() == &NumHands::OneHand && attack.get_weapon().get_type().is_melee() {
                     let dmg: CharacterDependant = Rc::new(|chr| {
                         if chr.get_equipment().get_secondary_weapon().is_none() {
@@ -57,7 +57,7 @@ impl FightingStyle {
 
     pub fn gwf(character: &mut Character) {
         for (_, co) in character.combat_actions.iter_mut() {
-            if let CombatAction::WeaponAttack(attack) = &mut co.action {
+            if let CABuilder::WeaponAttack(attack) = &mut co.action {
                 if attack.get_num_hands() == &NumHands::TwoHand && attack.get_weapon().get_type().is_melee() {
                     attack.get_damage_mut().add_damage_feature(DamageFeature::GWF);
                 }
@@ -67,7 +67,7 @@ impl FightingStyle {
 
     pub fn twf(character: &mut Character) {
         for (_, co) in character.combat_actions.iter_mut() {
-            if let CombatAction::WeaponAttack(attack) = &mut co.action {
+            if let CABuilder::WeaponAttack(attack) = &mut co.action {
                 if attack.get_hand_type() == &HandType::OffHand {
                     let ability = *attack.get_ability();
                     attack.get_damage_mut().add_base_char_dmg(
@@ -98,12 +98,12 @@ impl Feature for FightingStyle {
 mod tests {
     use std::collections::HashSet;
     use num::{BigInt, BigRational};
+    use combat_core::attack::{AccMRV64, AttackHitType};
     use rand_var::{RVBig, RandomVariable};
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use rand_var::rv_traits::sequential::Pair;
     use crate::Character;
     use crate::classes::ClassName;
-    use crate::combat::attack::{AccMRV64, Attack, AttackHitType};
     use crate::equipment::{ACSource, Armor, Equipment, OffHand, Weapon};
     use crate::tests::{get_dex_based, get_str_based};
     use super::*;

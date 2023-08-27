@@ -1,10 +1,11 @@
 use std::fmt::Debug;
-use character_builder::combat::{ActionName, ActionType, AttackType};
-use character_builder::resources::ResourceName;
-use character_builder::Square;
+use rand_var::rv_traits::prob_type::RVProb;
+use crate::actions::{ActionName, ActionType, AttackType};
+use crate::combat_state::CombatState;
+use crate::health::Health;
+use crate::movement::Square;
 use crate::participant::{ParticipantId, TeamMember};
-use crate::prob_combat_state::combat_state::CombatState;
-use crate::prob_combat_state::combat_state::health::Health;
+use crate::resources::ResourceName;
 
 // TODO: add shapes eventually (for spells and such)
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
@@ -28,29 +29,29 @@ impl From<ActionName> for StrategicOption {
     }
 }
 
-pub trait Strategy : Debug {
-    fn get_action(&self, state: &CombatState, participants: &Vec<TeamMember>, me: ParticipantId) -> Option<StrategicOption>;
+pub trait Strategy<T: RVProb, E> : Debug {
+    fn get_action(&self, state: &CombatState, participants: &Vec<TeamMember<T, E>>, me: ParticipantId) -> Option<StrategicOption>;
 }
 
 #[derive(Debug)]
-pub struct LinearStrategy {
-    strategies: Vec<Box<dyn Strategy>>
+pub struct LinearStrategy<T: RVProb, E: Debug> {
+    strategies: Vec<Box<dyn Strategy<T, E>>>
 }
 
-impl LinearStrategy {
+impl<T: RVProb, E: Debug> LinearStrategy<T, E> {
     pub fn new() -> Self {
         Self {
             strategies: Vec::new(),
         }
     }
 
-    pub fn add_strategy(&mut self, str: Box<dyn Strategy>) {
+    pub fn add_strategy(&mut self, str: Box<dyn Strategy<T, E>>) {
         self.strategies.push(str);
     }
 }
 
-impl Strategy for LinearStrategy {
-    fn get_action(&self, state: &CombatState, participants: &Vec<TeamMember>, me: ParticipantId) -> Option<StrategicOption> {
+impl<T: RVProb + Debug, E: Debug> Strategy<T, E> for LinearStrategy<T, E> {
+    fn get_action(&self, state: &CombatState, participants: &Vec<TeamMember<T, E>>, me: ParticipantId) -> Option<StrategicOption> {
         for str in self.strategies.iter() {
             let so = str.get_action(state, participants, me);
             if so.is_some() {
@@ -63,13 +64,13 @@ impl Strategy for LinearStrategy {
 
 #[derive(Debug)]
 pub struct DoNothing;
-impl Strategy for DoNothing {
-    fn get_action(&self, _: &CombatState, _: &Vec<TeamMember>, _: ParticipantId) -> Option<StrategicOption> {
+impl<T: RVProb, E> Strategy<T, E> for DoNothing {
+    fn get_action(&self, _: &CombatState, _: &Vec<TeamMember<T, E>>, _: ParticipantId) -> Option<StrategicOption> {
         None
     }
 }
 
-pub fn get_first_target(state: &CombatState, participants: &Vec<TeamMember>, me: ParticipantId) -> Option<Target> {
+pub fn get_first_target<T: RVProb, E>(state: &CombatState, participants: &Vec<TeamMember<T, E>>, me: ParticipantId) -> Option<Target> {
     let my_team = participants.get(me.0).unwrap().team;
     for i in 0..participants.len() {
         let pid = ParticipantId(i);
@@ -82,8 +83,8 @@ pub fn get_first_target(state: &CombatState, participants: &Vec<TeamMember>, me:
 
 #[derive(Debug)]
 pub struct BasicAttackStr;
-impl Strategy for BasicAttackStr {
-    fn get_action(&self, state: &CombatState, participants: &Vec<TeamMember>, me: ParticipantId) -> Option<StrategicOption> {
+impl<T:RVProb, E> Strategy<T, E> for BasicAttackStr {
+    fn get_action(&self, state: &CombatState, participants: &Vec<TeamMember<T, E>>, me: ParticipantId) -> Option<StrategicOption> {
         let my_rm = state.get_rm(me);
         if my_rm.get_current(ResourceName::AT(ActionType::Action)) > 0 {
             return Some(ActionName::AttackAction.into())
@@ -101,8 +102,8 @@ impl Strategy for BasicAttackStr {
 
 #[derive(Debug)]
 pub struct SecondWindStr;
-impl Strategy for SecondWindStr {
-    fn get_action(&self, state: &CombatState, _: &Vec<TeamMember>, me: ParticipantId) -> Option<StrategicOption> {
+impl<T:RVProb, E> Strategy<T, E> for SecondWindStr {
+    fn get_action(&self, state: &CombatState, _: &Vec<TeamMember<T, E>>, me: ParticipantId) -> Option<StrategicOption> {
         let my_rm = state.get_rm(me);
         let has_ba = my_rm.get_current(ResourceName::AT(ActionType::BonusAction)) > 0;
         let has_sw = my_rm.get_current(ResourceName::AN(ActionName::SecondWind)) > 0;

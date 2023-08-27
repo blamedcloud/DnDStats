@@ -1,6 +1,6 @@
+use combat_core::actions::{ActionName, ActionType, CABuilder, CombatOption};
 use crate::ability_scores::Ability;
 use crate::{CBError, Character};
-use crate::combat::{ActionName, ActionType, CombatAction, CombatOption};
 
 pub mod feats;
 pub mod fighting_style;
@@ -53,7 +53,7 @@ impl From<(Ability, Ability)> for SaveProficiencies {
 pub struct ExtraAttack(pub u8);
 impl Feature for ExtraAttack {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        character.combat_actions.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CombatAction::AdditionalAttacks(self.0)));
+        character.combat_actions.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CABuilder::AdditionalAttacks(self.0)));
         Ok(())
     }
 }

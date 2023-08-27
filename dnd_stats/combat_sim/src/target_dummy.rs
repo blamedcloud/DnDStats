@@ -1,28 +1,34 @@
 use std::collections::HashSet;
-use character_builder::combat::ActionManager;
-use character_builder::damage::DamageType;
-use crate::participant::Participant;
+use std::fmt::Debug;
+use combat_core::actions::ActionManager;
+use combat_core::damage::DamageType;
+use combat_core::participant::Participant;
+use combat_core::resources::ResourceManager;
+use rand_var::rv_traits::prob_type::RVProb;
+use crate::CSError;
 
 #[derive(Debug, Clone)]
-pub struct TargetDummy {
+pub struct TargetDummy<T: RVProb> {
     max_hp: isize,
     ac: isize,
     resistances: HashSet<DamageType>,
-    action_manager: ActionManager,
+    action_manager: ActionManager<T, CSError>,
+    resource_manager: ResourceManager,
 }
 
-impl TargetDummy {
+impl<T: RVProb> TargetDummy<T> {
     pub fn new(hp: isize, ac: isize) -> Self {
         TargetDummy {
             max_hp: hp,
             ac,
             resistances: HashSet::new(),
             action_manager: ActionManager::new(),
+            resource_manager: ResourceManager::new(),
         }
     }
 }
 
-impl Participant for TargetDummy {
+impl<T: RVProb + Debug> Participant<T, CSError> for TargetDummy<T> {
     fn get_ac(&self) -> isize {
         self.ac
     }
@@ -35,7 +41,11 @@ impl Participant for TargetDummy {
         &self.resistances
     }
 
-    fn get_action_manager(&self) -> &ActionManager {
+    fn get_action_manager(&self) -> &ActionManager<T, CSError> {
         &self.action_manager
+    }
+
+    fn get_resource_manager(&self) -> &ResourceManager {
+        &self.resource_manager
     }
 }

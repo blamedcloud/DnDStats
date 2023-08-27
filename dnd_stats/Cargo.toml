@@ -2,6 +2,7 @@
 
 members = [
     "character_builder",
+    "combat_core",
     "combat_sim",
     "rand_var",
 ]

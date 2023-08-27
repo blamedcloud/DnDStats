@@ -1,8 +1,8 @@
-use character_builder::combat::ActionName;
-use character_builder::combat::attack::AttackResult;
-use character_builder::resources::RefreshTiming;
+use crate::actions::ActionName;
+use crate::attack::AttackResult;
+use crate::health::Health;
 use crate::participant::ParticipantId;
-use crate::prob_combat_state::combat_state::health::Health;
+use crate::resources::RefreshTiming;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
 pub struct RoundId(pub u8);

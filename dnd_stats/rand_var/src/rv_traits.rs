@@ -11,7 +11,7 @@ use crate::rv_traits::sequential::{Seq, SeqIter};
 pub mod sequential;
 pub mod prob_type;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RVError {
     InvalidBounds,
     CDFNotOne,
