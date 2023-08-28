@@ -1,15 +1,17 @@
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::rc::Rc;
 use num::{BigRational, Rational64};
 use character_builder::CBError;
 use combat_core::actions::{ActionName, ActionType, CombatAction};
-use combat_core::attack::{ArMRV, Attack, AttackHitType};
+use combat_core::attack::{Attack, AttackHitType, AttackResult};
 use combat_core::CCError;
 use combat_core::combat_event::{CombatEvent, CombatTiming};
+use combat_core::damage::DamageTerm;
 use combat_core::participant::{Participant, ParticipantId, ParticipantManager, Team};
 use combat_core::resources::ResourceName;
 use combat_core::strategy::{StrategicOption, Strategy, StrategyManager, Target};
+use combat_core::triggers::{TriggerAction, TriggerContext, TriggerResponse, TriggerType};
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::RVError;
@@ -26,6 +28,8 @@ pub enum CSError {
     ActionNotHandled,
     InvalidTarget,
     InvalidAction,
+    UnknownEvent(CombatEvent),
+    InvalidTriggerResponse,
     RVE(RVError),
     CCE(CCError),
     CBE(CBError),
@@ -185,18 +189,13 @@ impl<'sm, 'pm, T: RVProb> EncounterManager<'sm, 'pm, T> {
         let strategy = self.get_strategy(pid);
         if let Some(so) = strategy.get_action(pcs.get_state()) {
             if self.possible_action(&pcs, pid, so) {
-                let handled_action = self.handle_action(pcs, pid, so)?;
-                match handled_action {
-                    HandledAction::InPlace(p) => self.finish_turn(p, pid),
-                    HandledAction::Children(children) => {
-                        let mut finished_pcs = Vec::new();
-                        for pcs in children.into_iter() {
-                            let new_pcs = self.finish_turn(pcs, pid)?;
-                            finished_pcs.extend(new_pcs.into_iter());
-                        }
-                        Ok(finished_pcs)
-                    }
+                let children = self.finish_action(pcs, pid, so)?;
+                let mut finished_pcs = Vec::new();
+                for pcs in children.into_iter() {
+                    let new_pcs = self.finish_turn(pcs, pid)?;
+                    finished_pcs.extend(new_pcs.into_iter());
                 }
+                Ok(finished_pcs)
             } else {
                 // strategy gave me an invalid StrategicOption
                 Ok(vec!(pcs))
@@ -242,12 +241,20 @@ impl<'sm, 'pm, T: RVProb> EncounterManager<'sm, 'pm, T> {
         has_action && valid_target && has_resources
     }
 
+    fn finish_action(&self, pcs: ProbCombatState<'pm, T>, pid: ParticipantId, so: StrategicOption) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
+        let handled_action = self.handle_action(pcs, pid, so)?;
+        match handled_action {
+            HandledAction::InPlace(p) => Ok(vec!(p)),
+            HandledAction::Children(v) => Ok(v),
+        }
+    }
+
     fn handle_action(&self, mut pcs: ProbCombatState<'pm, T>, pid: ParticipantId, so: StrategicOption) -> ResultHA<'pm, T> {
         let an = so.action_name;
         let participant = self.get_participant(pid);
         let co = participant.get_action_manager().get(&an).unwrap();
         let at = co.action_type;
-        pcs.spend_resources(pid, an, at);
+        pcs.spend_action_resources(pid, an, at);
 
         pcs.push(CombatEvent::AN(an));
 
@@ -255,16 +262,15 @@ impl<'sm, 'pm, T: RVProb> EncounterManager<'sm, 'pm, T> {
             CombatAction::Attack(atk) => {
                 if let Target::Participant(target_pid) = so.target.unwrap() {
                     pcs.push(CombatEvent::Attack(pid, target_pid));
-                    Ok(HandledAction::Children(self.handle_attack(pcs, atk, target_pid)?))
+                    Ok(HandledAction::Children(self.handle_attack(pcs, atk, pid, target_pid)?))
                 } else {
                     Err(CSError::InvalidTarget)
                 }
-            }
+            },
             CombatAction::SelfHeal(de) => {
                 let heal: RandomVariable<T> = de.get_heal_rv()?;
                 Ok(HandledAction::Children(pcs.add_dmg(&heal, pid, self.is_dead_at_zero(pid))))
             },
-            CombatAction::BonusDamage(_) => Err(CSError::InvalidAction),
             CombatAction::AdditionalAttacks(aa) => {
                 pcs.get_rm_mut(pid).gain(ResourceName::AT(ActionType::SingleAttack), *aa as usize);
                 Ok(HandledAction::InPlace(pcs))
@@ -281,15 +287,81 @@ impl<'sm, 'pm, T: RVProb> EncounterManager<'sm, 'pm, T> {
         }
     }
 
-    fn handle_attack(&self, pcs: ProbCombatState<'pm, T>, atk: &Rc<dyn Attack<T>>, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
+    fn handle_attack(&self, pcs: ProbCombatState<'pm, T>, atk: &Rc<dyn Attack<T>>, atker_pid: ParticipantId, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
+        let attacker = self.get_participant(atker_pid);
         let target = self.get_participant(target_pid);
-        let ar_rv: ArMRV<T> = atk.get_ar_rv(AttackHitType::Normal, target.get_ac())?;
-        let ce_rv: MapRandVar<CombatEvent, T> = ar_rv.map_keys(|ar| ar.into());
-        let ar_dmg_map = atk.get_dmg_map(target.get_resistances())?;
-        // TODO: handle bonus damage
-        let ce_dmg_map: BTreeMap<CombatEvent, RandomVariable<T>> = ar_dmg_map.into_iter().map(|(k, v)| (k.into(), v)).collect();
         let dead_at_zero = self.is_dead_at_zero(target_pid);
-        Ok(pcs.split_dmg(ce_rv, ce_dmg_map, target_pid, dead_at_zero))
+        let ce_rv: MapRandVar<CombatEvent, T> = atk.get_ce_rv(AttackHitType::Normal, target.get_ac())?;
+        // TODO: handle AC boosts somehow...
+
+        if attacker.has_triggers() && attacker.get_trigger_manager().unwrap().has_triggers(TriggerType::SuccessfulAttack) {
+            let children = pcs.split(ce_rv);
+            let mut results = Vec::with_capacity(children.len());
+            let resist = target.get_resistances();
+            for mut child in children {
+                if let CombatEvent::AR(ar) = child.get_last_event().unwrap() {
+                    match ar {
+                        AttackResult::Miss => {
+                            let v = child.add_dmg(&atk.get_miss_dmg(resist, vec!())?, target_pid, dead_at_zero);
+                            results.extend(v.into_iter());
+                        }
+                        _ => {
+                            let response = self.get_strategy(atker_pid).handle_trigger(TriggerType::SuccessfulAttack, TriggerContext::AR(ar), child.get_state());
+                            let cost = self.validate_trigger_cost(&child, atker_pid, TriggerType::SuccessfulAttack, &response);
+                            if cost.is_some() {
+                                child.spend_resource_cost(atker_pid, cost.unwrap());
+                                let bonus_dmg = self.handle_dmg_bonus(response);
+                                let v = child.add_dmg(&atk.get_ar_dmg(ar, resist, bonus_dmg)?, target_pid, dead_at_zero);
+                                results.extend(v.into_iter());
+                            } else {
+                                return Err(CSError::InvalidTriggerResponse);
+                            }
+                        }
+                    }
+                } else {
+                    return Err(CSError::UnknownEvent(child.get_last_event().unwrap()));
+                }
+            }
+            Ok(results)
+        } else {
+            let ce_dmg_map = atk.get_dmg_map(target.get_resistances())?.into_ce_map();
+            Ok(pcs.split_dmg(ce_rv, ce_dmg_map, target_pid, dead_at_zero))
+        }
+    }
+
+    fn handle_dmg_bonus(&self, response: Vec<TriggerResponse>) -> Vec<DamageTerm> {
+        let mut v = Vec::with_capacity(response.len());
+        for tr in response {
+            if let TriggerAction::AddAttackDamage(dt) = tr.action {
+                v.push(dt);
+            }
+        }
+        v
+    }
+
+    fn validate_trigger_cost(&self, pcs: &ProbCombatState<'pm, T>, pid: ParticipantId, tt: TriggerType, response: &Vec<TriggerResponse>) -> Option<HashMap<ResourceName, usize>> {
+        match tt {
+            TriggerType::WasHit => todo!(),
+            TriggerType::SuccessfulAttack => {
+                let mut resource_cost: HashMap<ResourceName, usize> = HashMap::new();
+                for tr in response.iter() {
+                    if let TriggerAction::AddAttackDamage(_) = &tr.action {
+                        for rn in &tr.resources {
+                            resource_cost.entry(*rn)
+                                .and_modify(|count| *count += 1)
+                                .or_insert(1);
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+                if pcs.get_rm(pid).check_counts(&resource_cost) {
+                    Some(resource_cost)
+                } else {
+                    None
+                }
+            }
+        }
     }
 }
 
@@ -299,7 +371,8 @@ mod tests {
     use character_builder::ability_scores::AbilityScores;
     use character_builder::basic_attack::BasicAttack;
     use character_builder::Character;
-    use character_builder::classes::ClassName;
+    use character_builder::classes::{ChooseSubClass, ClassName};
+    use character_builder::classes::rogue::ScoutRogue;
     use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
     use combat_core::actions::{ActionName, AttackType};
@@ -308,7 +381,7 @@ mod tests {
     use combat_core::damage::{DamageDice, DamageType};
     use combat_core::health::Health;
     use combat_core::participant::{Participant, ParticipantId, ParticipantManager};
-    use combat_core::strategy::strategy_impls::{BasicAtkStrBuilder, DoNothingBuilder, PairStrBuilder, SecondWindStrBuilder};
+    use combat_core::strategy::strategy_impls::{BasicAtkStrBuilder, DoNothingBuilder, DualWieldStrBuilder, PairStrBuilder, SecondWindStrBuilder, SneakAttackStrBuilder};
     use combat_core::strategy::StrategyManager;
     use rand_var::RV64;
     use rand_var::rv_traits::{NumRandVar, RandVar};
@@ -330,6 +403,25 @@ mod tests {
             OffHand::Free,
         );
         Character::new(name, ability_scores, equipment)
+    }
+
+    pub fn get_dex_based() -> AbilityScores {
+        AbilityScores::new(12,16,16,8,13,10)
+    }
+
+    pub fn get_test_rogue_lvl_3() -> Character {
+        let name = String::from("EdgeLord");
+        let ability_scores = get_dex_based();
+        let equipment = Equipment::new(
+            Armor::studded_leather(),
+            Weapon::shortsword(),
+            OffHand::Weapon(Weapon::shortsword())
+        );
+        let mut rogue = Character::new(name, ability_scores, equipment);
+        rogue.level_up(ClassName::Rogue, vec!()).unwrap();
+        rogue.level_up_basic().unwrap();
+        rogue.level_up(ClassName::Rogue, vec!(Box::new(ChooseSubClass(ScoutRogue)))).unwrap();
+        rogue
     }
 
     #[test]
@@ -625,6 +717,37 @@ mod tests {
                 CombatEvent::Timing(CombatTiming::EndRound(RoundId(1))),
             );
             assert_eq!(expected_events, full_log);
+        }
+    }
+
+    #[test]
+    fn rogue_vs_dummy_sneak_attack() {
+        let rogue = get_test_rogue_lvl_3();
+        let rogue_str = PairStrBuilder::new(DualWieldStrBuilder, SneakAttackStrBuilder::new(false));
+        let player = Player::from(rogue.clone());
+        let dummy = TargetDummy::new(isize::MAX, 14);
+
+        let mut pm = ParticipantManager::new();
+        pm.add_player(Box::new(player)).unwrap();
+        pm.add_enemy(Box::new(dummy)).unwrap();
+        pm.compile();
+
+        let mut sm = StrategyManager::new(&pm).unwrap();
+        sm.add_participant(rogue_str).unwrap();
+        sm.add_participant(DoNothingBuilder).unwrap();
+
+        let mut em: EM64 = EncounterManager::new(&sm).unwrap();
+        em.set_do_merges(true);
+        em.simulate_n_rounds(1).unwrap();
+
+        {
+            let cs_rv = em.get_state_rv();
+            assert_eq!(1, cs_rv.len());
+
+            let dmg = cs_rv.get_dmg(ParticipantId(1));
+            assert_eq!(0, dmg.lower_bound());
+            assert_eq!(51, dmg.upper_bound());
+            assert_eq!(Rational64::new(318, 25), dmg.expected_value());
         }
     }
 }

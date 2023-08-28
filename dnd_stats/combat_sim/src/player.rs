@@ -6,6 +6,7 @@ use combat_core::actions::{ActionManager, CABuilder, CombatAction, CombatOption}
 use combat_core::damage::DamageType;
 use combat_core::participant::Participant;
 use combat_core::resources::ResourceManager;
+use combat_core::triggers::TriggerManager;
 use rand_var::rv_traits::prob_type::RVProb;
 
 #[derive(Debug, Clone)]
@@ -16,6 +17,7 @@ pub struct Player<T: RVProb> {
     resistances: HashSet<DamageType>,
     action_manager: ActionManager<T>,
     resource_manager: ResourceManager,
+    trigger_manager: TriggerManager,
 }
 
 impl<T: RVProb> Player<T> {
@@ -35,7 +37,6 @@ impl<T: RVProb> From<Character> for Player<T> {
             let ca: CombatAction<T> = match cab {
                 CABuilder::WeaponAttack(wa) => CombatAction::Attack(Rc::new(wa)),
                 CABuilder::SelfHeal(de) => CombatAction::SelfHeal(Rc::new(de)),
-                CABuilder::BonusDamage(dt) => CombatAction::BonusDamage(dt),
                 CABuilder::AdditionalAttacks(aa) => CombatAction::AdditionalAttacks(aa),
                 CABuilder::ByName => CombatAction::ByName,
             };
@@ -50,6 +51,7 @@ impl<T: RVProb> From<Character> for Player<T> {
             resistances: value.get_resistances().clone(),
             action_manager: am,
             resource_manager: value.get_resource_manager().clone(),
+            trigger_manager: value.get_trigger_manager().clone(),
         }
     }
 }
@@ -73,5 +75,13 @@ impl<T: RVProb> Participant<T> for Player<T> {
 
     fn get_resource_manager(&self) -> &ResourceManager {
         &self.resource_manager
+    }
+
+    fn has_triggers(&self) -> bool {
+        true
+    }
+
+    fn get_trigger_manager(&self) -> Option<&TriggerManager> {
+        Some(&self.trigger_manager)
     }
 }

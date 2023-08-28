@@ -4,7 +4,7 @@ use std::fmt::Display;
 use std::iter::Sum;
 use std::marker::PhantomData;
 use std::ops::{Add, Div, Mul, Sub};
-use num::{One, Zero};
+use num::{One, ToPrimitive, Zero};
 use crate::rv_traits::prob_type::{Prob, Reciprocal};
 use crate::rv_traits::sequential::{Seq, SeqIter};
 
@@ -309,11 +309,11 @@ where
     {
         println!("P:\tpdf\t(cdf)");
         for p in self.valid_p() {
-            println!("{}:\t{}\t({})", &p, self.pdf_ref(&p), self.cdf_ref(&p));
+            println!("{}: {}\t\t({})", &p, self.pdf_ref(&p), self.cdf_ref(&p));
         }
     }
 
-    fn print_pdf<F, T2>(&self, f: F)
+    fn print_pdf<F, T2>(&self, f: &F)
     where
         P: Display,
         T: Display,
@@ -322,7 +322,7 @@ where
     {
         println!("P\tpdf\t~pdf");
         for p in self.valid_p() {
-            println!("{}:\t{}\t~{}", &p, self.pdf_ref(&p), f(self.pdf_ref(&p)));
+            println!("{}: {}\t\t~{}", &p, self.pdf_ref(&p), f(self.pdf_ref(&p)));
         }
     }
 }
@@ -375,12 +375,25 @@ where
         println!("var = {}", self.variance());
     }
 
-    fn print_stats_convert<F,T2>(&self, f: F)
+    fn print_stats_f64(&self)
     where
+        P: Display,
+        T: Display + ToPrimitive,
+    {
+        let to_float = |t: T| t.to_f64().unwrap();
+        self.print_stats_convert(&to_float);
+        println!("std.dev ~= {}", to_float(self.variance()).sqrt());
+    }
+
+    fn print_stats_convert<F, T2>(&self, f: &F)
+    where
+        P: Display,
         T: Display,
         F: Fn(T) -> T2,
         T2: Display,
     {
+        self.print_pdf(f);
+        println!("Bounds: ({}, {})", self.lower_bound(), self.upper_bound());
         println!("ev  = {} ~= {}", self.expected_value(), f(self.expected_value()));
         println!("var = {} ~= {}", self.variance(), f(self.variance()));
     }

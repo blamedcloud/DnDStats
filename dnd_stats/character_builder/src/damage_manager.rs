@@ -1,6 +1,6 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use combat_core::attack::AttackResult;
+use combat_core::attack::AtkDmgMap;
 use combat_core::CCError;
 use combat_core::damage::{DamageDice, DamageFeature, DamageRV, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 use rand_var::RandomVariable;
@@ -126,6 +126,8 @@ impl<T: RVProb> DamageRV<T> for DiceExpression {
 
 type DamageExpression = HashMap<ExtendedDamageType, DiceExpression>;
 
+
+
 #[derive(Debug, Clone)]
 pub struct DamageManager {
     base_dmg: DamageExpression,
@@ -145,6 +147,12 @@ impl DamageManager {
             damage_features: HashSet::new(),
             weapon_die: None,
             weapon_dmg_type: None,
+        }
+    }
+
+    fn merge_dmg(de: &mut DamageExpression, dtv: Vec<DamageTerm>) {
+        for dt in dtv.into_iter() {
+            DamageManager::add_dmg_term(de, dt);
         }
     }
 
@@ -237,33 +245,56 @@ impl DamageManager {
         Ok(rv)
     }
 
-    pub fn get_base_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CBError> {
-        self.get_total_dmg(&self.base_dmg, resistances, false)
+    pub fn get_base_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>) -> Result<RandomVariable<T>, CBError> {
+        if dtv.len() == 0 {
+            self.get_total_dmg(&self.base_dmg, resistances, false)
+        } else {
+            let mut base_dmg = self.base_dmg.clone();
+            DamageManager::merge_dmg(&mut base_dmg, dtv);
+            self.get_total_dmg(&base_dmg, resistances, false)
+        }
     }
 
-    pub fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CBError> {
-        // double base dice + base const
-        let mut rv = self.get_total_dmg(&self.base_dmg, resistances, true)?;
-        // bonus crit dmg
-        rv = rv.add_rv(&self.get_total_dmg(&self.bonus_crit_dmg, resistances, false)?);
-        Ok(rv)
+    pub fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>) -> Result<RandomVariable<T>, CBError> {
+        if dtv.len() == 0 {
+            // double base dice + base const
+            let mut rv = self.get_total_dmg(&self.base_dmg, resistances, true)?;
+            // bonus crit dmg
+            rv = rv.add_rv(&self.get_total_dmg(&self.bonus_crit_dmg, resistances, false)?);
+            Ok(rv)
+        } else {
+            let mut base_dmg = self.base_dmg.clone();
+            DamageManager::merge_dmg(&mut base_dmg, dtv);
+            // double base dice + base const
+            let mut rv = self.get_total_dmg(&base_dmg, resistances, true)?;
+            // bonus crit dmg
+            rv = rv.add_rv(&self.get_total_dmg(&self.bonus_crit_dmg, resistances, false)?);
+            Ok(rv)
+        }
     }
 
-    pub fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CBError> {
-        self.get_total_dmg(&self.miss_dmg, resistances, false)
+    pub fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>) -> Result<RandomVariable<T>, CBError> {
+        if dtv.len() == 0 {
+            self.get_total_dmg(&self.miss_dmg, resistances, false)
+        } else {
+            let mut miss_dmg = self.miss_dmg.clone();
+            DamageManager::merge_dmg(&mut miss_dmg, dtv);
+            self.get_total_dmg(&miss_dmg, resistances, false)
+        }
     }
 
     // this is often easier for "half dmg on save" than building
     // an actual miss_dmg DamageExpression
     pub fn get_half_base_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CBError> {
-        Ok(self.get_base_dmg(resistances)?.half().unwrap())
+        Ok(self.get_base_dmg(resistances, vec!())?.half().unwrap())
     }
 
-    pub fn get_attack_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, CBError> {
-        let mut map = BTreeMap::new();
-        map.insert(AttackResult::Miss, self.get_miss_dmg(resistances)?);
-        map.insert(AttackResult::Hit, self.get_base_dmg(resistances)?);
-        map.insert(AttackResult::Crit, self.get_crit_dmg(resistances)?);
+    pub fn get_attack_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CBError> {
+        let map = AtkDmgMap::new(
+            self.get_miss_dmg(resistances, vec!())?,
+            self.get_base_dmg(resistances, vec!())?,
+            self.get_crit_dmg(resistances, vec!())?
+        );
         Ok(map)
     }
 }
@@ -278,13 +309,13 @@ mod tests {
         let mut dmg = DamageManager::new();
         dmg.add_base_dmg(DamageTerm::new(ExpressionTerm::Die(ExtendedDamageDice::Basic(DamageDice::D6)), ExtendedDamageType::Basic(DamageType::Bludgeoning)));
         dmg.add_base_dmg(DamageTerm::new(ExpressionTerm::Const(3), ExtendedDamageType::Basic(DamageType::Bludgeoning)));
-        let rv1: RV64 = dmg.get_base_dmg(&HashSet::new()).unwrap();
+        let rv1: RV64 = dmg.get_base_dmg(&HashSet::new(), vec!()).unwrap();
 
         let rv2: RV64 = RandomVariable::new_dice(6).unwrap();
         let rv2 = rv2.add_const(3);
         assert_eq!(rv1, rv2);
 
-        let rv3: RV64 = dmg.get_crit_dmg(&HashSet::new()).unwrap();
+        let rv3: RV64 = dmg.get_crit_dmg(&HashSet::new(), vec!()).unwrap();
 
         let rv4: RV64 = RandomVariable::new_dice(6).unwrap().multiple(2);
         let rv4 = rv4.add_const(3);
@@ -300,14 +331,14 @@ mod tests {
         dmg.add_base_dmg(DamageTerm::new(ExpressionTerm::Const(5), ExtendedDamageType::WeaponDamage));
         let brutal_crit_dmg = DamageTerm::new(ExpressionTerm::Die(ExtendedDamageDice::SingleWeaponDie), ExtendedDamageType::WeaponDamage);
         dmg.add_bonus_crit_dmg(brutal_crit_dmg);
-        let rv1: RV64 = dmg.get_base_dmg(&HashSet::new()).unwrap();
+        let rv1: RV64 = dmg.get_base_dmg(&HashSet::new(), vec!()).unwrap();
 
         let d12: RV64 = RandomVariable::new_dice(12).unwrap();
         let const_dmg = 5;
         let base_dmg = d12.add_const(const_dmg);
         assert_eq!(rv1, base_dmg);
 
-        let rv2: RV64 = dmg.get_crit_dmg(&HashSet::new()).unwrap();
+        let rv2: RV64 = dmg.get_crit_dmg(&HashSet::new(), vec!()).unwrap();
         let crit_dmg = d12.multiple(3).add_const(const_dmg);
         assert_eq!(rv2, crit_dmg);
     }
@@ -317,7 +348,7 @@ mod tests {
         let mut dmg = DamageManager::new();
         dmg.add_base_dmg(DamageTerm::new(ExpressionTerm::Dice(4, DamageDice::D6.into()), DamageType::Fire.into()));
         dmg.add_base_dmg(DamageTerm::new(ExpressionTerm::Dice(4, DamageDice::D6.into()), DamageType::Radiant.into()));
-        let rv1: RV64 = dmg.get_base_dmg(&HashSet::new()).unwrap();
+        let rv1: RV64 = dmg.get_base_dmg(&HashSet::new(), vec!()).unwrap();
         let rv2: RV64 = dmg.get_half_base_dmg(&HashSet::new()).unwrap();
 
         let eight_d6: RV64 = RandomVariable::new_dice(6).unwrap().multiple(8);
@@ -327,7 +358,7 @@ mod tests {
 
         let resist_fire = HashSet::from([DamageType::Fire]);
 
-        let rv3: RV64 = dmg.get_base_dmg(&resist_fire).unwrap();
+        let rv3: RV64 = dmg.get_base_dmg(&resist_fire, vec!()).unwrap();
         let four_d6: RV64 = RandomVariable::new_dice(6).unwrap().multiple(4);
         let resist_dmg = four_d6.add_rv(&four_d6.half().unwrap());
         assert_eq!(rv3, resist_dmg);

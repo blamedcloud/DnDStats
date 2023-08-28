@@ -4,8 +4,8 @@ use crate::actions::{ActionName};
 use crate::CCError;
 use crate::combat_state::CombatState;
 use crate::movement::Square;
-use crate::participant::{ParticipantId, ParticipantManager, TeamMember};
-use crate::triggers::{TriggeredAction, TriggerType};
+use crate::participant::{Participant, ParticipantId, ParticipantManager, TeamMember};
+use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
 
 pub mod strategy_impls;
 
@@ -37,11 +37,28 @@ pub trait StrategyBuilder<T: RVProb> {
 
 pub trait Strategy<T: RVProb> : Debug {
     fn get_participants(&self) -> &Vec<TeamMember<T>>;
-    fn get_me(&self) -> ParticipantId;
+    fn get_my_pid(&self) -> ParticipantId;
 
     fn get_action(&self, state: &CombatState) -> Option<StrategicOption>;
 
-    fn handle_trigger(&self, tt: TriggerType, state: &CombatState) -> Vec<TriggeredAction>;
+    fn handle_trigger(&self, tt: TriggerType, tc: TriggerContext, state: &CombatState) -> Vec<TriggerResponse>;
+
+    fn get_me(&self) -> &Box<dyn Participant<T>> {
+        &self.get_participants().get(self.get_my_pid().0).unwrap().participant
+    }
+
+    fn get_first_target(&self, state: &CombatState) -> Option<Target> {
+        let participants = self.get_participants();
+        let me = self.get_my_pid();
+        let my_team = participants.get(me.0).unwrap().team;
+        for i in 0..participants.len() {
+            let pid = ParticipantId(i);
+            if participants[i].team != my_team && state.is_alive(pid) {
+                return Some(Target::Participant(pid))
+            }
+        }
+        None
+    }
 }
 
 pub struct StrategyManager<'pm, T: RVProb> {

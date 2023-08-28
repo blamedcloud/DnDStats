@@ -1,5 +1,5 @@
-use std::collections::{BTreeMap, HashSet};
-use combat_core::attack::{AccMRV, AoMRV, ArMRV, Attack, AttackHitType, AttackResult, D20Type};
+use std::collections::HashSet;
+use combat_core::attack::{AccMRV, AoMRV, ArMRV, AtkDmgMap, Attack, AttackHitType, AttackResult, D20Type};
 use combat_core::CCError;
 use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 use rand_var::RandomVariable;
@@ -181,7 +181,7 @@ impl WeaponAttack {
         &mut self.damage
     }
 
-    pub fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, CBError> {
+    pub fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CBError> {
         Ok(self.damage.get_attack_dmg_map(resistances)?)
     }
 
@@ -202,19 +202,27 @@ impl WeaponAttack {
     pub fn get_attack_dmg_rv<T: RVProb>(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CBError> {
         let attack_result_rv = self.get_attack_result_rv(hit_type, target_ac)?;
         let dmg_map = self.get_dmg_map(resistances)?;
-        Ok(attack_result_rv.consolidate(&dmg_map)?.into())
+        Ok(attack_result_rv.consolidate(&dmg_map.into_ar_map())?.into())
     }
 
     pub fn get_attack_outcome_rv<T: RVProb>(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<AoMRV<T>, CBError> {
         let attack_result_rv = self.get_attack_result_rv(hit_type, target_ac)?;
         let dmg_map = self.get_dmg_map(resistances)?;
-        Ok(attack_result_rv.projection(&dmg_map)?)
+        Ok(attack_result_rv.projection(&dmg_map.into_ar_map())?)
     }
 }
 
 impl<T: RVProb> Attack<T> for WeaponAttack {
-    fn get_dmg_map(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, CCError> {
-        Ok(self.get_damage().get_attack_dmg_map(resistances)?)
+    fn get_miss_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+        Ok(self.damage.get_miss_dmg(resistances, bonus_dmg)?)
+    }
+
+    fn get_hit_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+        Ok(self.damage.get_base_dmg(resistances, bonus_dmg)?)
+    }
+
+    fn get_crit_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+        Ok(self.damage.get_crit_dmg(resistances, bonus_dmg)?)
     }
 
     fn get_acc_rv(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, CCError> {
@@ -226,20 +234,28 @@ impl<T: RVProb> Attack<T> for WeaponAttack {
         Ok(rv.into_mrv().map_keys(|roll| Pair(roll, roll + hit_const)))
     }
 
+    fn get_dmg_map(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CCError> {
+        Ok(self.get_damage().get_attack_dmg_map(resistances)?)
+    }
+
     fn get_crit_lb(&self) -> isize {
         self.get_crit_lb()
     }
+
+
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashSet};
     use num::{BigRational, FromPrimitive};
-    use combat_core::attack::ArMRVBig;
-    use rand_var::{MRVBig, RVBig};
+    use combat_core::attack::{ArMRVBig, AttackHitType, AttackResult};
+    use rand_var::{MRVBig, RandomVariable, RVBig};
     use rand_var::rv_traits::{RandVar, NumRandVar};
+    use rand_var::rv_traits::sequential::Pair;
+    use crate::equipment::Weapon;
     use crate::tests::get_test_fighter;
-    use super::*;
+    use crate::weapon_attack::{HandType, NumHands, WeaponAttack};
 
     #[test]
     fn weapon_atk_test() {
@@ -256,11 +272,11 @@ mod tests {
 
         let two_d6: RVBig = RandomVariable::new_dice(6).unwrap().multiple(2);
         let base_dmg = two_d6.add_const(3);
-        assert_eq!(base_dmg, damage.get_base_dmg(&no_resist).unwrap());
+        assert_eq!(base_dmg, damage.get_base_dmg(&no_resist, vec!()).unwrap());
         let crit_dmg = two_d6.multiple(2).add_const(3);
-        assert_eq!(crit_dmg, damage.get_crit_dmg(&no_resist).unwrap());
+        assert_eq!(crit_dmg, damage.get_crit_dmg(&no_resist, vec!()).unwrap());
         let miss_dmg: RVBig = RandomVariable::new_constant(0).unwrap();
-        assert_eq!(miss_dmg, damage.get_miss_dmg(&no_resist).unwrap());
+        assert_eq!(miss_dmg, damage.get_miss_dmg(&no_resist, vec!()).unwrap());
 
         let mut dmg_map = BTreeMap::new();
         dmg_map.insert(AttackResult::Crit, crit_dmg);
@@ -289,8 +305,8 @@ mod tests {
         assert_eq!(27, dmg_rv.upper_bound());
         assert_eq!(result_rv.pdf(AttackResult::Miss), dmg_rv.pdf(0));
         let dmg = attack.get_damage();
-        let hit_ev: BigRational = dmg.get_base_dmg(&no_resist).unwrap().expected_value();
-        let crit_ev: BigRational = dmg.get_crit_dmg(&no_resist).unwrap().expected_value();
+        let hit_ev: BigRational = dmg.get_base_dmg(&no_resist, vec!()).unwrap().expected_value();
+        let crit_ev: BigRational = dmg.get_crit_dmg(&no_resist, vec!()).unwrap().expected_value();
         let ev = result_rv.pdf(AttackResult::Hit) * hit_ev + result_rv.pdf(AttackResult::Crit) * crit_ev;
         assert_eq!(ev, dmg_rv.expected_value());
         let attack_rv = attack.get_attack_outcome_rv(AttackHitType::Normal, ac, &no_resist).unwrap();

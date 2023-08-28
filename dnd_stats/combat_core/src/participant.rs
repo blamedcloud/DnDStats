@@ -5,6 +5,7 @@ use crate::actions::ActionManager;
 use crate::CCError;
 use crate::damage::DamageType;
 use crate::resources::ResourceManager;
+use crate::triggers::TriggerManager;
 
 pub trait Participant<T: RVProb> : Debug {
     fn get_ac(&self) -> isize;
@@ -12,6 +13,9 @@ pub trait Participant<T: RVProb> : Debug {
     fn get_resistances(&self) -> &HashSet<DamageType>;
     fn get_action_manager(&self) -> &ActionManager<T>;
     fn get_resource_manager(&self) -> &ResourceManager;
+
+    fn has_triggers(&self) -> bool;
+    fn get_trigger_manager(&self) -> Option<&TriggerManager>;
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

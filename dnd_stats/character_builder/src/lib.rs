@@ -42,6 +42,8 @@ impl From<RVError> for CBError {
     }
 }
 use std::fmt::Write;
+use combat_core::triggers::TriggerManager;
+
 impl From<CBError> for CCError {
     fn from(value: CBError) -> Self {
         let mut s = String::new();
@@ -92,6 +94,7 @@ pub struct Character {
     combat_actions: ActionBuilder<WeaponAttack, DiceExpression>,
     resource_manager: ResourceManager,
     resistances: HashSet<DamageType>,
+    trigger_manager: TriggerManager,
 }
 
 impl Character {
@@ -107,6 +110,7 @@ impl Character {
             combat_actions: ActionBuilder::new(),
             resource_manager: create_basic_rm(),
             resistances: HashSet::new(),
+            trigger_manager: TriggerManager::new(),
         };
         character.calc_ac();
         character.combat_actions = create_character_ab(&character);
@@ -298,6 +302,10 @@ impl Character {
 
     pub fn get_resistances(&self) -> &HashSet<DamageType> {
         &self.resistances
+    }
+
+    pub fn get_trigger_manager(&self) -> &TriggerManager {
+        &self.trigger_manager
     }
 }
 

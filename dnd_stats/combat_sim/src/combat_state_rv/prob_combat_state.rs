@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ptr;
 use combat_core::actions::{ActionName, ActionType};
 use combat_core::combat_event::{CombatEvent, CombatTiming};
@@ -100,13 +100,20 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         self.dmg[pid.0] = rv;
     }
 
-    pub fn spend_resources(&mut self, pid: ParticipantId, an: ActionName, at: ActionType) {
+    pub fn spend_action_resources(&mut self, pid: ParticipantId, an: ActionName, at: ActionType) {
         let rm = self.get_rm_mut(pid);
         if rm.has_resource(ResourceName::AN(an)) {
             rm.spend(ResourceName::AN(an));
         }
         if rm.has_resource(ResourceName::AT(at)) {
             rm.spend(ResourceName::AT(at));
+        }
+    }
+
+    pub fn spend_resource_cost(&mut self, pid: ParticipantId, costs: HashMap<ResourceName, usize>) {
+        let rm = self.get_rm_mut(pid);
+        for (rn, cost) in costs {
+            rm.spend_many(rn, cost);
         }
     }
 
@@ -142,7 +149,6 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         }
         result
     }
-
 
     pub fn add_dmg(mut self, dmg: &RandomVariable<T>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
         let old_health = self.get_health(target);

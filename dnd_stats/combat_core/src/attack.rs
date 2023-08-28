@@ -7,7 +7,8 @@ use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::sequential::{Pair, Seq, SeqIter};
 use crate::CCError;
-use crate::damage::DamageType;
+use crate::combat_event::CombatEvent;
+use crate::damage::{DamageTerm, DamageType};
 
 #[derive(Debug, Copy, Clone)]
 pub enum AttackHitType {
@@ -44,7 +45,7 @@ impl D20Type {
     }
 }
 
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum AttackResult {
     Miss,
     Hit,
@@ -120,9 +121,60 @@ pub type AoMRV<T> = MapRandVar<Pair<AttackResult, isize>, T>;
 pub type AoMRV64 = MapRandVar<Pair<AttackResult, isize>, Rational64>;
 pub type AoMRVBig = MapRandVar<Pair<AttackResult, isize>, BigRational>;
 
+#[derive(Debug, Clone)]
+pub struct AtkDmgMap<T: RVProb> {
+    miss_dmg: RandomVariable<T>,
+    hit_dmg: RandomVariable<T>,
+    crit_dmg: RandomVariable<T>,
+}
+
+impl<T: RVProb> AtkDmgMap<T> {
+    pub fn new(miss_dmg: RandomVariable<T>, hit_dmg: RandomVariable<T>, crit_dmg: RandomVariable<T>) -> Self {
+        Self {
+            miss_dmg,
+            hit_dmg,
+            crit_dmg,
+        }
+    }
+
+    pub fn into_ar_map(self) -> BTreeMap<AttackResult, RandomVariable<T>> {
+        let mut map = BTreeMap::new();
+        map.insert(AttackResult::Miss, self.miss_dmg);
+        map.insert(AttackResult::Hit, self.hit_dmg);
+        map.insert(AttackResult::Crit, self.crit_dmg);
+        map
+    }
+
+    pub fn into_ce_map(self) -> BTreeMap<CombatEvent, RandomVariable<T>> {
+        let mut map = BTreeMap::new();
+        map.insert(CombatEvent::AR(AttackResult::Miss), self.miss_dmg);
+        map.insert(CombatEvent::AR(AttackResult::Hit), self.hit_dmg);
+        map.insert(CombatEvent::AR(AttackResult::Crit), self.crit_dmg);
+        map
+    }
+}
+
 pub trait Attack<T: RVProb> : Debug {
-    fn get_dmg_map(&self, resistances: &HashSet<DamageType>) -> Result<BTreeMap<AttackResult, RandomVariable<T>>, CCError>;
+    fn get_miss_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
+    fn get_hit_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
+    fn get_crit_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
     fn get_acc_rv(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, CCError>;
+
+    fn get_ar_dmg(&self, ar: AttackResult, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+        match ar {
+            AttackResult::Miss => self.get_miss_dmg(resistances, bonus_dmg),
+            AttackResult::Hit => self.get_hit_dmg(resistances, bonus_dmg),
+            AttackResult::Crit => self.get_crit_dmg(resistances, bonus_dmg),
+        }
+    }
+
+    fn get_dmg_map(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CCError> {
+        Ok(AtkDmgMap::new(
+            self.get_miss_dmg(resistances, vec!())?,
+            self.get_hit_dmg(resistances, vec!())?,
+            self.get_crit_dmg(resistances, vec!())?
+        ))
+    }
 
     fn get_crit_lb(&self) -> isize {
         20
@@ -133,15 +185,20 @@ pub trait Attack<T: RVProb> : Debug {
         Ok(hit_rv.map_keys(|hit| AttackResult::from(hit, target_ac, self.get_crit_lb())))
     }
 
+    fn get_ce_rv(&self, hit_type: AttackHitType, target_ac: isize) -> Result<MapRandVar<CombatEvent, T>, CCError> {
+        let ar_rv = self.get_ar_rv(hit_type, target_ac)?;
+        Ok(ar_rv.map_keys(|ar| ar.into()))
+    }
+
     fn get_dmg_rv(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CCError> {
         let attack_result_rv = self.get_ar_rv(hit_type, target_ac)?;
         let dmg_map = self.get_dmg_map(resistances)?;
-        Ok(attack_result_rv.consolidate(&dmg_map)?.into())
+        Ok(attack_result_rv.consolidate(&dmg_map.into_ar_map())?.into())
     }
 
     fn get_ao_rv(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<AoMRV<T>, CCError> {
         let attack_result_rv = self.get_ar_rv(hit_type, target_ac)?;
         let dmg_map = self.get_dmg_map(resistances)?;
-        Ok(attack_result_rv.projection(&dmg_map)?)
+        Ok(attack_result_rv.projection(&dmg_map.into_ar_map())?)
     }
 }

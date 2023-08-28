@@ -1,11 +1,13 @@
 use std::cmp;
 use std::collections::{HashMap, HashSet};
 use crate::actions::{ActionName, ActionType};
+use crate::triggers::TriggerName;
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ResourceName {
     AT(ActionType),
     AN(ActionName),
+    TN(TriggerName),
 }
 
 impl From<ActionType> for ResourceName {
@@ -82,6 +84,16 @@ impl Resource {
         self.current
     }
 
+    pub fn spend_many(&mut self, amount: usize) -> usize {
+        if self.current >= amount {
+            self.current -= amount;
+            0
+        } else {
+            let leftover = amount - self.current;
+            self.current = 0;
+            leftover
+        }
+    }
     pub fn spend(&mut self) {
         if self.current > 0 {
             self.current -= 1;
@@ -162,10 +174,34 @@ impl ResourceManager {
         self.perm_resources.contains_key(&rn) || self.temp_resources.contains_key(&rn)
     }
 
+    pub fn check_counts(&self, spending: &HashMap<ResourceName, usize>) -> bool {
+        for (rn, count) in spending {
+            if !self.has_resource(*rn) {
+                return false;
+            }
+            if  self.get_current(*rn) < *count {
+                return false;
+            }
+        }
+        true
+    }
+
     pub fn get_current(&self, rn: ResourceName) -> usize {
         let temp_c = self.temp_resources.get(&rn).map(|r| r.get_current()).unwrap_or(0);
         let perm_c = self.perm_resources.get(&rn).map(|r| r.get_current()).unwrap_or(0);
         temp_c + perm_c
+    }
+
+    pub fn spend_many(&mut self, rn: ResourceName, amount: usize) {
+        let mut leftover = amount;
+        if let Some(res) = self.temp_resources.get_mut(&rn) {
+            leftover = res.spend_many(amount);
+        }
+        if leftover > 0 {
+            if let Some(res) = self.perm_resources.get_mut(&rn) {
+                res.spend_many(leftover);
+            }
+        }
     }
 
     pub fn spend(&mut self, rn: ResourceName) {

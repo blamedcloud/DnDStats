@@ -6,6 +6,7 @@ use combat_core::actions::{ActionManager, ActionName, ActionType, AttackType, Co
 use combat_core::damage::DamageType;
 use combat_core::participant::Participant;
 use combat_core::resources::{create_basic_rm, ResourceManager};
+use combat_core::triggers::TriggerManager;
 use rand_var::rv_traits::prob_type::RVProb;
 
 #[derive(Debug, Clone)]
@@ -58,5 +59,13 @@ impl<T: RVProb> Participant<T> for Monster<T> {
 
     fn get_resource_manager(&self) -> &ResourceManager {
         &self.resource_manager
+    }
+
+    fn has_triggers(&self) -> bool {
+        false
+    }
+
+    fn get_trigger_manager(&self) -> Option<&TriggerManager> {
+        None
     }
 }

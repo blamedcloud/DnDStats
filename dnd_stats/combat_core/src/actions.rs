@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use rand_var::rv_traits::prob_type::RVProb;
 use crate::attack::Attack;
-use crate::damage::{DamageRV, DamageTerm};
+use crate::damage::DamageRV;
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ActionType {
@@ -12,14 +12,12 @@ pub enum ActionType {
     Reaction,
     Movement,
     FreeAction,
-    OnHit,
 }
 
 #[derive(Debug, Clone)]
 pub enum CABuilder<A, D> {
     WeaponAttack(A),
     SelfHeal(D),
-    BonusDamage(DamageTerm),
     AdditionalAttacks(u8),
     ByName,
 }
@@ -28,7 +26,6 @@ pub enum CABuilder<A, D> {
 pub enum CombatAction<T: RVProb> {
     Attack(Rc<dyn Attack<T>>),
     SelfHeal(Rc<dyn DamageRV<T>>),
-    BonusDamage(DamageTerm),
     AdditionalAttacks(u8),
     ByName,
 }
@@ -84,8 +81,7 @@ pub enum ActionName {
     BonusGWMAttack,
     SecondWind,
     ActionSurge,
-    Indomitable,
-    SneakAttack,
+    Indomitable, // TODO: move to triggers (OnSave trigger)
 }
 
 pub type ActionBuilder<A, D> = HashMap<ActionName, CombatOption<CABuilder<A, D>>>;
