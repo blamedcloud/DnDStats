@@ -92,7 +92,7 @@ mod tests {
     use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
     use combat_core::ability_scores::AbilityScores;
-    use combat_core::attack::AttackHitType;
+    use combat_core::D20RollType;
     use combat_core::participant::ParticipantId;
     use combat_core::strategy::strategy_impls::{BasicAtkStrBuilder, DualWieldStrBuilder, PairStrBuilder, SneakAttackStrBuilder};
     use rand_var::RV64;
@@ -144,7 +144,7 @@ mod tests {
         let dummy_data = cr_rv.get_pcr(0).get_participant_data().get(1).unwrap();
 
         let dmg_rv = cr_rv.get_dmg(ParticipantId(1));
-        let atk_dmg: RV64 = fighter.get_weapon_attack().unwrap().get_attack_dmg_rv(AttackHitType::Normal, dummy_data.ac, &dummy_data.resistances).unwrap();
+        let atk_dmg: RV64 = fighter.get_weapon_attack().unwrap().get_attack_dmg_rv(D20RollType::Normal, dummy_data.ac, &dummy_data.resistances).unwrap();
         assert_eq!(atk_dmg, dmg_rv);
 
         let cs = CombatSimulator::do_encounter(fighter.clone(), BasicAtkStrBuilder, 14, 2).unwrap();

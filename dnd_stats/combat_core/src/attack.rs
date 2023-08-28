@@ -5,48 +5,13 @@ use std::fmt::{Debug, Display, Formatter};
 use num::{BigRational, Rational64};
 
 use rand_var::{MapRandVar, RandomVariable};
-use rand_var::rv_traits::{RandVar, sequential};
+use rand_var::rv_traits::sequential;
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::sequential::{Pair, Seq, SeqIter};
 
-use crate::CCError;
+use crate::{D20RollType, CCError};
 use crate::combat_event::CombatEvent;
 use crate::damage::{DamageTerm, DamageType};
-
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
-pub enum AttackHitType {
-    Disadvantage,
-    Normal,
-    Advantage,
-    SuperAdvantage,
-}
-
-impl AttackHitType {
-    pub fn get_rv<T: RVProb>(&self, d20: &D20Type) -> RandomVariable<T> {
-        let rv = d20.get_rv();
-        match self {
-            AttackHitType::Disadvantage => rv.min_two_trials(),
-            AttackHitType::Normal => rv,
-            AttackHitType::Advantage => rv.max_two_trials(),
-            AttackHitType::SuperAdvantage => rv.max_three_trials(),
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
-pub enum D20Type {
-    D20,
-    D20R1,
-}
-
-impl D20Type {
-    pub fn get_rv<T: RVProb>(&self) -> RandomVariable<T> {
-        match self {
-            D20Type::D20 => RandomVariable::new_dice(20).unwrap(),
-            D20Type::D20R1 => RandomVariable::new_dice_reroll(20, 1).unwrap()
-        }
-    }
-}
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum AttackResult {
@@ -161,7 +126,7 @@ pub trait Attack<T: RVProb> : Debug {
     fn get_miss_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
     fn get_hit_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
     fn get_crit_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
-    fn get_acc_rv(&self, hit_type: AttackHitType) -> Result<AccMRV<T>, CCError>;
+    fn get_acc_rv(&self, hit_type: D20RollType) -> Result<AccMRV<T>, CCError>;
 
     fn get_ar_dmg(&self, ar: AttackResult, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
         match ar {
@@ -183,23 +148,23 @@ pub trait Attack<T: RVProb> : Debug {
         20
     }
 
-    fn get_ar_rv(&self, hit_type: AttackHitType, target_ac: isize) -> Result<ArMRV<T>, CCError> {
+    fn get_ar_rv(&self, hit_type: D20RollType, target_ac: isize) -> Result<ArMRV<T>, CCError> {
         let hit_rv = self.get_acc_rv(hit_type)?;
         Ok(hit_rv.map_keys(|hit| AttackResult::from(hit, target_ac, self.get_crit_lb())))
     }
 
-    fn get_ce_rv(&self, hit_type: AttackHitType, target_ac: isize) -> Result<MapRandVar<CombatEvent, T>, CCError> {
+    fn get_ce_rv(&self, hit_type: D20RollType, target_ac: isize) -> Result<MapRandVar<CombatEvent, T>, CCError> {
         let ar_rv = self.get_ar_rv(hit_type, target_ac)?;
         Ok(ar_rv.map_keys(|ar| ar.into()))
     }
 
-    fn get_dmg_rv(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CCError> {
+    fn get_dmg_rv(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CCError> {
         let attack_result_rv = self.get_ar_rv(hit_type, target_ac)?;
         let dmg_map = self.get_dmg_map(resistances)?;
         Ok(attack_result_rv.consolidate(&dmg_map.into_ar_map())?.into())
     }
 
-    fn get_ao_rv(&self, hit_type: AttackHitType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<AoMRV<T>, CCError> {
+    fn get_ao_rv(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<AoMRV<T>, CCError> {
         let attack_result_rv = self.get_ar_rv(hit_type, target_ac)?;
         let dmg_map = self.get_dmg_map(resistances)?;
         Ok(attack_result_rv.projection(&dmg_map.into_ar_map())?)

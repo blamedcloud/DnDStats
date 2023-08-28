@@ -2,8 +2,9 @@ use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 
 use combat_core::ability_scores::Ability;
+use combat_core::health::HitDice;
 
-use crate::{CBError, Character, HitDice};
+use crate::{CBError, Character};
 use crate::classes::fighter::FighterClass;
 use crate::classes::rogue::RogueClass;
 use crate::feature::{Feature, SaveProficiencies};

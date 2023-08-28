@@ -126,9 +126,8 @@ impl<T: RVProb> DamageRV<T> for DiceExpression {
     }
 }
 
+
 type DamageExpression = HashMap<ExtendedDamageType, DiceExpression>;
-
-
 
 #[derive(Debug, Clone)]
 pub struct DamageManager {

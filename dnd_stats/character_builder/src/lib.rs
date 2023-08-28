@@ -9,6 +9,7 @@ use combat_core::actions::{ActionBuilder, ActionName, ActionType, AttackType, CA
 use combat_core::CCError;
 use combat_core::damage::DamageType;
 use combat_core::resources::{create_basic_rm, ResourceManager};
+use combat_core::skills::SkillManager;
 use combat_core::triggers::TriggerManager;
 use rand_var::rv_traits::RVError;
 
@@ -53,40 +54,13 @@ impl From<CBError> for CCError {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum HitDice {
-    D6,
-    D8,
-    D10,
-    D12,
-}
-
-impl HitDice {
-    pub fn get_max(&self) -> isize {
-        match self {
-            HitDice::D6 => 6,
-            HitDice::D8 => 8,
-            HitDice::D10 => 10,
-            HitDice::D12 => 12,
-        }
-    }
-
-    pub fn get_per_lvl(&self) -> isize {
-        match self {
-            HitDice::D6 => 4,
-            HitDice::D8 => 5,
-            HitDice::D10 => 6,
-            HitDice::D12 => 7,
-        }
-    }
-}
-
 pub type CharacterCO = CombatOption<CABuilder<WeaponAttack, DiceExpression>>;
 
 #[derive(Debug, Clone)]
 pub struct Character {
     name: String,
     ability_scores: AbilityScores,
+    skills: SkillManager,
     level: u8,
     class_lvls: Vec<ClassName>,
     sub_classes: HashMap<ClassName, Rc<dyn SubClass>>,
@@ -103,6 +77,7 @@ impl Character {
         let mut character = Character {
             name,
             ability_scores,
+            skills: SkillManager::new(),
             level: 0,
             class_lvls: Vec::new(),
             sub_classes: HashMap::new(),
@@ -217,6 +192,9 @@ impl Character {
         &self.ability_scores
     }
 
+    pub fn get_skills(&self) -> &SkillManager {
+        &self.skills
+    }
 
     pub fn get_class_levels(&self) -> &Vec<ClassName> {
         &self.class_lvls

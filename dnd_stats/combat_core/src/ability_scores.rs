@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum Ability {
     STR,
     DEX,
@@ -40,6 +40,14 @@ impl AbilityScore {
 
     pub fn get_score(&self) -> u8 {
         self.score
+    }
+
+    pub fn set_score(&mut self, new_score: u8) {
+        if new_score <= self.cap {
+            self.score = new_score;
+        } else {
+            self.score = self.cap;
+        }
     }
 
     pub fn get_cap(&self) -> u8 {

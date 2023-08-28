@@ -4,8 +4,8 @@ use std::rc::Rc;
 use num::{BigRational, Rational64};
 
 use combat_core::actions::{ActionName, ActionType, CombatAction};
-use combat_core::attack::{Attack, AttackHitType, AttackResult};
-use combat_core::CCError;
+use combat_core::attack::{Attack, AttackResult};
+use combat_core::{D20RollType, CCError};
 use combat_core::combat_event::{CombatEvent, CombatTiming};
 use combat_core::damage::DamageTerm;
 use combat_core::participant::{Participant, ParticipantId, ParticipantManager, Team};
@@ -260,7 +260,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         let attacker = self.get_participant(atker_pid);
         let target = self.get_participant(target_pid);
         let dead_at_zero = self.is_dead_at_zero(target_pid);
-        let ce_rv: MapRandVar<CombatEvent, T> = atk.get_ce_rv(AttackHitType::Normal, target.get_ac())?;
+        let ce_rv: MapRandVar<CombatEvent, T> = atk.get_ce_rv(D20RollType::Normal, target.get_ac())?;
         // TODO: handle AC boosts somehow...
 
         if attacker.has_triggers() && attacker.get_trigger_manager().unwrap().has_triggers(TriggerType::SuccessfulAttack) {
@@ -345,7 +345,8 @@ mod tests {
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
     use combat_core::ability_scores::AbilityScores;
     use combat_core::actions::{ActionName, AttackType};
-    use combat_core::attack::{AttackHitType, AttackResult};
+    use combat_core::attack::AttackResult;
+    use combat_core::D20RollType;
     use combat_core::combat_event::{CombatEvent, CombatTiming, RoundId};
     use combat_core::damage::{DamageDice, DamageType};
     use combat_core::health::Health;
@@ -447,7 +448,7 @@ mod tests {
 
             let index_rv = cs_rv.get_index_rv();
             let ar_rv: RV64 = fighter.get_weapon_attack().unwrap()
-                .get_attack_result_rv(AttackHitType::Normal, dummy.get_ac()).unwrap()
+                .get_attack_result_rv(D20RollType::Normal, dummy.get_ac()).unwrap()
                 .map_keys(|ar| {
                     match ar {
                         AttackResult::Miss => 0,
@@ -549,7 +550,7 @@ mod tests {
             let dmg_rv = cs_rv.get_dmg(orc_pid);
             let atk_dmg: RV64 = fighter
                 .get_weapon_attack().unwrap()
-                .get_attack_dmg_rv(AttackHitType::Normal, orc.get_ac(), orc.get_resistances()).unwrap()
+                .get_attack_dmg_rv(D20RollType::Normal, orc.get_ac(), orc.get_resistances()).unwrap()
                 .cap_ub(orc.get_max_hp()).unwrap();
             assert_eq!(atk_dmg, dmg_rv);
         }
@@ -583,7 +584,7 @@ mod tests {
         let dmg_rv = cs_rv.get_dmg(orc_pid);
         let wa = fighter.get_weapon_attack().unwrap();
         let atk_dmg: RV64 = wa
-            .get_attack_dmg_rv(AttackHitType::Normal, orc.get_ac(), orc.get_resistances()).unwrap()
+            .get_attack_dmg_rv(D20RollType::Normal, orc.get_ac(), orc.get_resistances()).unwrap()
             .cap_ub(orc.get_max_hp()).unwrap();
         assert_eq!(atk_dmg, dmg_rv);
     }
@@ -596,7 +597,7 @@ mod tests {
         let player = Player::from(fighter.clone());
 
         let ba = BasicAttack::new(5, DamageType::Slashing, 3, DamageDice::D12, 1);
-        let orc = Monster::new(15, 13, ba, 1);
+        let orc = Monster::new(15, 13, 2, ba, 1);
 
         let mut pm = ParticipantManager::new();
         pm.add_enemy(Box::new(orc.clone())).unwrap();

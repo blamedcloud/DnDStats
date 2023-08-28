@@ -1,5 +1,5 @@
 use crate::actions::ActionType;
-use crate::attack::AttackHitType;
+use crate::D20RollType;
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ConditionName {
@@ -10,8 +10,8 @@ pub enum ConditionName {
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ConditionEffect {
-    AttackerMod(AttackHitType), // ~ "your attacks have advantage"
-    AtkTargetedMod(AttackHitType), // ~ "attacks against you have advantage"
+    AttackerMod(D20RollType), // ~ "your attacks have advantage"
+    AtkTargetedMod(D20RollType), // ~ "attacks against you have advantage"
 }
 
 pub enum ConditionLifetime {

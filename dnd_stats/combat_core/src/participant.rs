@@ -2,20 +2,24 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 use rand_var::rv_traits::prob_type::RVProb;
+use crate::ability_scores::AbilityScores;
 
 use crate::actions::ActionManager;
 use crate::CCError;
 use crate::damage::DamageType;
 use crate::resources::ResourceManager;
+use crate::skills::SkillManager;
 use crate::triggers::TriggerManager;
 
 pub trait Participant<T: RVProb> : Debug {
     fn get_ac(&self) -> isize;
     fn get_max_hp(&self) -> isize;
+    fn get_prof(&self) -> isize;
     fn get_resistances(&self) -> &HashSet<DamageType>;
+    fn get_ability_scores(&self) -> &AbilityScores;
+    fn get_skill_manager(&self) -> &SkillManager;
     fn get_action_manager(&self) -> &ActionManager<T>;
     fn get_resource_manager(&self) -> &ResourceManager;
-
     fn has_triggers(&self) -> bool;
     fn get_trigger_manager(&self) -> Option<&TriggerManager>;
 }

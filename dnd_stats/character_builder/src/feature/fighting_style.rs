@@ -102,7 +102,8 @@ mod tests {
 
     use num::{BigInt, BigRational};
 
-    use combat_core::attack::{AccMRV64, AttackHitType};
+    use combat_core::attack::AccMRV64;
+    use combat_core::D20RollType;
     use rand_var::{RandomVariable, RVBig};
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use rand_var::rv_traits::sequential::Pair;
@@ -124,7 +125,7 @@ mod tests {
         let mut archer = Character::new(String::from("archer"), get_dex_based(), equipment);
         archer.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::Archery)))).unwrap();
         let attack = archer.get_weapon_attack().unwrap();
-        let acc: AccMRV64 = attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
+        let acc: AccMRV64 = attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 8), acc.lower_bound());
         assert_eq!(Pair(20, 27), acc.upper_bound());
     }

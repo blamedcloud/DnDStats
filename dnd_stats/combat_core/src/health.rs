@@ -42,3 +42,31 @@ impl Health {
         }
     }
 }
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum HitDice {
+    D6,
+    D8,
+    D10,
+    D12,
+}
+
+impl HitDice {
+    pub fn get_max(&self) -> isize {
+        match self {
+            HitDice::D6 => 6,
+            HitDice::D8 => 8,
+            HitDice::D10 => 10,
+            HitDice::D12 => 12,
+        }
+    }
+
+    pub fn get_per_lvl(&self) -> isize {
+        match self {
+            HitDice::D6 => 4,
+            HitDice::D8 => 5,
+            HitDice::D10 => 6,
+            HitDice::D12 => 7,
+        }
+    }
+}

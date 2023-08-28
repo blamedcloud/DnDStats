@@ -165,7 +165,8 @@ mod tests {
 
     use combat_core::ability_scores::Ability;
     use combat_core::actions::{ActionName, AttackType, CABuilder};
-    use combat_core::attack::{AccMRV64, AttackHitType};
+    use combat_core::attack::AccMRV64;
+    use combat_core::D20RollType;
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use rand_var::rv_traits::sequential::Pair;
     use rand_var::RVBig;
@@ -211,7 +212,7 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(GreatWeaponMaster))).unwrap();
         let gwm_option = fighter.get_combat_option(ActionName::PrimaryAttack(AttackType::GWMAttack)).unwrap();
         let gwm_attack = get_attack(gwm_option);
-        let acc: AccMRV64 = gwm_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
+        let acc: AccMRV64 = gwm_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
         let dmg: RVBig = gwm_attack.get_damage().get_base_dmg(&HashSet::new(), vec!()).unwrap();
@@ -231,7 +232,7 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(SharpShooter))).unwrap();
         let ss_option = fighter.get_combat_option(ActionName::PrimaryAttack(AttackType::SSAttack)).unwrap();
         let ss_attack = get_attack(ss_option);
-        let acc: AccMRV64 = ss_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
+        let acc: AccMRV64 = ss_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
         let dmg: RVBig = ss_attack.get_damage().get_base_dmg(&HashSet::new(), vec!()).unwrap();
@@ -251,7 +252,7 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(PolearmMaster))).unwrap();
         let pam_option = fighter.get_combat_option(ActionName::BonusPAMAttack(AttackType::Normal)).unwrap();
         let pam_attack = get_attack(pam_option);
-        let acc: AccMRV64 = pam_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
+        let acc: AccMRV64 = pam_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 6), acc.lower_bound());
         assert_eq!(Pair(20, 25), acc.upper_bound());
         let dmg: RVBig = pam_attack.get_damage().get_base_dmg(&HashSet::new(), vec!()).unwrap();
@@ -278,7 +279,7 @@ mod tests {
         assert!(fighter.has_combat_option(ActionName::BonusPAMAttack(AttackType::GWMAttack)));
         let gwm_pam_option = fighter.get_combat_option(ActionName::BonusPAMAttack(AttackType::GWMAttack)).unwrap();
         let gwm_pam_attack = get_attack(gwm_pam_option);
-        let acc: AccMRV64 = gwm_pam_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
+        let acc: AccMRV64 = gwm_pam_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
         let dmg: RVBig = gwm_pam_attack.get_damage().get_base_dmg(&HashSet::new(), vec!()).unwrap();
@@ -305,7 +306,7 @@ mod tests {
         assert!(fighter.has_combat_option(ActionName::BonusPAMAttack(AttackType::GWMAttack)));
         let pam_gwm_option = fighter.get_combat_option(ActionName::BonusPAMAttack(AttackType::GWMAttack)).unwrap();
         let pam_gwm_attack = get_attack(pam_gwm_option);
-        let acc: AccMRV64 = pam_gwm_attack.get_accuracy_rv(AttackHitType::Normal).unwrap();
+        let acc: AccMRV64 = pam_gwm_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
         let dmg: RVBig = pam_gwm_attack.get_damage().get_base_dmg(&HashSet::new(), vec!()).unwrap();

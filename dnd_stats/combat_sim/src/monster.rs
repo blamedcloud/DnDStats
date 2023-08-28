@@ -3,10 +3,12 @@ use std::fmt::Debug;
 use std::rc::Rc;
 
 use character_builder::basic_attack::BasicAttack;
+use combat_core::ability_scores::{Ability, AbilityScores};
 use combat_core::actions::{ActionManager, ActionName, ActionType, AttackType, CombatAction, CombatOption};
 use combat_core::damage::DamageType;
 use combat_core::participant::Participant;
 use combat_core::resources::{create_basic_rm, ResourceManager};
+use combat_core::skills::SkillManager;
 use combat_core::triggers::TriggerManager;
 use rand_var::rv_traits::prob_type::RVProb;
 
@@ -14,21 +16,78 @@ use rand_var::rv_traits::prob_type::RVProb;
 pub struct Monster<T: RVProb> {
     max_hp: isize,
     ac: isize,
+    prof: isize,
     resistances: HashSet<DamageType>,
+    ability_scores: AbilityScores,
+    skill_manager: SkillManager,
     action_manager: ActionManager<T>,
     resource_manager: ResourceManager,
 }
 
 impl<T: RVProb> Monster<T> {
-    pub fn new(max_hp: isize, ac: isize, ba: BasicAttack, num_attacks: u8) -> Self {
+    pub fn new(max_hp: isize, ac: isize, prof: isize, ba: BasicAttack, num_attacks: u8) -> Self {
         Self {
             max_hp,
             ac,
+            prof,
             resistances: HashSet::new(),
+            ability_scores: ability_scores_by_prof(prof as u8, Ability::STR),
+            skill_manager: SkillManager::new(),
             action_manager: create_basic_attack_am(ba, num_attacks),
             resource_manager: create_basic_rm(),
         }
     }
+}
+
+// finds the first cr that gives at least a given AC
+pub fn ac_to_cr(ac: isize) -> u8 {
+    if ac <= ac_by_cr(0) {
+        return 0;
+    }
+    let mut cr = 1;
+    for _ in 0..30 {
+        if ac_by_cr(cr) == ac {
+            return cr;
+        }
+        cr += 1;
+    }
+    cr
+}
+
+pub fn ac_by_cr(cr: u8) -> isize {
+    // AC is mostly cr + prof with a few bumps.
+    let mut ac = (cr as isize) + prof_by_cr(cr);
+    if cr >= 4 {
+        ac += 1;
+    }
+    if cr >= 8 {
+        ac += 1;
+    }
+    if cr == 9 {
+        ac -= 1;
+    }
+    ac
+}
+
+pub fn prof_by_cr(cr: u8) -> isize {
+    if cr == 0 {
+        2
+    } else {
+        (cr as isize + 3)/4 + 1
+    }
+}
+
+pub fn ability_scores_by_prof(prof: u8, primary_ability: Ability) -> AbilityScores {
+    let score = 8 + prof;
+    let mut scores = AbilityScores::new(score, score, score, score, score, score);
+    scores.get_score_mut(&primary_ability).set_prof_save(true);
+    scores.constitution.set_prof_save(true);
+    scores
+}
+
+pub fn ability_scores_by_cr(cr: u8, primary_ability: Ability) -> AbilityScores {
+    let prof = prof_by_cr(cr) as u8;
+    ability_scores_by_prof(prof, primary_ability)
 }
 
 pub fn create_basic_attack_am<T: RVProb>(ba: BasicAttack, num_attacks: u8) -> ActionManager<T> {
@@ -50,8 +109,20 @@ impl<T: RVProb> Participant<T> for Monster<T> {
         self.max_hp
     }
 
+    fn get_prof(&self) -> isize {
+        self.prof
+    }
+
     fn get_resistances(&self) -> &HashSet<DamageType> {
         &self.resistances
+    }
+
+    fn get_ability_scores(&self) -> &AbilityScores {
+        &self.ability_scores
+    }
+
+    fn get_skill_manager(&self) -> &SkillManager {
+        &self.skill_manager
     }
 
     fn get_action_manager(&self) -> &ActionManager<T> {
