@@ -1,5 +1,6 @@
+use combat_core::ability_scores::Ability;
 use combat_core::actions::{ActionName, ActionType, CABuilder, CombatOption};
-use crate::ability_scores::Ability;
+
 use crate::{CBError, Character};
 
 pub mod feats;

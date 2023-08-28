@@ -1,4 +1,5 @@
 use std::rc::Rc;
+
 use crate::combat_event::CombatEvent;
 use crate::transposition::Transposition;
 

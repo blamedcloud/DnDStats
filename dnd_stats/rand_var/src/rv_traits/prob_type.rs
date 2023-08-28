@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use std::iter::Sum;
 use std::ops::{Add, Mul, Sub};
+
 use num::{FromPrimitive, Integer, One, Zero};
 use num::rational::Ratio;
 

@@ -4,7 +4,9 @@ use std::fmt::Display;
 use std::iter::Sum;
 use std::marker::PhantomData;
 use std::ops::{Add, Div, Mul, Sub};
+
 use num::{One, ToPrimitive, Zero};
+
 use crate::rv_traits::prob_type::{Prob, Reciprocal};
 use crate::rv_traits::sequential::{Seq, SeqIter};
 
@@ -563,8 +565,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use num::{BigInt, BigRational, One, Rational64, FromPrimitive, Zero};
-    use crate::{RVBig, RandomVariable, RV64};
+    use num::{BigInt, BigRational, FromPrimitive, One, Rational64, Zero};
+
+    use crate::{RandomVariable, RV64, RVBig};
+
     use super::*;
 
     #[test]

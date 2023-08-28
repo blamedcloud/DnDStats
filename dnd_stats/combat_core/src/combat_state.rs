@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+
 use crate::combat_event::{CombatEvent, CombatTiming};
 use crate::combat_state::combat_log::CombatLog;
 use crate::health::Health;

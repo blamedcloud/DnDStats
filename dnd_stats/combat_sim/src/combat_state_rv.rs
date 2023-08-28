@@ -1,10 +1,12 @@
 use std::collections::BTreeMap;
+
 use combat_core::combat_event::CombatEvent;
 use combat_core::participant::{ParticipantId, ParticipantManager};
 use combat_core::transposition::Transposition;
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::RandVar;
+
 use crate::combat_state_rv::prob_combat_state::ProbCombatState;
 
 pub mod prob_combat_state;

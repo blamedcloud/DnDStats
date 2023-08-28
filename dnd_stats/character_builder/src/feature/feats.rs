@@ -1,10 +1,12 @@
 use std::clone::Clone;
+
+use combat_core::ability_scores::Ability;
 use combat_core::actions::{ActionName, ActionType, AttackType, CABuilder, CombatOption};
 use combat_core::damage::{DamageTerm, ExpressionTerm, ExtendedDamageType};
 use combat_core::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, ResourceName};
-use crate::ability_scores::Ability;
-use crate::attributed_bonus::{BonusTerm, BonusType};
+
 use crate::{CBError, Character, CharacterCO};
+use crate::attributed_bonus::{BonusTerm, BonusType};
 use crate::equipment::{Weapon, WeaponProperty};
 use crate::feature::Feature;
 
@@ -158,14 +160,17 @@ impl Feature for SharpShooter {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+
     use num::{BigInt, BigRational, FromPrimitive};
+
+    use combat_core::ability_scores::Ability;
     use combat_core::actions::{ActionName, AttackType, CABuilder};
     use combat_core::attack::{AccMRV64, AttackHitType};
-    use rand_var::RVBig;
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use rand_var::rv_traits::sequential::Pair;
+    use rand_var::RVBig;
+
     use crate::{Character, CharacterCO};
-    use crate::ability_scores::Ability;
     use crate::classes::{ChooseSubClass, ClassName};
     use crate::classes::fighter::ChampionFighter;
     use crate::equipment::{Armor, Equipment, OffHand, Weapon};

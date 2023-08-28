@@ -1,6 +1,8 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
+
 use rand_var::rv_traits::prob_type::RVProb;
+
 use crate::actions::{ActionName, ActionType, AttackType};
 use crate::attack::AttackResult;
 use crate::combat_state::CombatState;

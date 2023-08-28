@@ -1,13 +1,17 @@
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+use std::fmt::Write;
 use std::rc::Rc;
+
+use combat_core::ability_scores::AbilityScores;
 use combat_core::actions::{ActionBuilder, ActionName, ActionType, AttackType, CABuilder, CombatOption};
 use combat_core::CCError;
 use combat_core::damage::DamageType;
 use combat_core::resources::{create_basic_rm, ResourceManager};
+use combat_core::triggers::TriggerManager;
 use rand_var::rv_traits::RVError;
-use crate::ability_scores::AbilityScores;
+
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType, CharacterDependant};
 use crate::classes::{ClassName, SubClass};
 use crate::damage_manager::DiceExpression;
@@ -15,7 +19,6 @@ use crate::equipment::{ArmorType, Equipment};
 use crate::feature::Feature;
 use crate::weapon_attack::WeaponAttack;
 
-pub mod ability_scores;
 pub mod attributed_bonus;
 pub mod basic_attack;
 pub mod classes;
@@ -41,8 +44,6 @@ impl From<RVError> for CBError {
         CBError::RVError(value)
     }
 }
-use std::fmt::Write;
-use combat_core::triggers::TriggerManager;
 
 impl From<CBError> for CCError {
     fn from(value: CBError) -> Self {
@@ -329,6 +330,7 @@ pub fn create_character_ab(character: &Character) -> ActionBuilder<WeaponAttack,
 #[cfg(test)]
 mod tests {
     use crate::equipment::{ACSource, Armor, OffHand, Weapon};
+
     use super::*;
 
     pub fn get_str_based() -> AbilityScores {

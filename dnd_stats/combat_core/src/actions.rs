@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::rc::Rc;
+
 use rand_var::rv_traits::prob_type::RVProb;
+
 use crate::attack::Attack;
 use crate::damage::DamageRV;
 

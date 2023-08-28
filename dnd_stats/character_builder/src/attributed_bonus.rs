@@ -1,6 +1,8 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
-use crate::ability_scores::Ability;
+
+use combat_core::ability_scores::Ability;
+
 use crate::Character;
 use crate::classes::ClassName;
 
@@ -187,6 +189,7 @@ impl Display for AttributedBonus {
 #[cfg(test)]
 mod tests {
     use crate::tests::get_test_fighter;
+
     use super::*;
 
     #[test]

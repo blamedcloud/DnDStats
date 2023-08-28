@@ -1,6 +1,7 @@
 use combat_core::actions::{ActionName, ActionType, CABuilder, CombatOption};
 use combat_core::damage::{DamageDice, ExpressionTerm, ExtendedDamageDice};
 use combat_core::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, ResourceName};
+
 use crate::{CBError, Character};
 use crate::attributed_bonus::{BonusTerm, BonusType};
 use crate::classes::{Class, ClassName, SubClass};
@@ -118,7 +119,8 @@ impl Feature for ImprovedCritical {
 
 #[cfg(test)]
 mod tests {
-    use crate::ability_scores::Ability;
+    use combat_core::ability_scores::Ability;
+
     use crate::Character;
     use crate::classes::{ChooseSubClass, ClassName};
     use crate::classes::fighter::ChampionFighter;

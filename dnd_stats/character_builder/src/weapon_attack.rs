@@ -1,13 +1,15 @@
 use std::collections::HashSet;
+
+use combat_core::ability_scores::Ability;
 use combat_core::attack::{AccMRV, AoMRV, ArMRV, AtkDmgMap, Attack, AttackHitType, AttackResult, D20Type};
 use combat_core::CCError;
 use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 use rand_var::RandomVariable;
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::sequential::Pair;
-use crate::ability_scores::Ability;
-use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType};
+
 use crate::{CBError, Character};
+use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType};
 use crate::damage_manager::DamageManager;
 use crate::equipment::{OffHand, Weapon, WeaponProperty, WeaponRange};
 
@@ -248,11 +250,14 @@ impl<T: RVProb> Attack<T> for WeaponAttack {
 #[cfg(test)]
 mod tests {
     use std::collections::{BTreeMap, HashSet};
+
     use num::{BigRational, FromPrimitive};
+
     use combat_core::attack::{ArMRVBig, AttackHitType, AttackResult};
     use rand_var::{MRVBig, RandomVariable, RVBig};
-    use rand_var::rv_traits::{RandVar, NumRandVar};
+    use rand_var::rv_traits::{NumRandVar, RandVar};
     use rand_var::rv_traits::sequential::Pair;
+
     use crate::equipment::Weapon;
     use crate::tests::get_test_fighter;
     use crate::weapon_attack::{HandType, NumHands, WeaponAttack};

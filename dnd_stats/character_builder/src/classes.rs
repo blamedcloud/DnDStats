@@ -1,10 +1,12 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
-use crate::ability_scores::Ability;
-use crate::feature::{Feature, SaveProficiencies};
+
+use combat_core::ability_scores::Ability;
+
 use crate::{CBError, Character, HitDice};
 use crate::classes::fighter::FighterClass;
 use crate::classes::rogue::RogueClass;
+use crate::feature::{Feature, SaveProficiencies};
 
 pub mod fighter;
 pub mod rogue;

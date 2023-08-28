@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
+
 use combat_core::actions::ActionManager;
 use combat_core::damage::DamageType;
 use combat_core::participant::Participant;

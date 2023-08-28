@@ -1,8 +1,10 @@
 use std::rc::Rc;
+
 use combat_core::actions::CABuilder;
 use combat_core::damage::{DamageFeature, ExtendedDamageType};
-use crate::attributed_bonus::{BonusTerm, BonusType, CharacterDependant};
+
 use crate::{CBError, Character};
+use crate::attributed_bonus::{BonusTerm, BonusType, CharacterDependant};
 use crate::equipment::ArmorType;
 use crate::feature::Feature;
 use crate::weapon_attack::{HandType, NumHands};
@@ -97,15 +99,19 @@ impl Feature for FightingStyle {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+
     use num::{BigInt, BigRational};
+
     use combat_core::attack::{AccMRV64, AttackHitType};
-    use rand_var::{RVBig, RandomVariable};
+    use rand_var::{RandomVariable, RVBig};
     use rand_var::rv_traits::{NumRandVar, RandVar};
     use rand_var::rv_traits::sequential::Pair;
+
     use crate::Character;
     use crate::classes::ClassName;
     use crate::equipment::{ACSource, Armor, Equipment, OffHand, Weapon};
     use crate::tests::{get_dex_based, get_str_based};
+
     use super::*;
 
     #[test]

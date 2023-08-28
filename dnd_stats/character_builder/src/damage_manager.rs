@@ -1,13 +1,15 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+
 use combat_core::attack::AtkDmgMap;
 use combat_core::CCError;
 use combat_core::damage::{DamageDice, DamageFeature, DamageRV, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 use rand_var::RandomVariable;
 use rand_var::rv_traits::{NumRandVar, RandVar};
 use rand_var::rv_traits::prob_type::RVProb;
-use crate::attributed_bonus::{AttributedBonus, BonusTerm};
+
 use crate::{CBError, Character};
+use crate::attributed_bonus::{AttributedBonus, BonusTerm};
 
 #[derive(Debug, Clone)]
 pub struct DiceExpression {
@@ -302,6 +304,7 @@ impl DamageManager {
 #[cfg(test)]
 mod tests {
     use rand_var::RV64;
+
     use super::*;
 
     #[test]

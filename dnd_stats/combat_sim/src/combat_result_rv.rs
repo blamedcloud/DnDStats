@@ -1,8 +1,10 @@
 use std::collections::BTreeMap;
+
 use combat_core::participant::ParticipantId;
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::RandVar;
+
 use crate::combat_result_rv::prob_combat_result::ProbCombatResult;
 use crate::combat_state_rv::CombatStateRV;
 

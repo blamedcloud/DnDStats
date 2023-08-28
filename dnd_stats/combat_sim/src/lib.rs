@@ -85,17 +85,19 @@ impl<T: RVProb + 'static> CombatSimulator<T> {
 #[cfg(test)]
 mod tests {
     use num::Rational64;
-    use character_builder::ability_scores::AbilityScores;
+
     use character_builder::Character;
     use character_builder::classes::{ChooseSubClass, ClassName};
     use character_builder::classes::rogue::ScoutRogue;
     use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
+    use combat_core::ability_scores::AbilityScores;
     use combat_core::attack::AttackHitType;
     use combat_core::participant::ParticipantId;
     use combat_core::strategy::strategy_impls::{BasicAtkStrBuilder, DualWieldStrBuilder, PairStrBuilder, SneakAttackStrBuilder};
     use rand_var::RV64;
     use rand_var::rv_traits::{NumRandVar, RandVar};
+
     use crate::CombatSimulator;
 
     pub fn get_str_based() -> AbilityScores {

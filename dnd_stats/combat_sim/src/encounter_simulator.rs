@@ -338,12 +338,12 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
 mod tests {
     use num::{One, Rational64};
 
-    use character_builder::ability_scores::AbilityScores;
     use character_builder::basic_attack::BasicAttack;
     use character_builder::Character;
     use character_builder::classes::ClassName;
     use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
+    use combat_core::ability_scores::AbilityScores;
     use combat_core::actions::{ActionName, AttackType};
     use combat_core::attack::{AttackHitType, AttackResult};
     use combat_core::combat_event::{CombatEvent, CombatTiming, RoundId};

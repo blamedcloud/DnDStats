@@ -1,16 +1,19 @@
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::{Debug, Display, Formatter};
+
 use num::{BigRational, Rational64};
-use rand_var::rv_traits::{RandVar, sequential};
+
 use rand_var::{MapRandVar, RandomVariable};
+use rand_var::rv_traits::{RandVar, sequential};
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::sequential::{Pair, Seq, SeqIter};
+
 use crate::CCError;
 use crate::combat_event::CombatEvent;
 use crate::damage::{DamageTerm, DamageType};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum AttackHitType {
     Disadvantage,
     Normal,

@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
+
 use rand_var::rv_traits::prob_type::RVProb;
+
 use crate::actions::ActionManager;
 use crate::CCError;
 use crate::damage::DamageType;

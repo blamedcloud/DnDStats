@@ -1,6 +1,8 @@
 use std::fmt::Debug;
+
 use rand_var::rv_traits::prob_type::RVProb;
-use crate::actions::{ActionName};
+
+use crate::actions::ActionName;
 use crate::CCError;
 use crate::combat_state::CombatState;
 use crate::movement::Square;

@@ -1,8 +1,9 @@
+use combat_core::ability_scores::Ability;
 use combat_core::damage::{DamageDice, DamageTerm, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 use combat_core::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, ResourceName};
 use combat_core::triggers::{TriggerAction, TriggerName, TriggerType};
+
 use crate::{CBError, Character};
-use crate::ability_scores::Ability;
 use crate::classes::{Class, ClassName, SubClass};
 use crate::feature::{Feature, SaveProficiencies};
 
@@ -104,9 +105,10 @@ impl Feature for SneakAttack {
 
 #[cfg(test)]
 mod tests {
+    use combat_core::ability_scores::Ability;
     use combat_core::damage::{DamageDice, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
     use combat_core::triggers::{TriggerAction, TriggerName};
-    use crate::ability_scores::Ability;
+
     use crate::Character;
     use crate::classes::{ChooseSubClass, ClassName};
     use crate::classes::rogue::ScoutRogue;

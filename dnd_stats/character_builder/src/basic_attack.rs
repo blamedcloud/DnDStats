@@ -1,10 +1,12 @@
 use std::collections::HashSet;
+
 use combat_core::attack::{AccMRV, AtkDmgMap, Attack, AttackHitType, D20Type};
 use combat_core::CCError;
 use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 use rand_var::RandomVariable;
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::sequential::Pair;
+
 use crate::damage_manager::DamageManager;
 
 #[derive(Debug, Clone)]

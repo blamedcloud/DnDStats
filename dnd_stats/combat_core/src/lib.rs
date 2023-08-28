@@ -1,14 +1,17 @@
 use rand_var::rv_traits::RVError;
 
+pub mod ability_scores;
 pub mod actions;
 pub mod attack;
 pub mod combat_event;
 pub mod combat_state;
+pub mod conditions;
 pub mod damage;
 pub mod health;
 pub mod movement;
 pub mod participant;
 pub mod resources;
+pub mod skills;
 pub mod strategy;
 pub mod transposition;
 pub mod triggers;

@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use std::iter::Sum;
+
 use num::{BigRational, FromPrimitive, Rational64};
+
 use crate::rv_traits::{NumRandVar, RandVar, RVError};
 use crate::rv_traits::prob_type::{Prob, Reciprocal};
 use crate::rv_traits::sequential::{Pair, Seq, SeqIter};
@@ -440,7 +442,9 @@ impl<T: Prob + PartialOrd<T>> RandomVariable<T> {
 #[cfg(test)]
 mod tests {
     use std::cmp;
+
     use num::{BigInt, BigRational, One, Rational64, Zero};
+
     use super::*;
 
     fn get_attack_setup() -> (MRV64, BTreeMap<isize, RV64>) {

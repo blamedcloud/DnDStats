@@ -1,7 +1,9 @@
 use std::fmt::Debug;
+
 use rand_var::RandomVariable;
 use rand_var::rv_traits::NumRandVar;
 use rand_var::rv_traits::prob_type::RVProb;
+
 use crate::CCError;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]

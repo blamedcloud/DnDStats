@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::ptr;
+
 use combat_core::actions::{ActionName, ActionType};
 use combat_core::combat_event::{CombatEvent, CombatTiming};
 use combat_core::combat_state::CombatState;
@@ -8,8 +9,9 @@ use combat_core::participant::{ParticipantId, ParticipantManager};
 use combat_core::resources::{RefreshTiming, ResourceManager, ResourceName};
 use combat_core::transposition::Transposition;
 use rand_var::{MapRandVar, RandomVariable};
-use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::{NumRandVar, RandVar, RVPartition};
+use rand_var::rv_traits::prob_type::RVProb;
+
 use crate::combat_result_rv::prob_combat_result::ProbCombatResult;
 
 #[derive(Debug, Clone)]

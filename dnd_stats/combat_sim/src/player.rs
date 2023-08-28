@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::rc::Rc;
+
 use character_builder::Character;
 use combat_core::actions::{ActionManager, CABuilder, CombatAction, CombatOption};
 use combat_core::damage::DamageType;
