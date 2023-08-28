@@ -10,6 +10,7 @@ use combat_core::transposition::Transposition;
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::{NumRandVar, RandVar, RVPartition};
+use crate::combat_result_rv::prob_combat_result::ProbCombatResult;
 
 #[derive(Debug, Clone)]
 pub struct ProbCombatState<'pm, T: RVProb> {
@@ -216,5 +217,15 @@ impl<'pm, T: RVProb> Transposition for ProbCombatState<'pm, T> {
         self.state.merge_left(other.state);
         self.dmg = new_dmg;
         self.prob = self.prob.clone() + other.prob;
+    }
+}
+
+impl<'pm, T: RVProb> From<ProbCombatState<'pm, T>> for ProbCombatResult<T> {
+    fn from(value: ProbCombatState<'pm, T>) -> Self {
+        let mut part_data = Vec::new();
+        for i in 0..value.participants.len() {
+            part_data.push(value.participants.get_participant(ParticipantId(i)).into());
+        }
+        ProbCombatResult::new(part_data, value.state, value.dmg, value.prob)
     }
 }

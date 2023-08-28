@@ -9,7 +9,7 @@ use crate::combat_state_rv::prob_combat_state::ProbCombatState;
 
 pub mod prob_combat_state;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CombatStateRV<'pm, T: RVProb> {
     states: Vec<ProbCombatState<'pm, T>>,
 }

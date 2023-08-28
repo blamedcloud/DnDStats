@@ -38,6 +38,25 @@ impl<T: RVProb> TeamMember<T> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ParticipantData {
+    pub team: Team,
+    pub ac: isize,
+    pub max_hp: isize,
+    pub resistances: HashSet<DamageType>,
+}
+
+impl<T: RVProb> From<&TeamMember<T>> for ParticipantData {
+    fn from(value: &TeamMember<T>) -> Self {
+        Self {
+            team: value.team,
+            ac: value.participant.get_ac(),
+            max_hp: value.participant.get_max_hp(),
+            resistances: value.participant.get_resistances().clone(),
+        }
+    }
+}
+
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct ParticipantId(pub usize);
 impl From<usize> for ParticipantId {

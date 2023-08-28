@@ -12,7 +12,7 @@ pub mod combat_log;
 pub struct CombatState {
     logs: CombatLog,
     resources: Vec<ResourceManager>,
-    health: Vec<Health>,
+    healthiness: Vec<Health>,
     deaths: HashSet<ParticipantId>,
     last_combat_timing: Option<CombatTiming>,
 }
@@ -23,7 +23,7 @@ impl CombatState {
         Self {
             logs: CombatLog::new(),
             resources,
-            health,
+            healthiness: health,
             deaths: HashSet::new(),
             last_combat_timing: None,
         }
@@ -46,11 +46,11 @@ impl CombatState {
     }
 
     pub fn get_health(&self, pid: ParticipantId) -> Health {
-        *self.health.get(pid.0).unwrap()
+        *self.healthiness.get(pid.0).unwrap()
     }
 
     pub fn set_health(&mut self, pid: ParticipantId, h: Health) {
-        self.health[pid.0] = h;
+        self.healthiness[pid.0] = h;
         if h == Health::Dead {
             self.deaths.insert(pid);
         }
@@ -60,7 +60,7 @@ impl CombatState {
         Self {
             logs: self.logs.into_child(),
             resources: self.resources,
-            health: self.health,
+            healthiness: self.healthiness,
             deaths: self.deaths,
             last_combat_timing: self.last_combat_timing,
         }
@@ -90,7 +90,7 @@ impl Transposition for CombatState {
     fn is_transposition(&self, other: &Self) -> bool {
         if self.logs.is_transposition(&other.logs) {
             if self.resources == other.resources {
-                if self.health == other.health {
+                if self.healthiness == other.healthiness {
                     if self.deaths == other.deaths {
                         if self.last_combat_timing == other.last_combat_timing {
                             return true;
