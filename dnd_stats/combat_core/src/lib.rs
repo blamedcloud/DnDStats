@@ -1,7 +1,9 @@
-use std::ops::Add;
+use std::cmp;
+use std::ops::{Add, AddAssign};
+
 use rand_var::RandomVariable;
-use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::{RandVar, RVError};
+use rand_var::rv_traits::prob_type::RVProb;
 
 pub mod ability_scores;
 pub mod actions;
@@ -26,6 +28,7 @@ pub enum CCError {
     PMNotCompiled,
     SMNotCompiled,
     SMPushAfterCompile,
+    UnknownCondition,
     RVE(RVError),
     Other(String),
 }
@@ -62,6 +65,10 @@ impl D20RollType {
             D20RollType::SuperAdvantage => rv.max_three_trials(),
         }
     }
+
+    pub fn choose_better(&self, other: &D20RollType) -> D20RollType {
+        cmp::max(*self, *other)
+    }
 }
 
 impl Add<D20RollType> for D20RollType {
@@ -90,6 +97,11 @@ impl Add<D20RollType> for D20RollType {
             // no disadvantage implies adv and super adv, so super adv.
             D20RollType::SuperAdvantage
         }
+    }
+}
+impl AddAssign<D20RollType> for D20RollType {
+    fn add_assign(&mut self, rhs: D20RollType) {
+        *self = *self + rhs;
     }
 }
 
@@ -121,7 +133,9 @@ pub enum BinaryOutcome {
 #[cfg(test)]
 mod tests {
     use num::Rational64;
+
     use rand_var::rv_traits::RandVar;
+
     use crate::{D20RollType, D20Type};
 
     #[test]
@@ -139,5 +153,12 @@ mod tests {
         assert_eq!(10, reliable_talent.lower_bound());
         assert_eq!(20, reliable_talent.upper_bound());
         assert_eq!(Rational64::new(10, 20), reliable_talent.pdf(10));
+    }
+
+    #[test]
+    fn better_d20_roll() {
+        assert_eq!(D20RollType::Advantage, D20RollType::Disadvantage.choose_better(&D20RollType::Advantage));
+        assert_eq!(D20RollType::SuperAdvantage, D20RollType::SuperAdvantage.choose_better(&D20RollType::Advantage));
+        assert_eq!(D20RollType::Normal, D20RollType::Normal.choose_better(&D20RollType::Disadvantage));
     }
 }

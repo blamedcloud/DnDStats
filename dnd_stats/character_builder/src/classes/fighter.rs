@@ -1,6 +1,7 @@
 use combat_core::actions::{ActionName, ActionType, CABuilder, CombatOption};
 use combat_core::damage::{DamageDice, ExpressionTerm, ExtendedDamageDice};
-use combat_core::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, ResourceName};
+use combat_core::resources::{RefreshTiming, Resource, ResourceName};
+use combat_core::resources::resource_amounts::{RefreshBy, ResourceCap};
 
 use crate::{CBError, Character};
 use crate::attributed_bonus::{BonusTerm, BonusType};

@@ -5,9 +5,10 @@ use std::rc::Rc;
 use character_builder::basic_attack::BasicAttack;
 use combat_core::ability_scores::{Ability, AbilityScores};
 use combat_core::actions::{ActionManager, ActionName, ActionType, AttackType, CombatAction, CombatOption};
+use combat_core::conditions::ConditionManager;
 use combat_core::damage::DamageType;
 use combat_core::participant::Participant;
-use combat_core::resources::{create_basic_rm, ResourceManager};
+use combat_core::resources::ResourceManager;
 use combat_core::skills::SkillManager;
 use combat_core::triggers::TriggerManager;
 use rand_var::rv_traits::prob_type::RVProb;
@@ -22,6 +23,7 @@ pub struct Monster<T: RVProb> {
     skill_manager: SkillManager,
     action_manager: ActionManager<T>,
     resource_manager: ResourceManager,
+    condition_manager: ConditionManager,
 }
 
 impl<T: RVProb> Monster<T> {
@@ -34,7 +36,8 @@ impl<T: RVProb> Monster<T> {
             ability_scores: ability_scores_by_prof(prof as u8, Ability::STR),
             skill_manager: SkillManager::new(),
             action_manager: create_basic_attack_am(ba, num_attacks),
-            resource_manager: create_basic_rm(),
+            resource_manager: ResourceManager::just_action_types(),
+            condition_manager: ConditionManager::new(),
         }
     }
 }
@@ -139,5 +142,9 @@ impl<T: RVProb> Participant<T> for Monster<T> {
 
     fn get_trigger_manager(&self) -> Option<&TriggerManager> {
         None
+    }
+
+    fn get_condition_manager(&self) -> &ConditionManager {
+        &self.condition_manager
     }
 }

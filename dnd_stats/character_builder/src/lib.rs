@@ -7,8 +7,9 @@ use std::rc::Rc;
 use combat_core::ability_scores::AbilityScores;
 use combat_core::actions::{ActionBuilder, ActionName, ActionType, AttackType, CABuilder, CombatOption};
 use combat_core::CCError;
+use combat_core::conditions::ConditionManager;
 use combat_core::damage::DamageType;
-use combat_core::resources::{create_basic_rm, ResourceManager};
+use combat_core::resources::ResourceManager;
 use combat_core::skills::SkillManager;
 use combat_core::triggers::TriggerManager;
 use rand_var::rv_traits::RVError;
@@ -36,6 +37,7 @@ pub enum CBError {
     NoClassSet,
     NoSubClassSet,
     InvalidLevel,
+    RequirementsNotMet,
     RVError(RVError),
     Other(String),
 }
@@ -70,6 +72,7 @@ pub struct Character {
     resource_manager: ResourceManager,
     resistances: HashSet<DamageType>,
     trigger_manager: TriggerManager,
+    condition_manager: ConditionManager,
 }
 
 impl Character {
@@ -84,9 +87,10 @@ impl Character {
             equipment,
             armor_class: AttributedBonus::new(String::from("AC")),
             combat_actions: ActionBuilder::new(),
-            resource_manager: create_basic_rm(),
+            resource_manager: ResourceManager::just_action_types(),
             resistances: HashSet::new(),
             trigger_manager: TriggerManager::new(),
+            condition_manager: ConditionManager::new(),
         };
         character.calc_ac();
         character.combat_actions = create_character_ab(&character);
@@ -285,6 +289,10 @@ impl Character {
 
     pub fn get_trigger_manager(&self) -> &TriggerManager {
         &self.trigger_manager
+    }
+
+    pub fn get_condition_manager(&self) -> &ConditionManager {
+        &self.condition_manager
     }
 }
 

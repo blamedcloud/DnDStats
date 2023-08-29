@@ -4,9 +4,11 @@ use std::ptr;
 use combat_core::actions::{ActionName, ActionType};
 use combat_core::combat_event::{CombatEvent, CombatTiming};
 use combat_core::combat_state::CombatState;
+use combat_core::conditions::{ConditionManager, ConditionName};
 use combat_core::health::Health;
 use combat_core::participant::{ParticipantId, ParticipantManager};
 use combat_core::resources::{RefreshTiming, ResourceManager, ResourceName};
+use combat_core::resources::resource_amounts::ResourceCount;
 use combat_core::transposition::Transposition;
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::{NumRandVar, RandVar, RVPartition};
@@ -30,7 +32,7 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         }
         Self {
             participants: pm,
-            state: CombatState::new(pm.get_initial_rms()),
+            state: CombatState::new(pm.get_initial_rms(), pm.get_initial_cms()),
             dmg,
             prob: T::one(),
         }
@@ -65,6 +67,13 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         self.state.get_rm_mut(pid)
     }
 
+    pub fn get_cm(&self, pid: ParticipantId) -> &ConditionManager {
+        self.state.get_cm(pid)
+    }
+    pub fn get_cm_mut(&mut self, pid: ParticipantId) -> &mut ConditionManager {
+        self.state.get_cm_mut(pid)
+    }
+
     pub fn get_max_hp(&self, pid: ParticipantId) -> isize {
         self.participants.get_participant(pid).participant.get_max_hp()
     }
@@ -96,6 +105,19 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         }
     }
 
+    pub fn apply_default_condition(&mut self, pid: ParticipantId, cn: ConditionName) {
+        let cm = self.get_cm_mut(pid);
+        cm.add_default_condition(cn).unwrap();
+        self.push(CombatEvent::ApplyCond(cn, pid));
+    }
+
+    pub fn remove_condition(&mut self, pid: ParticipantId, cn: ConditionName, at: ActionType) {
+        let cm = self.get_cm_mut(pid);
+        cm.remove_condition(&cn);
+        self.spend_at_resource(pid, at);
+        self.push(CombatEvent::RemoveCond(cn));
+    }
+
     pub fn get_dmg(&self, pid: ParticipantId) -> &RandomVariable<T> {
         self.dmg.get(pid.0).unwrap()
     }
@@ -108,8 +130,31 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         if rm.has_resource(ResourceName::AN(an)) {
             rm.spend(ResourceName::AN(an));
         }
-        if rm.has_resource(ResourceName::AT(at)) {
-            rm.spend(ResourceName::AT(at));
+        self.spend_at_resource(pid, at);
+    }
+
+    pub fn spend_at_resource(&mut self, pid: ParticipantId, at: ActionType) {
+        let rm = self.get_rm_mut(pid);
+        match at {
+            ActionType::Movement => {
+                if rm.has_resource(ResourceName::Movement) {
+                    rm.drain(ResourceName::Movement);
+                }
+            }
+            ActionType::HalfMove => {
+                if rm.has_resource(ResourceName::Movement) {
+                    let cap = rm.get_cap(ResourceName::Movement);
+                    let amount: ResourceCount = (cap / 2).unwrap().into();
+                    if !amount.is_uncapped() {
+                        rm.spend_many(ResourceName::Movement, amount.count().unwrap());
+                    }
+                }
+            }
+            _ => {
+                if rm.has_resource(at.into()) {
+                    rm.spend(at.into());
+                }
+            }
         }
     }
 

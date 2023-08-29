@@ -2,14 +2,21 @@ use std::fmt::Debug;
 
 use rand_var::rv_traits::prob_type::RVProb;
 
-use crate::actions::ActionName;
+use crate::actions::{ActionName, ActionType};
 use crate::CCError;
 use crate::combat_state::CombatState;
+use crate::conditions::ConditionName;
 use crate::movement::Square;
 use crate::participant::{Participant, ParticipantId, ParticipantManager, TeamMember};
 use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
 
-pub mod strategy_impls;
+pub mod basic_atk_str;
+pub mod basic_strategies;
+pub mod dual_wield_str;
+pub mod linear_str;
+pub mod second_wind_str;
+pub mod shield_master_str;
+pub mod sneak_atk_str;
 
 // TODO: add shapes eventually (for spells and such)
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
@@ -19,12 +26,52 @@ pub enum Target {
 }
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
-pub struct StrategicOption {
+pub enum StrategyDecision {
+    DoNothing,
+    MyAction(StrategicAction),
+    // done like this because the action manager
+    // can't be modified, and probably doesn't
+    // know it can spend an action to do this.
+    RemoveCondition(ConditionName, ActionType),
+}
+
+impl StrategyDecision {
+    pub fn is_some(&self) -> bool {
+        !self.is_none()
+    }
+
+    pub fn is_none(&self) -> bool {
+        self == &StrategyDecision::DoNothing
+    }
+}
+
+impl From<StrategicAction> for StrategyDecision {
+    fn from(value: StrategicAction) -> Self {
+        StrategyDecision::MyAction(value)
+    }
+}
+impl From<Option<StrategicAction>> for StrategyDecision {
+    fn from(value: Option<StrategicAction>) -> Self {
+        if value.is_some() {
+            StrategyDecision::MyAction(value.unwrap())
+        } else {
+            StrategyDecision::DoNothing
+        }
+    }
+}
+impl From<ActionName> for StrategyDecision {
+    fn from(value: ActionName) -> Self {
+        StrategyDecision::MyAction(value.into())
+    }
+}
+
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
+pub struct StrategicAction {
     pub action_name: ActionName,
     pub target: Option<Target>
 }
 
-impl From<ActionName> for StrategicOption {
+impl From<ActionName> for StrategicAction {
     fn from(value: ActionName) -> Self {
         Self {
             action_name: value,
@@ -41,7 +88,7 @@ pub trait Strategy<T: RVProb> : Debug {
     fn get_participants(&self) -> &Vec<TeamMember<T>>;
     fn get_my_pid(&self) -> ParticipantId;
 
-    fn get_action(&self, state: &CombatState) -> Option<StrategicOption>;
+    fn get_action(&self, state: &CombatState) -> StrategyDecision;
 
     fn handle_trigger(&self, tt: TriggerType, tc: TriggerContext, state: &CombatState) -> Vec<TriggerResponse>;
 

@@ -13,7 +13,22 @@ pub enum ActionType {
     BonusAction,
     Reaction,
     Movement,
+    HalfMove,
     FreeAction,
+}
+
+impl ActionType {
+    pub fn iterator() -> impl Iterator<Item = ActionType> {
+        [
+            ActionType::Action,
+            ActionType::SingleAttack,
+            ActionType::BonusAction,
+            ActionType::Reaction,
+            ActionType::Movement,
+            ActionType::HalfMove,
+            ActionType::FreeAction,
+        ].iter().copied()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +99,7 @@ pub enum ActionName {
     SecondWind,
     ActionSurge,
     Indomitable, // TODO: move to triggers (OnSave trigger)
+    ShoveProne,
 }
 
 pub type ActionBuilder<A, D> = HashMap<ActionName, CombatOption<CABuilder<A, D>>>;

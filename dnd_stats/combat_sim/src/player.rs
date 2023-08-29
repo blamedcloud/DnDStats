@@ -5,6 +5,7 @@ use std::rc::Rc;
 use character_builder::Character;
 use combat_core::ability_scores::AbilityScores;
 use combat_core::actions::{ActionManager, CABuilder, CombatAction, CombatOption};
+use combat_core::conditions::ConditionManager;
 use combat_core::damage::DamageType;
 use combat_core::participant::Participant;
 use combat_core::resources::ResourceManager;
@@ -24,6 +25,7 @@ pub struct Player<T: RVProb> {
     action_manager: ActionManager<T>,
     resource_manager: ResourceManager,
     trigger_manager: TriggerManager,
+    condition_manager: ConditionManager,
 }
 
 impl<T: RVProb> Player<T> {
@@ -61,6 +63,7 @@ impl<T: RVProb> From<Character> for Player<T> {
             action_manager: am,
             resource_manager: value.get_resource_manager().clone(),
             trigger_manager: value.get_trigger_manager().clone(),
+            condition_manager: value.get_condition_manager().clone(),
         }
     }
 }
@@ -104,5 +107,9 @@ impl<T: RVProb> Participant<T> for Player<T> {
 
     fn get_trigger_manager(&self) -> Option<&TriggerManager> {
         Some(&self.trigger_manager)
+    }
+
+    fn get_condition_manager(&self) -> &ConditionManager {
+        &self.condition_manager
     }
 }

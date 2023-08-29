@@ -3,14 +3,17 @@ use std::rc::Rc;
 
 use num::{BigRational, Rational64};
 
+use combat_core::CCError;
 use combat_core::actions::{ActionName, ActionType, CombatAction};
 use combat_core::attack::{Attack, AttackResult};
-use combat_core::{D20RollType, CCError};
 use combat_core::combat_event::{CombatEvent, CombatTiming};
+use combat_core::conditions::{ConditionLifetime, ConditionName};
 use combat_core::damage::DamageTerm;
 use combat_core::participant::{Participant, ParticipantId, ParticipantManager, Team};
-use combat_core::resources::ResourceName;
-use combat_core::strategy::{StrategicOption, Strategy, StrategyManager, Target};
+use combat_core::resources::{ResourceActionType, ResourceName};
+use combat_core::resources::resource_amounts::ResourceCount;
+use combat_core::skills::{ContestResult, SkillContest, SkillName};
+use combat_core::strategy::{StrategicAction, Strategy, StrategyDecision, StrategyManager, Target};
 use combat_core::triggers::{TriggerAction, TriggerContext, TriggerResponse, TriggerType};
 use rand_var::{MapRandVar, RandomVariable};
 use rand_var::rv_traits::prob_type::RVProb;
@@ -156,7 +159,8 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
             return Ok(vec!(pcs));
         }
         let strategy = self.get_strategy(pid);
-        if let Some(so) = strategy.get_action(pcs.get_state()) {
+        let sd = strategy.get_action(pcs.get_state());
+        if let StrategyDecision::MyAction(so) = sd {
             if self.possible_action(&pcs, pid, so) {
                 let children = self.finish_action(pcs, pid, so)?;
                 let mut finished_pcs = Vec::new();
@@ -166,12 +170,57 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
                 }
                 Ok(finished_pcs)
             } else {
-                // strategy gave me an invalid StrategicOption
+                // strategy gave me an invalid StrategicDecision
                 Ok(vec!(pcs))
             }
         } else {
-            // strategy end-turn on purpose.
-            Ok(vec!(pcs))
+            if let StrategyDecision::RemoveCondition(cond, at) = sd {
+                // remove a condition
+                if self.possible_condition_removal(&pcs, pid, cond, at) {
+                    pcs.remove_condition(pid, cond, at);
+                    Ok(self.finish_turn(pcs, pid)?)
+                } else {
+                    // invalid StrategicDecision
+                    Ok(vec!(pcs))
+                }
+            } else {
+                // strategy end-turn on purpose.
+                Ok(vec!(pcs))
+            }
+        }
+    }
+
+    fn possible_condition_removal(&self, pcs: &ProbCombatState<'pm, T>, pid: ParticipantId, cn: ConditionName, at: ActionType) -> bool {
+        let cm = pcs.get_state().get_cm(pid);
+        let has_cond = cm.has_condition(&cn);
+        if !has_cond {
+            return false;
+        }
+        let has_lifetime = cm.has_lifetime(&ConditionLifetime::UntilSpendAT(at));
+        if !has_lifetime {
+            return false;
+        }
+        let cns = cm.get_cns_for_lifetime(&ConditionLifetime::UntilSpendAT(at));
+        if !cns.contains(&cn) {
+            return false;
+        }
+        let rm = pcs.get_rm(pid);
+        if rm.has_resource(at.into()) {
+            match at {
+                ActionType::Movement => {
+                    // assume takes full movement
+                    rm.is_full(ResourceName::Movement)
+                }
+                ActionType::HalfMove => {
+                    let half_move: ResourceCount = (rm.get_cap(ResourceName::Movement) / 2).unwrap().into();
+                    half_move.is_uncapped() || rm.get_current(ResourceName::Movement) >= half_move.count().unwrap()
+                },
+                _ => {
+                    rm.get_current(at.into()) > 0
+                }
+            }
+        } else {
+            false
         }
     }
 
@@ -183,7 +232,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         self.get_team(pid) == Team::Enemies
     }
 
-    fn possible_action(&self, pcs: &ProbCombatState<'pm, T>, pid: ParticipantId, so: StrategicOption) -> bool {
+    fn possible_action(&self, pcs: &ProbCombatState<'pm, T>, pid: ParticipantId, so: StrategicAction) -> bool {
         let an = so.action_name;
         let participant = self.get_participant(pid);
         let has_action = participant.get_action_manager().contains_key(&an);
@@ -202,7 +251,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
             } else {
                 let co = participant.get_action_manager().get(&an).unwrap();
                 let at = co.action_type;
-                if rm.has_resource(ResourceName::AT(at)) && rm.get_current(ResourceName::AT(at)) == 0 {
+                if rm.has_resource(at.into()) && rm.get_current(at.into()) == 0 {
                     has_resources = false;
                 }
             }
@@ -210,7 +259,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         has_action && valid_target && has_resources
     }
 
-    fn finish_action(&self, pcs: ProbCombatState<'pm, T>, pid: ParticipantId, so: StrategicOption) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
+    fn finish_action(&self, pcs: ProbCombatState<'pm, T>, pid: ParticipantId, so: StrategicAction) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
         let handled_action = self.handle_action(pcs, pid, so)?;
         match handled_action {
             HandledAction::InPlace(p) => Ok(vec!(p)),
@@ -218,7 +267,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         }
     }
 
-    fn handle_action(&self, mut pcs: ProbCombatState<'pm, T>, pid: ParticipantId, so: StrategicOption) -> ResultHA<'pm, T> {
+    fn handle_action(&self, mut pcs: ProbCombatState<'pm, T>, pid: ParticipantId, so: StrategicAction) -> ResultHA<'pm, T> {
         let an = so.action_name;
         let participant = self.get_participant(pid);
         let co = participant.get_action_manager().get(&an).unwrap();
@@ -241,26 +290,62 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
                 Ok(HandledAction::Children(pcs.add_dmg(&heal, pid, self.is_dead_at_zero(pid))))
             },
             CombatAction::AdditionalAttacks(aa) => {
-                pcs.get_rm_mut(pid).gain(ResourceName::AT(ActionType::SingleAttack), *aa as usize);
+                pcs.get_rm_mut(pid).gain(ResourceName::RAT(ResourceActionType::SingleAttack), *aa as usize);
                 Ok(HandledAction::InPlace(pcs))
             },
             CombatAction::ByName => {
                 match an {
                     ActionName::ActionSurge => {
-                        pcs.get_rm_mut(pid).gain(ResourceName::AT(ActionType::Action), 1);
+                        pcs.get_rm_mut(pid).gain(ResourceName::RAT(ResourceActionType::Action), 1);
                         Ok(HandledAction::InPlace(pcs))
                     },
+                    ActionName::ShoveProne => {
+                        if let Target::Participant(target_pid) = so.target.unwrap() {
+                            Ok(HandledAction::Children(self.handle_shove_prone(pcs, pid, target_pid)?))
+                        } else {
+                            Err(CSError::InvalidTarget)
+                        }
+                    }
                     _ => Err(CSError::ActionNotHandled),
                 }
             }
         }
     }
 
+    fn handle_shove_prone(&self, mut pcs: ProbCombatState<'pm, T>, shover_pid: ParticipantId, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
+        let shover = self.get_participant(shover_pid);
+        let target = self.get_participant(target_pid);
+        let t_sm = target.get_skill_manager();
+        let t_skill = t_sm.choose_grapple_defense(target.get_ability_scores(), target.get_prof());
+        pcs.push(CombatEvent::SkillContest(shover_pid, SkillName::Athletics, target_pid, t_skill));
+        let contest = SkillContest::build(shover, target, SkillName::Athletics, t_skill);
+        let ce_skc = contest.result.map_keys(|cr| CombatEvent::SkCR(cr));
+        let children = pcs.split(ce_skc);
+        let mut results = Vec::with_capacity(children.len());
+        for mut child in children {
+            if let CombatEvent::SkCR(cr) = child.get_last_event().unwrap() {
+                match cr {
+                    ContestResult::InitiatorWins => {
+                        child.apply_default_condition(target_pid, ConditionName::Prone);
+                        results.push(child);
+                    }
+                    ContestResult::DefenderWins => results.push(child)
+                };
+            } else {
+                return Err(CSError::UnknownEvent(child.get_last_event().unwrap()));
+            }
+        }
+        Ok(results)
+    }
+
     fn handle_attack(&self, pcs: ProbCombatState<'pm, T>, atk: &Rc<dyn Attack<T>>, atker_pid: ParticipantId, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
         let attacker = self.get_participant(atker_pid);
         let target = self.get_participant(target_pid);
         let dead_at_zero = self.is_dead_at_zero(target_pid);
-        let ce_rv: MapRandVar<CombatEvent, T> = atk.get_ce_rv(D20RollType::Normal, target.get_ac())?;
+        let atk_cm = pcs.get_state().get_cm(atker_pid);
+        let target_cm = pcs.get_state().get_cm(target_pid);
+        let roll_type = atk_cm.overall_atk_mod(target_cm, atk.get_atk_range());
+        let ce_rv: MapRandVar<CombatEvent, T> = atk.get_ce_rv(roll_type, target.get_ac())?;
         // TODO: handle AC boosts somehow...
 
         if attacker.has_triggers() && attacker.get_trigger_manager().unwrap().has_triggers(TriggerType::SuccessfulAttack) {
@@ -346,12 +431,15 @@ mod tests {
     use combat_core::ability_scores::AbilityScores;
     use combat_core::actions::{ActionName, AttackType};
     use combat_core::attack::AttackResult;
-    use combat_core::D20RollType;
     use combat_core::combat_event::{CombatEvent, CombatTiming, RoundId};
+    use combat_core::D20RollType;
     use combat_core::damage::{DamageDice, DamageType};
     use combat_core::health::Health;
     use combat_core::participant::{Participant, ParticipantId, ParticipantManager};
-    use combat_core::strategy::strategy_impls::{BasicAtkStrBuilder, DoNothingBuilder, PairStrBuilder, SecondWindStrBuilder};
+    use combat_core::strategy::basic_atk_str::BasicAtkStrBuilder;
+    use combat_core::strategy::basic_strategies::DoNothingBuilder;
+    use combat_core::strategy::linear_str::PairStrBuilder;
+    use combat_core::strategy::second_wind_str::SecondWindStrBuilder;
     use combat_core::strategy::StrategyManager;
     use rand_var::RV64;
     use rand_var::rv_traits::RandVar;

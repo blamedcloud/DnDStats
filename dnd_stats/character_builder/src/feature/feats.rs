@@ -3,7 +3,8 @@ use std::clone::Clone;
 use combat_core::ability_scores::Ability;
 use combat_core::actions::{ActionName, ActionType, AttackType, CABuilder, CombatOption};
 use combat_core::damage::{DamageTerm, ExpressionTerm, ExtendedDamageType};
-use combat_core::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, ResourceName};
+use combat_core::resources::{RefreshTiming, Resource, ResourceName};
+use combat_core::resources::resource_amounts::{RefreshBy, ResourceCap, ResourceCount};
 
 use crate::{CBError, Character, CharacterCO};
 use crate::attributed_bonus::{BonusTerm, BonusType};
@@ -55,7 +56,7 @@ impl Feature for GreatWeaponMaster {
         }
         character.combat_actions.insert(ActionName::BonusGWMAttack, CombatOption::new(ActionType::BonusAction, CABuilder::AdditionalAttacks(1)));
 
-        let mut res = Resource::new(ResourceCap::Soft(1), 0);
+        let mut res = Resource::new(ResourceCap::Soft(1), ResourceCount::Count(0));
         res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToEmpty);
         res.add_refresh(RefreshTiming::EndMyTurn, RefreshBy::ToEmpty);
         character.resource_manager.add_perm(ResourceName::AN(ActionName::BonusGWMAttack), res);
@@ -153,6 +154,26 @@ impl Feature for SharpShooter {
         for (ca, co) in new_actions.into_iter() {
             character.combat_actions.insert(ca, co);
         }
+        Ok(())
+    }
+}
+
+pub struct ShieldMaster;
+impl Feature for ShieldMaster {
+    fn apply(&self, character: &mut Character) -> Result<(), CBError> {
+        let co = CombatOption::new_target(ActionType::BonusAction, CABuilder::ByName, true);
+        character.combat_actions.insert(ActionName::ShoveProne, co);
+
+        let shield = character.get_equipment().get_shield();
+        if shield.is_none() {
+            return Err(CBError::RequirementsNotMet);
+        }
+        let bonus = shield.unwrap().get_base_ac() + shield.unwrap().get_magic_bonus().unwrap_or(0);
+        // TODO: this will get messy if you change out the shield
+        character.ability_scores.dexterity.add_save_bonus(bonus as i8);
+
+        // TODO: add evasion (this one can be a trigger I think)
+
         Ok(())
     }
 }

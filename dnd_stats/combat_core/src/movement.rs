@@ -1,8 +1,8 @@
 use std::ops::Add;
 
-#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub struct Feet(pub i32);
-#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub struct Square(pub i32);
 
 impl Add<Square> for Square {
@@ -26,5 +26,11 @@ impl Add<Feet> for Feet {
 
     fn add(self, other: Feet) -> Feet {
         Feet(self.0 + other.0)
+    }
+}
+
+impl From<Square> for Feet {
+    fn from(value: Square) -> Self {
+        Feet(value.0 * 5)
     }
 }

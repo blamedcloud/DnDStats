@@ -1,24 +1,52 @@
 use std::cmp;
 use std::collections::{HashMap, HashSet};
 
+use resource_amounts::{RefreshBy, ResourceCap};
+
 use crate::actions::{ActionName, ActionType};
+use crate::movement::Feet;
+use crate::resources::resource_amounts::ResourceCount;
 use crate::triggers::TriggerName;
+
+pub mod resource_amounts;
+
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+pub enum ResourceActionType {
+    Action,
+    SingleAttack,
+    BonusAction,
+    Reaction,
+    FreeAction,
+}
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ResourceName {
-    AT(ActionType),
+    RAT(ResourceActionType),
+    Movement,
     AN(ActionName),
     TN(TriggerName),
 }
 
 impl From<ActionType> for ResourceName {
     fn from(value: ActionType) -> Self {
-        ResourceName::AT(value)
+        match value {
+            ActionType::Action => ResourceName::RAT(ResourceActionType::Action),
+            ActionType::SingleAttack => ResourceName::RAT(ResourceActionType::SingleAttack),
+            ActionType::BonusAction => ResourceName::RAT(ResourceActionType::BonusAction),
+            ActionType::Reaction => ResourceName::RAT(ResourceActionType::Reaction),
+            ActionType::FreeAction => ResourceName::RAT(ResourceActionType::FreeAction),
+            ActionType::HalfMove | ActionType::Movement => ResourceName::Movement,
+        }
     }
 }
 impl From<ActionName> for ResourceName {
     fn from(value: ActionName) -> Self {
         ResourceName::AN(value)
+    }
+}
+impl From<TriggerName> for ResourceName {
+    fn from(value: TriggerName) -> Self {
+        ResourceName::TN(value)
     }
 }
 
@@ -34,38 +62,16 @@ pub enum RefreshTiming {
     LongRest,
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub enum RefreshBy {
-    Const(usize),
-    ToFull,
-    ToEmpty,
-}
-
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub enum ResourceCap {
-    Soft(usize),
-    Hard(usize),
-}
-
-impl ResourceCap {
-    pub fn cap(&self) -> usize {
-        match self {
-            ResourceCap::Soft(c) => *c,
-            ResourceCap::Hard(c) => *c,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Resource {
     max: ResourceCap,
-    current: usize,
+    current: ResourceCount,
     refresh_map: HashMap<RefreshTiming, RefreshBy>,
     expirations: HashSet<RefreshTiming>,
 }
 
 impl Resource {
-    pub fn new(max: ResourceCap, current: usize) -> Self {
+    pub fn new(max: ResourceCap, current: ResourceCount) -> Self {
         Resource {
             max,
             current,
@@ -81,7 +87,7 @@ impl Resource {
         self.max = new_max;
     }
 
-    pub fn get_current(&self) -> usize {
+    pub fn get_current(&self) -> ResourceCount {
         self.current
     }
 
@@ -90,8 +96,8 @@ impl Resource {
             self.current -= amount;
             0
         } else {
-            let leftover = amount - self.current;
-            self.current = 0;
+            let leftover = amount - self.current.count().unwrap();
+            self.current.set_count(0);
             leftover
         }
     }
@@ -102,13 +108,13 @@ impl Resource {
     }
     pub fn gain(&mut self, uses: usize) {
         if let ResourceCap::Hard(cap) = self.max {
-            self.current = cmp::min(self.current + uses, cap);
+            self.current.set_count(cmp::min(self.current.count().unwrap() + uses, cap));
         } else {
             self.current += uses;
         }
     }
     pub fn drain(&mut self) {
-        self.current = 0;
+        self.current.set_count(0);
     }
 
     pub fn add_refresh(&mut self, timing: RefreshTiming, by: RefreshBy) {
@@ -125,8 +131,8 @@ impl Resource {
         if let Some(by) = self.refresh_map.get(&timing) {
             match by {
                 RefreshBy::Const(c) => self.gain(*c),
-                RefreshBy::ToFull => self.current = self.max.cap(),
-                RefreshBy::ToEmpty => self.current = 0,
+                RefreshBy::ToFull => self.current = self.max.into(),
+                RefreshBy::ToEmpty => self.current.set_count(0),
             }
         }
     }
@@ -140,7 +146,7 @@ impl From<ResourceCap> for Resource {
     fn from(value: ResourceCap) -> Self {
         Self {
             max: value,
-            current: value.cap(),
+            current: value.into(),
             refresh_map: HashMap::new(),
             expirations: HashSet::new(),
         }
@@ -159,6 +165,10 @@ impl ResourceManager {
             perm_resources: HashMap::new(),
             temp_resources: HashMap::new(),
         }
+    }
+
+    pub fn just_action_types() -> Self {
+        create_basic_rm(Feet(30))
     }
 
     pub fn add_perm(&mut self, rn: ResourceName, res: Resource) {
@@ -187,10 +197,20 @@ impl ResourceManager {
         true
     }
 
-    pub fn get_current(&self, rn: ResourceName) -> usize {
-        let temp_c = self.temp_resources.get(&rn).map(|r| r.get_current()).unwrap_or(0);
-        let perm_c = self.perm_resources.get(&rn).map(|r| r.get_current()).unwrap_or(0);
+    pub fn get_cap(&self, rn: ResourceName) -> ResourceCap {
+        let temp_c = self.temp_resources.get(&rn).map(|r| r.get_max()).unwrap_or(ResourceCap::Hard(0));
+        let perm_c = self.perm_resources.get(&rn).map(|r| r.get_max()).unwrap_or(ResourceCap::Hard(0));
         temp_c + perm_c
+    }
+
+    pub fn get_current(&self, rn: ResourceName) -> ResourceCount {
+        let temp_c = self.temp_resources.get(&rn).map(|r| r.get_current()).unwrap_or(ResourceCount::Count(0));
+        let perm_c = self.perm_resources.get(&rn).map(|r| r.get_current()).unwrap_or(ResourceCount::Count(0));
+        temp_c + perm_c
+    }
+
+    pub fn is_full(&self, rn: ResourceName) -> bool {
+        self.get_current(rn) == self.get_cap(rn)
     }
 
     pub fn spend_many(&mut self, rn: ResourceName, amount: usize) {
@@ -215,6 +235,15 @@ impl ResourceManager {
             if let Some(res) = self.perm_resources.get_mut(&rn) {
                 res.spend();
             }
+        }
+    }
+
+    pub fn drain(&mut self, rn: ResourceName) {
+        if self.temp_resources.contains_key(&rn) {
+            self.temp_resources.remove(&rn);
+        }
+        if let Some(res) = self.perm_resources.get_mut(&rn) {
+            res.drain();
         }
     }
 
@@ -252,23 +281,27 @@ impl ResourceManager {
     }
 }
 
-pub fn create_basic_rm() -> ResourceManager {
+pub fn create_basic_rm(speed: Feet) -> ResourceManager {
     let mut rm = ResourceManager::new();
     let mut at_res = Resource::from(ResourceCap::Soft(1));
     at_res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToFull);
-    rm.add_perm(ResourceName::AT(ActionType::Reaction), at_res.clone());
+    rm.add_perm(ResourceName::RAT(ResourceActionType::Reaction), at_res.clone());
 
     // clearing the action resources at the end of the turn is a small
     // optimization to make state merging more likely to happen.
     at_res.add_refresh(RefreshTiming::EndMyTurn, RefreshBy::ToEmpty);
-    rm.add_perm(ResourceName::AT(ActionType::Action), at_res.clone());
-    rm.add_perm(ResourceName::AT(ActionType::BonusAction), at_res.clone());
-    rm.add_perm(ResourceName::AT(ActionType::Movement), at_res);
+    rm.add_perm(ResourceName::RAT(ResourceActionType::Action), at_res.clone());
+    rm.add_perm(ResourceName::RAT(ResourceActionType::BonusAction), at_res);
+
+    let mut move_res = Resource::from(ResourceCap::Soft(speed.0.abs() as usize));
+    move_res.add_refresh(RefreshTiming::EndMyTurn, RefreshBy::ToEmpty);
+    move_res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToFull);
+    rm.add_perm(ResourceName::Movement, move_res);
 
     let mut sa_res = Resource::from(ResourceCap::Soft(0));
     sa_res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToEmpty);
     sa_res.add_refresh(RefreshTiming::EndMyTurn, RefreshBy::ToEmpty);
-    rm.add_perm(ResourceName::AT(ActionType::SingleAttack), sa_res);
+    rm.add_perm(ResourceName::RAT(ResourceActionType::SingleAttack), sa_res);
 
     rm
 }

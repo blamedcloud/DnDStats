@@ -1,5 +1,11 @@
 use std::fmt::{Display, Formatter};
 
+use rand_var::RandomVariable;
+use rand_var::rv_traits::NumRandVar;
+use rand_var::rv_traits::prob_type::RVProb;
+
+use crate::{D20RollType, D20Type};
+
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum Ability {
     STR,
@@ -31,11 +37,20 @@ pub struct AbilityScore {
     cap: u8,
     prof_save: bool,
     save_bonus: i8,
+    default_roll_type: D20RollType,
+    d20_type: D20Type,
 }
 
 impl AbilityScore {
     pub fn new(score: u8) -> Self {
-        AbilityScore { score, cap: 20, prof_save: false, save_bonus: 0 }
+        Self {
+            score,
+            cap: 20,
+            prof_save: false,
+            save_bonus: 0,
+            default_roll_type: D20RollType::Normal,
+            d20_type: D20Type::D20,
+        }
     }
 
     pub fn get_score(&self) -> u8 {
@@ -82,6 +97,27 @@ impl AbilityScore {
 
     pub fn set_save_bonus(&mut self, bonus: i8) {
         self.save_bonus = bonus;
+    }
+
+    pub fn add_save_bonus(&mut self, bonus: i8) {
+        self.save_bonus += bonus;
+    }
+
+    pub fn get_d20_type(&self) -> &D20Type {
+        &self.d20_type
+    }
+
+    pub fn get_d20_roll_type(&self) -> &D20RollType {
+        &self.default_roll_type
+    }
+
+    pub fn get_rv<T: RVProb>(&self, prof: isize) -> RandomVariable<T> {
+        let mut bonus = (self.get_mod() + self.save_bonus) as isize;
+        if self.prof_save {
+            bonus += prof;
+        }
+        let d20 = self.default_roll_type.get_rv(&self.d20_type);
+        d20.add_const(bonus)
     }
 }
 

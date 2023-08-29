@@ -2,10 +2,11 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 use rand_var::rv_traits::prob_type::RVProb;
-use crate::ability_scores::AbilityScores;
 
+use crate::ability_scores::AbilityScores;
 use crate::actions::ActionManager;
 use crate::CCError;
+use crate::conditions::ConditionManager;
 use crate::damage::DamageType;
 use crate::resources::ResourceManager;
 use crate::skills::SkillManager;
@@ -22,6 +23,7 @@ pub trait Participant<T: RVProb> : Debug {
     fn get_resource_manager(&self) -> &ResourceManager;
     fn has_triggers(&self) -> bool;
     fn get_trigger_manager(&self) -> Option<&TriggerManager>;
+    fn get_condition_manager(&self) -> &ConditionManager;
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -75,6 +77,7 @@ impl From<usize> for ParticipantId {
 pub struct ParticipantManager<T: RVProb> { // In order of initiative
     participants: Vec<TeamMember<T>>,
     initial_resources: Vec<ResourceManager>,
+    initial_conditions: Vec<ConditionManager>,
     compiled: bool,
 }
 
@@ -83,6 +86,7 @@ impl<T: RVProb> ParticipantManager<T> {
         Self {
             participants: Vec::new(),
             initial_resources: Vec::new(),
+            initial_conditions: Vec::new(),
             compiled: false,
         }
     }
@@ -100,6 +104,7 @@ impl<T: RVProb> ParticipantManager<T> {
             return Err(CCError::PMPushAfterCompile);
         }
         self.initial_resources.push(tm.participant.get_resource_manager().clone());
+        self.initial_conditions.push(tm.participant.get_condition_manager().clone());
         self.participants.push(tm);
         Ok(())
     }
@@ -126,5 +131,9 @@ impl<T: RVProb> ParticipantManager<T> {
 
     pub fn get_initial_rms(&self) -> Vec<ResourceManager> {
         self.initial_resources.clone()
+    }
+
+    pub fn get_initial_cms(&self) -> Vec<ConditionManager> {
+        self.initial_conditions.clone()
     }
 }

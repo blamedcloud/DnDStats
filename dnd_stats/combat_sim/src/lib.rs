@@ -5,7 +5,7 @@ use combat_core::CCError;
 use combat_core::combat_event::CombatEvent;
 use combat_core::participant::ParticipantManager;
 use combat_core::strategy::{StrategyBuilder, StrategyManager};
-use combat_core::strategy::strategy_impls::DoNothingBuilder;
+use combat_core::strategy::basic_strategies::RemoveCondBuilder;
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::RVError;
 
@@ -66,7 +66,7 @@ impl<T: RVProb + 'static> CombatSimulator<T> {
 
         let mut sm = StrategyManager::new(&pm)?;
         sm.add_participant(str_bldr)?;
-        sm.add_participant(DoNothingBuilder)?;
+        sm.add_participant(RemoveCondBuilder)?;
 
         let mut em: EncounterSimulator<T> = EncounterSimulator::new(&sm)?;
         em.set_do_merges(true);
@@ -88,13 +88,19 @@ mod tests {
 
     use character_builder::Character;
     use character_builder::classes::{ChooseSubClass, ClassName};
+    use character_builder::classes::fighter::ChampionFighter;
     use character_builder::classes::rogue::ScoutRogue;
-    use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};
+    use character_builder::equipment::{ACSource, Armor, Equipment, OffHand, Weapon};
+    use character_builder::feature::feats::ShieldMaster;
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
     use combat_core::ability_scores::AbilityScores;
     use combat_core::D20RollType;
     use combat_core::participant::ParticipantId;
-    use combat_core::strategy::strategy_impls::{BasicAtkStrBuilder, DualWieldStrBuilder, PairStrBuilder, SneakAttackStrBuilder};
+    use combat_core::strategy::basic_atk_str::BasicAtkStrBuilder;
+    use combat_core::strategy::dual_wield_str::DualWieldStrBuilder;
+    use combat_core::strategy::linear_str::PairStrBuilder;
+    use combat_core::strategy::shield_master_str::ShieldMasterStrBuilder;
+    use combat_core::strategy::sneak_atk_str::SneakAttackStrBuilder;
     use rand_var::RV64;
     use rand_var::rv_traits::{NumRandVar, RandVar};
 
@@ -169,4 +175,32 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_shield_master() {
+        let name = String::from("ShieldHero");
+        let ability_scores = get_str_based();
+        let equipment = Equipment::new(
+            Armor::chain_mail(),
+            Weapon::longsword(),
+            OffHand::Shield(ACSource::shield()),
+        );
+        let mut fighter = Character::new(name, ability_scores, equipment);
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::Dueling)))).unwrap();
+        fighter.level_up_basic().unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(ChampionFighter)))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ShieldMaster))).unwrap();
+
+        let cs = CombatSimulator::do_encounter(fighter.clone(), ShieldMasterStrBuilder, 14, 1).unwrap();
+        let cr_rv = cs.get_cr_rv();
+        {
+            assert_eq!(1, cr_rv.len());
+
+            let dmg = cr_rv.get_dmg(ParticipantId(1));
+            assert_eq!(0, dmg.lower_bound());
+            assert_eq!(21, dmg.upper_bound());
+            // we're getting to the point that I'm not sure how to verify this is
+            // correct, so I'll just take the code's word for it I guess.
+            assert_eq!(Rational64::new(624639, 80000), dmg.expected_value());
+        }
+    }
 }

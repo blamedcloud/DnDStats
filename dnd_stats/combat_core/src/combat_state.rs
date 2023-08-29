@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use crate::combat_event::{CombatEvent, CombatTiming};
 use crate::combat_state::combat_log::CombatLog;
+use crate::conditions::ConditionManager;
 use crate::health::Health;
 use crate::participant::ParticipantId;
 use crate::resources::ResourceManager;
@@ -13,17 +14,19 @@ pub mod combat_log;
 pub struct CombatState {
     logs: CombatLog,
     resources: Vec<ResourceManager>,
+    conditions: Vec<ConditionManager>,
     healthiness: Vec<Health>,
     deaths: HashSet<ParticipantId>,
     last_combat_timing: Option<CombatTiming>,
 }
 
 impl CombatState {
-    pub fn new(resources: Vec<ResourceManager>) -> Self {
+    pub fn new(resources: Vec<ResourceManager>, conditions: Vec<ConditionManager>) -> Self {
         let health = vec![Health::Healthy; resources.len()];
         Self {
             logs: CombatLog::new(),
             resources,
+            conditions,
             healthiness: health,
             deaths: HashSet::new(),
             last_combat_timing: None,
@@ -41,9 +44,15 @@ impl CombatState {
     pub fn get_rm(&self, pid: ParticipantId) -> &ResourceManager {
         self.resources.get(pid.0).unwrap()
     }
-
     pub fn get_rm_mut(&mut self, pid: ParticipantId) -> &mut ResourceManager {
         self.resources.get_mut(pid.0).unwrap()
+    }
+
+    pub fn get_cm(&self, pid: ParticipantId) -> &ConditionManager {
+        self.conditions.get(pid.0).unwrap()
+    }
+    pub fn get_cm_mut(&mut self, pid: ParticipantId) -> &mut ConditionManager {
+        self.conditions.get_mut(pid.0).unwrap()
     }
 
     pub fn get_health(&self, pid: ParticipantId) -> Health {
@@ -61,6 +70,7 @@ impl CombatState {
         Self {
             logs: self.logs.into_child(),
             resources: self.resources,
+            conditions: self.conditions,
             healthiness: self.healthiness,
             deaths: self.deaths,
             last_combat_timing: self.last_combat_timing,
@@ -91,10 +101,12 @@ impl Transposition for CombatState {
     fn is_transposition(&self, other: &Self) -> bool {
         if self.logs.is_transposition(&other.logs) {
             if self.resources == other.resources {
-                if self.healthiness == other.healthiness {
-                    if self.deaths == other.deaths {
-                        if self.last_combat_timing == other.last_combat_timing {
-                            return true;
+                if self.conditions == other.conditions {
+                    if self.healthiness == other.healthiness {
+                        if self.deaths == other.deaths {
+                            if self.last_combat_timing == other.last_combat_timing {
+                                return true;
+                            }
                         }
                     }
                 }

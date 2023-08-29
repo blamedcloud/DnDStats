@@ -5,12 +5,13 @@ use std::fmt::{Debug, Display, Formatter};
 use num::{BigRational, Rational64};
 
 use rand_var::{MapRandVar, RandomVariable};
-use rand_var::rv_traits::sequential;
 use rand_var::rv_traits::prob_type::RVProb;
+use rand_var::rv_traits::sequential;
 use rand_var::rv_traits::sequential::{Pair, Seq, SeqIter};
 
-use crate::{D20RollType, CCError};
+use crate::{CCError, D20RollType};
 use crate::combat_event::CombatEvent;
+use crate::conditions::AttackDistance;
 use crate::damage::{DamageTerm, DamageType};
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -127,6 +128,10 @@ pub trait Attack<T: RVProb> : Debug {
     fn get_hit_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
     fn get_crit_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
     fn get_acc_rv(&self, hit_type: D20RollType) -> Result<AccMRV<T>, CCError>;
+
+    // TODO: this should eventually return something like Equipment::WeaponRange instead
+    // and then the map should validate this.
+    fn get_atk_range(&self) -> AttackDistance;
 
     fn get_ar_dmg(&self, ar: AttackResult, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
         match ar {

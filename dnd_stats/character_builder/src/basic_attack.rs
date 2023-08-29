@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
+use combat_core::{CCError, D20RollType, D20Type};
 use combat_core::attack::{AccMRV, AtkDmgMap, Attack};
-use combat_core::{D20RollType, CCError, D20Type};
+use combat_core::conditions::AttackDistance;
 use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 use rand_var::RandomVariable;
 use rand_var::rv_traits::prob_type::RVProb;
@@ -53,6 +54,11 @@ impl<T: RVProb> Attack<T> for BasicAttack {
     fn get_acc_rv(&self, hit_type: D20RollType) -> Result<AccMRV<T>, CCError> {
         let rv = hit_type.get_rv(&D20Type::D20);
         Ok(rv.into_mrv().map_keys(|roll| Pair(roll, roll + self.hit_bonus)))
+    }
+
+    fn get_atk_range(&self) -> AttackDistance {
+        // TODO: check this?
+        AttackDistance::Within5Ft
     }
 
     fn get_dmg_map(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CCError> {

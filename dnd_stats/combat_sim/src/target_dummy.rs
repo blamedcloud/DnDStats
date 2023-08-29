@@ -1,14 +1,16 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
-use combat_core::ability_scores::{Ability, AbilityScores};
 
+use combat_core::ability_scores::{Ability, AbilityScores};
 use combat_core::actions::ActionManager;
+use combat_core::conditions::ConditionManager;
 use combat_core::damage::DamageType;
 use combat_core::participant::Participant;
 use combat_core::resources::ResourceManager;
 use combat_core::skills::SkillManager;
 use combat_core::triggers::TriggerManager;
 use rand_var::rv_traits::prob_type::RVProb;
+
 use crate::monster::{ability_scores_by_cr, ac_to_cr, prof_by_cr};
 
 #[derive(Debug, Clone)]
@@ -21,6 +23,7 @@ pub struct TargetDummy<T: RVProb> {
     skill_manager: SkillManager,
     action_manager: ActionManager<T>,
     resource_manager: ResourceManager,
+    condition_manager: ConditionManager,
 }
 
 impl<T: RVProb> TargetDummy<T> {
@@ -34,7 +37,8 @@ impl<T: RVProb> TargetDummy<T> {
             ability_scores: ability_scores_by_cr(cr, Ability::STR),
             skill_manager: SkillManager::new(),
             action_manager: ActionManager::new(),
-            resource_manager: ResourceManager::new(),
+            resource_manager: ResourceManager::just_action_types(),
+            condition_manager: ConditionManager::new(),
         }
     }
 }
@@ -78,5 +82,9 @@ impl<T: RVProb> Participant<T> for TargetDummy<T> {
 
     fn get_trigger_manager(&self) -> Option<&TriggerManager> {
         None
+    }
+
+    fn get_condition_manager(&self) -> &ConditionManager {
+        &self.condition_manager
     }
 }

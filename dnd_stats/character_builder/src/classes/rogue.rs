@@ -1,6 +1,7 @@
 use combat_core::ability_scores::Ability;
 use combat_core::damage::{DamageDice, DamageTerm, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
-use combat_core::resources::{RefreshBy, RefreshTiming, Resource, ResourceCap, ResourceName};
+use combat_core::resources::{RefreshTiming, Resource, ResourceName};
+use combat_core::resources::resource_amounts::{RefreshBy, ResourceCap};
 use combat_core::triggers::{TriggerAction, TriggerName, TriggerType};
 
 use crate::{CBError, Character};

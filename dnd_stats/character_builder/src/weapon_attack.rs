@@ -1,9 +1,11 @@
 use std::collections::HashSet;
 
+use combat_core::{CCError, D20RollType, D20Type};
 use combat_core::ability_scores::Ability;
 use combat_core::attack::{AccMRV, AoMRV, ArMRV, AtkDmgMap, Attack, AttackResult};
-use combat_core::{D20RollType, CCError, D20Type};
+use combat_core::conditions::AttackDistance;
 use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
+use combat_core::movement::Feet;
 use rand_var::RandomVariable;
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::sequential::Pair;
@@ -234,6 +236,20 @@ impl<T: RVProb> Attack<T> for WeaponAttack {
         }
         let hit_const = self.get_hit_bonus().get_saved_value().unwrap() as isize;
         Ok(rv.into_mrv().map_keys(|roll| Pair(roll, roll + hit_const)))
+    }
+
+    fn get_atk_range(&self) -> AttackDistance {
+        match self.weapon.get_range() {
+            WeaponRange::Melee(f) => {
+                if f > Feet(5) {
+                    AttackDistance::Any
+                } else {
+                    AttackDistance::Within5Ft
+                }
+            },
+            WeaponRange::Ranged(_, _) => AttackDistance::Beyond5Ft,
+            WeaponRange::Thrown(_, _, _) => AttackDistance::Any
+        }
     }
 
     fn get_dmg_map(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CCError> {

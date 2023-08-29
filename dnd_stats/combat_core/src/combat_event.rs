@@ -1,8 +1,10 @@
 use crate::actions::ActionName;
 use crate::attack::AttackResult;
+use crate::conditions::ConditionName;
 use crate::health::Health;
 use crate::participant::ParticipantId;
 use crate::resources::RefreshTiming;
+use crate::skills::{ContestResult, SkillName};
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
 pub struct RoundId(pub u8);
@@ -53,7 +55,11 @@ pub enum CombatEvent {
     AN(ActionName),
     Attack(ParticipantId, ParticipantId),
     AR(AttackResult),
-    HP(ParticipantId, Health)
+    HP(ParticipantId, Health),
+    ApplyCond(ConditionName, ParticipantId),
+    RemoveCond(ConditionName),
+    SkillContest(ParticipantId, SkillName, ParticipantId, SkillName),
+    SkCR(ContestResult),
 }
 
 impl From<AttackResult> for CombatEvent {
