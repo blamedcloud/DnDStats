@@ -301,7 +301,7 @@ mod tests {
         assert_eq!(&Weapon::greatsword(), attack.get_weapon());
         assert_eq!(20, attack.get_crit_lb());
 
-        let damage = attack.get_damage();
+        let damage = &attack.get_damage().cdm;
 
         let two_d6: RVBig = RandomVariable::new_dice(6).unwrap().multiple(2);
         let base_dmg = two_d6.add_const(3);
@@ -338,8 +338,8 @@ mod tests {
         assert_eq!(27, dmg_rv.upper_bound());
         assert_eq!(result_rv.pdf(AttackResult::Miss), dmg_rv.pdf(0));
         let dmg = attack.get_damage();
-        let hit_ev: BigRational = dmg.get_base_dmg(&no_resist, vec!()).unwrap().expected_value();
-        let crit_ev: BigRational = dmg.get_crit_dmg(&no_resist, vec!()).unwrap().expected_value();
+        let hit_ev: BigRational = dmg.cdm.get_base_dmg(&no_resist, vec!()).unwrap().expected_value();
+        let crit_ev: BigRational = dmg.cdm.get_crit_dmg(&no_resist, vec!()).unwrap().expected_value();
         let ev = result_rv.pdf(AttackResult::Hit) * hit_ev + result_rv.pdf(AttackResult::Crit) * crit_ev;
         assert_eq!(ev, dmg_rv.expected_value());
         let attack_rv = attack.get_attack_outcome_rv(D20RollType::Normal, ac, &no_resist).unwrap();

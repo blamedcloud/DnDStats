@@ -151,7 +151,7 @@ mod tests {
         );
         let mut fighter = Character::new(String::from("duelist"), get_dex_based(), equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::Dueling)))).unwrap();
-        let dmg: RVBig = fighter.get_weapon_attack().unwrap().get_damage().get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let dmg: RVBig = fighter.get_weapon_attack().unwrap().get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
         assert_eq!(6, dmg.lower_bound());
         assert_eq!(13, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from(19), BigInt::from(2)), dmg.expected_value());
@@ -166,7 +166,7 @@ mod tests {
         );
         let mut fighter = Character::new(String::from("gwf"), get_str_based(), equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
-        let dmg: RVBig = fighter.get_weapon_attack().unwrap().get_damage().get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let dmg: RVBig = fighter.get_weapon_attack().unwrap().get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
         assert_eq!(5, dmg.lower_bound());
         assert_eq!(15, dmg.upper_bound());
         let rv: RVBig = RandomVariable::new_dice_reroll(6, 2).unwrap().multiple(2).add_const(3);
@@ -182,8 +182,8 @@ mod tests {
         );
         let mut fighter = Character::new(String::from("kirito"), get_dex_based(), equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::TwoWeaponFighting)))).unwrap();
-        let main_dmg: RVBig = fighter.get_weapon_attack().unwrap().get_damage().get_base_dmg(&HashSet::new(), vec!()).unwrap();
-        let off_dmg: RVBig = fighter.get_offhand_attack().unwrap().get_damage().get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let main_dmg: RVBig = fighter.get_weapon_attack().unwrap().get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let off_dmg: RVBig = fighter.get_offhand_attack().unwrap().get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
         assert_eq!(main_dmg, off_dmg);
     }
 }

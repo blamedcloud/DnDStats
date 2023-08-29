@@ -154,7 +154,6 @@ pub trait Attack : Debug {
         ))
     }
 
-
     fn get_ar_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize) -> Result<ArMRV<T>, CCError> {
         let hit_rv = self.get_acc_rv(hit_type)?;
         Ok(hit_rv.map_keys(|hit| AttackResult::from(hit, target_ac, self.get_crit_lb())))

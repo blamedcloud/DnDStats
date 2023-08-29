@@ -306,3 +306,76 @@ impl<DE: DiceExpr + Clone> DamageManager<DE> {
         Ok(map)
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use rand_var::RV64;
+    use crate::damage::dice_expr::DiceExpression;
+
+    use super::*;
+
+    #[test]
+    fn test_simple_dmg() {
+        let mut dmg: DamageManager<DiceExpression>  = DamageManager::new();
+        dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Die(ExtendedDamageDice::Basic(DamageDice::D6)), ExtendedDamageType::Basic(DamageType::Bludgeoning)));
+        dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Const(3), ExtendedDamageType::Basic(DamageType::Bludgeoning)));
+        let rv1: RV64 = dmg.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+
+        let rv2: RV64 = RandomVariable::new_dice(6).unwrap();
+        let rv2 = rv2.add_const(3);
+        assert_eq!(rv1, rv2);
+
+        let rv3: RV64 = dmg.get_crit_dmg(&HashSet::new(), vec!()).unwrap();
+
+        let rv4: RV64 = RandomVariable::new_dice(6).unwrap().multiple(2);
+        let rv4 = rv4.add_const(3);
+        assert_eq!(rv3, rv4);
+    }
+
+    #[test]
+    fn test_brutal_crit() {
+        let mut dmg: DamageManager<DiceExpression>  = DamageManager::new();
+        dmg.set_weapon(DamageDice::D12, DamageType::Slashing);
+        let weapon_dmg = DamageTerm::new(DiceExprTerm::Die(ExtendedDamageDice::WeaponDice), ExtendedDamageType::WeaponDamage);
+        dmg.add_base_dmg(weapon_dmg);
+        dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Const(5), ExtendedDamageType::WeaponDamage));
+        let brutal_crit_dmg = DamageTerm::new(DiceExprTerm::Die(ExtendedDamageDice::SingleWeaponDie), ExtendedDamageType::WeaponDamage);
+        dmg.add_bonus_crit_dmg(brutal_crit_dmg);
+        let rv1: RV64 = dmg.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+
+        let d12: RV64 = RandomVariable::new_dice(12).unwrap();
+        let const_dmg = 5;
+        let base_dmg = d12.add_const(const_dmg);
+        assert_eq!(rv1, base_dmg);
+
+        let rv2: RV64 = dmg.get_crit_dmg(&HashSet::new(), vec!()).unwrap();
+        let crit_dmg = d12.multiple(3).add_const(const_dmg);
+        assert_eq!(rv2, crit_dmg);
+    }
+
+    #[test]
+    fn test_flame_strike() {
+        let mut dmg: DamageManager<DiceExpression> = DamageManager::new();
+        dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Dice(4, DamageDice::D6.into()), DamageType::Fire.into()));
+        dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Dice(4, DamageDice::D6.into()), DamageType::Radiant.into()));
+        let rv1: RV64 = dmg.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let rv2: RV64 = dmg.get_half_base_dmg(&HashSet::new()).unwrap();
+
+        let eight_d6: RV64 = RandomVariable::new_dice(6).unwrap().multiple(8);
+        assert_eq!(rv1, eight_d6);
+        let save_dmg = eight_d6.half().unwrap();
+        assert_eq!(rv2, save_dmg);
+
+        let resist_fire = HashSet::from([DamageType::Fire]);
+
+        let rv3: RV64 = dmg.get_base_dmg(&resist_fire, vec!()).unwrap();
+        let four_d6: RV64 = RandomVariable::new_dice(6).unwrap().multiple(4);
+        let resist_dmg = four_d6.add_rv(&four_d6.half().unwrap());
+        assert_eq!(rv3, resist_dmg);
+
+        let rv4: RV64 = dmg.get_half_base_dmg(&resist_fire).unwrap();
+        let resist_save_dmg = resist_dmg.half().unwrap();
+        assert_eq!(rv4, resist_save_dmg);
+    }
+}
