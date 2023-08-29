@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
-use std::rc::Rc;
 
 use character_builder::Character;
 use combat_core::ability_scores::AbilityScores;
@@ -11,10 +10,9 @@ use combat_core::participant::Participant;
 use combat_core::resources::ResourceManager;
 use combat_core::skills::SkillManager;
 use combat_core::triggers::TriggerManager;
-use rand_var::rv_traits::prob_type::RVProb;
 
 #[derive(Debug, Clone)]
-pub struct Player<T: RVProb> {
+pub struct Player {
     name: String,
     ac: isize,
     max_hp: isize,
@@ -22,19 +20,19 @@ pub struct Player<T: RVProb> {
     resistances: HashSet<DamageType>,
     ability_scores: AbilityScores,
     skill_manager: SkillManager,
-    action_manager: ActionManager<T>,
+    action_manager: ActionManager,
     resource_manager: ResourceManager,
     trigger_manager: TriggerManager,
     condition_manager: ConditionManager,
 }
 
-impl<T: RVProb> Player<T> {
+impl Player {
     pub fn get_name(&self) -> &str {
         &self.name
     }
 }
 
-impl<T: RVProb> From<Character> for Player<T> {
+impl From<Character> for Player {
     fn from(value: Character) -> Self {
         let mut am = ActionManager::new();
 
@@ -42,8 +40,8 @@ impl<T: RVProb> From<Character> for Player<T> {
             let cab = co.action;
             let at = co.action_type;
             let req_t = co.req_target;
-            let ca: CombatAction<T> = match cab {
-                CABuilder::WeaponAttack(wa) => CombatAction::Attack(Rc::new(wa)),
+            let ca: CombatAction = match cab {
+                CABuilder::WeaponAttack(wa) => CombatAction::Attack(wa.into()),
                 CABuilder::SelfHeal(cde) => CombatAction::SelfHeal(cde.into()),
                 CABuilder::AdditionalAttacks(aa) => CombatAction::AdditionalAttacks(aa),
                 CABuilder::ByName => CombatAction::ByName,
@@ -68,7 +66,7 @@ impl<T: RVProb> From<Character> for Player<T> {
     }
 }
 
-impl<T: RVProb> Participant<T> for Player<T> {
+impl Participant for Player {
     fn get_ac(&self) -> isize {
         self.ac
     }
@@ -93,7 +91,7 @@ impl<T: RVProb> Participant<T> for Player<T> {
         &self.skill_manager
     }
 
-    fn get_action_manager(&self) -> &ActionManager<T> {
+    fn get_action_manager(&self) -> &ActionManager {
         &self.action_manager
     }
 

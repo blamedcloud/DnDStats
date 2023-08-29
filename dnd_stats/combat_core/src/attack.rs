@@ -125,17 +125,20 @@ impl<T: RVProb> AtkDmgMap<T> {
     }
 }
 
-pub trait Attack<T: RVProb> : Debug {
-    fn get_miss_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
-    fn get_hit_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
-    fn get_crit_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
-    fn get_acc_rv(&self, hit_type: D20RollType) -> Result<AccMRV<T>, CCError>;
+pub trait Attack : Debug {
+    fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
+    fn get_hit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
+    fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
+
+    fn get_acc_rv<T: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<T>, CCError>;
 
     // TODO: this should eventually return something like Equipment::WeaponRange instead
     // and then the map should validate this.
     fn get_atk_range(&self) -> AttackDistance;
+    fn get_crit_lb(&self) -> isize;
+    fn get_hit_bonus(&self) -> isize;
 
-    fn get_ar_dmg(&self, ar: AttackResult, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+    fn get_ar_dmg<T: RVProb>(&self, ar: AttackResult, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
         match ar {
             AttackResult::Miss => self.get_miss_dmg(resistances, bonus_dmg),
             AttackResult::Hit => self.get_hit_dmg(resistances, bonus_dmg),
@@ -143,7 +146,7 @@ pub trait Attack<T: RVProb> : Debug {
         }
     }
 
-    fn get_dmg_map(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CCError> {
+    fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CCError> {
         Ok(AtkDmgMap::new(
             self.get_miss_dmg(resistances, vec!())?,
             self.get_hit_dmg(resistances, vec!())?,
@@ -151,27 +154,24 @@ pub trait Attack<T: RVProb> : Debug {
         ))
     }
 
-    fn get_crit_lb(&self) -> isize {
-        20
-    }
 
-    fn get_ar_rv(&self, hit_type: D20RollType, target_ac: isize) -> Result<ArMRV<T>, CCError> {
+    fn get_ar_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize) -> Result<ArMRV<T>, CCError> {
         let hit_rv = self.get_acc_rv(hit_type)?;
         Ok(hit_rv.map_keys(|hit| AttackResult::from(hit, target_ac, self.get_crit_lb())))
     }
 
-    fn get_ce_rv(&self, hit_type: D20RollType, target_ac: isize) -> Result<MapRandVar<CombatEvent, T>, CCError> {
+    fn get_ce_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize) -> Result<MapRandVar<CombatEvent, T>, CCError> {
         let ar_rv = self.get_ar_rv(hit_type, target_ac)?;
         Ok(ar_rv.map_keys(|ar| ar.into()))
     }
 
-    fn get_dmg_rv(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CCError> {
+    fn get_dmg_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CCError> {
         let attack_result_rv = self.get_ar_rv(hit_type, target_ac)?;
         let dmg_map = self.get_dmg_map(resistances)?;
         Ok(attack_result_rv.consolidate(&dmg_map.into_ar_map())?.into())
     }
 
-    fn get_ao_rv(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<AoMRV<T>, CCError> {
+    fn get_ao_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<AoMRV<T>, CCError> {
         let attack_result_rv = self.get_ar_rv(hit_type, target_ac)?;
         let dmg_map = self.get_dmg_map(resistances)?;
         Ok(attack_result_rv.projection(&dmg_map.into_ar_map())?)

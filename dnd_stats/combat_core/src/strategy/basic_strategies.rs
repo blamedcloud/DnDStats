@@ -1,7 +1,4 @@
 use std::fmt::Debug;
-use std::marker::PhantomData;
-
-use rand_var::rv_traits::prob_type::RVProb;
 
 use crate::actions::ActionType;
 use crate::combat_state::CombatState;
@@ -11,16 +8,16 @@ use crate::strategy::{Strategy, StrategyBuilder, StrategyDecision};
 use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
 
 pub struct DoNothingBuilder;
-impl<T: RVProb> StrategyBuilder<T> for DoNothingBuilder {
-    fn build_strategy<'pm>(self, _: &'pm Vec<TeamMember<T>>, _: ParticipantId) -> Box<dyn Strategy<T> + 'pm> {
+impl StrategyBuilder for DoNothingBuilder {
+    fn build_strategy<'pm>(self, _: &'pm Vec<TeamMember>, _: ParticipantId) -> Box<dyn Strategy + 'pm> {
         Box::new(DoNothing)
     }
 }
 
 #[derive(Debug)]
 pub struct DoNothing;
-impl<T: RVProb> Strategy<T> for DoNothing {
-    fn get_participants(&self) -> &Vec<TeamMember<T>> {
+impl Strategy for DoNothing {
+    fn get_participants(&self) -> &Vec<TeamMember> {
         panic!("Should never call this!");
     }
 
@@ -38,10 +35,9 @@ impl<T: RVProb> Strategy<T> for DoNothing {
 }
 
 pub struct RemoveCondBuilder;
-impl<T: RVProb> StrategyBuilder<T> for RemoveCondBuilder {
-    fn build_strategy<'pm>(self, _: &'pm Vec<TeamMember<T>>, me: ParticipantId) -> Box<dyn Strategy<T> + 'pm> {
+impl StrategyBuilder for RemoveCondBuilder {
+    fn build_strategy<'pm>(self, _: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
         let str = RemoveConditions {
-            _t: PhantomData,
             my_pid: me,
         };
         Box::new(str)
@@ -49,12 +45,11 @@ impl<T: RVProb> StrategyBuilder<T> for RemoveCondBuilder {
 }
 
 #[derive(Debug)]
-pub struct RemoveConditions<T> {
-    _t: PhantomData<T>,
+pub struct RemoveConditions {
     my_pid: ParticipantId,
 }
-impl<T: RVProb> Strategy<T> for RemoveConditions<T> {
-    fn get_participants(&self) -> &Vec<TeamMember<T>> {
+impl Strategy for RemoveConditions {
+    fn get_participants(&self) -> &Vec<TeamMember> {
         panic!("Should never call this!");
     }
 

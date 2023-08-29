@@ -7,7 +7,7 @@ use combat_core::resources::resource_amounts::{RefreshBy, ResourceCap};
 use crate::{CBError, Character};
 use crate::attributed_bonus::{BonusTerm, BonusType};
 use crate::classes::{Class, ClassName, SubClass};
-use crate::damage_manager::CharDiceExpr;
+use crate::char_damage::CharDiceExpr;
 use crate::feature::{ExtraAttack, Feature};
 
 pub struct FighterClass;

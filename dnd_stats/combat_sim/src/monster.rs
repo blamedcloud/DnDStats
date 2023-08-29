@@ -1,32 +1,30 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
-use std::rc::Rc;
 
-use combat_core::attack::basic_attack::BasicAttack;
 use combat_core::ability_scores::{Ability, AbilityScores};
 use combat_core::actions::{ActionManager, ActionName, ActionType, AttackType, CombatAction, CombatOption};
+use combat_core::attack::basic_attack::BasicAttack;
 use combat_core::conditions::ConditionManager;
 use combat_core::damage::DamageType;
 use combat_core::participant::Participant;
 use combat_core::resources::ResourceManager;
 use combat_core::skills::SkillManager;
 use combat_core::triggers::TriggerManager;
-use rand_var::rv_traits::prob_type::RVProb;
 
 #[derive(Debug, Clone)]
-pub struct Monster<T: RVProb> {
+pub struct Monster {
     max_hp: isize,
     ac: isize,
     prof: isize,
     resistances: HashSet<DamageType>,
     ability_scores: AbilityScores,
     skill_manager: SkillManager,
-    action_manager: ActionManager<T>,
+    action_manager: ActionManager,
     resource_manager: ResourceManager,
     condition_manager: ConditionManager,
 }
 
-impl<T: RVProb> Monster<T> {
+impl Monster {
     pub fn new(max_hp: isize, ac: isize, prof: isize, ba: BasicAttack, num_attacks: u8) -> Self {
         Self {
             max_hp,
@@ -93,17 +91,17 @@ pub fn ability_scores_by_cr(cr: u8, primary_ability: Ability) -> AbilityScores {
     ability_scores_by_prof(prof, primary_ability)
 }
 
-pub fn create_basic_attack_am<T: RVProb>(ba: BasicAttack, num_attacks: u8) -> ActionManager<T> {
+pub fn create_basic_attack_am(ba: BasicAttack, num_attacks: u8) -> ActionManager {
     let mut am = ActionManager::new();
     am.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CombatAction::AdditionalAttacks(num_attacks)));
 
-    let pa_co = CombatOption::new_target(ActionType::SingleAttack, CombatAction::Attack(Rc::new(ba)), true);
+    let pa_co = CombatOption::new_target(ActionType::SingleAttack, CombatAction::Attack(ba), true);
     am.insert(ActionName::PrimaryAttack(AttackType::Normal), pa_co);
 
     am
 }
 
-impl<T: RVProb> Participant<T> for Monster<T> {
+impl Participant for Monster {
     fn get_ac(&self) -> isize {
         self.ac
     }
@@ -128,7 +126,7 @@ impl<T: RVProb> Participant<T> for Monster<T> {
         &self.skill_manager
     }
 
-    fn get_action_manager(&self) -> &ActionManager<T> {
+    fn get_action_manager(&self) -> &ActionManager {
         &self.action_manager
     }
 

@@ -187,7 +187,7 @@ impl<T: RVProb> SkillContest<T> {
         }
     }
 
-    pub fn build(initiator: &Box<dyn Participant<T>>, defender: &Box<dyn Participant<T>>, initiator_skill: SkillName, defender_skill: SkillName) -> Self {
+    pub fn build(initiator: &Box<dyn Participant>, defender: &Box<dyn Participant>, initiator_skill: SkillName, defender_skill: SkillName) -> Self {
         let i_sm = initiator.get_skill_manager();
         let d_sm = defender.get_skill_manager();
         let i_rv = i_sm.get_rv(initiator_skill, initiator.get_ability_scores(), initiator.get_prof());
@@ -195,7 +195,7 @@ impl<T: RVProb> SkillContest<T> {
         SkillContest::new(&i_rv, &d_rv)
     }
 
-    pub fn grapple_like(grappler: &Box<dyn Participant<T>>, target: &Box<dyn Participant<T>>, grappler_is_initiator: bool) -> Self {
+    pub fn grapple_like(grappler: &Box<dyn Participant>, target: &Box<dyn Participant>, grappler_is_initiator: bool) -> Self {
         let g_sm = grappler.get_skill_manager();
         let t_sm = target.get_skill_manager();
 

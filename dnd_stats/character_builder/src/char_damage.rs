@@ -177,6 +177,18 @@ impl CharDmgManager {
     }
 }
 
+impl From<CharDmgManager> for DamageManager<DiceExpression> {
+    fn from(value: CharDmgManager) -> Self {
+        let dmg_feats = value.cdm.get_dmg_features().clone();
+        let weapon = value.cdm.get_weapon_stats();
+        let mut dmg_manager = DamageManager::prebuilt(value.cdm.base_dmg, value.cdm.bonus_crit_dmg, value.cdm.miss_dmg);
+        dmg_manager.add_all_damage_features(dmg_feats);
+        if weapon.is_some() {
+            dmg_manager.set_weapon(weapon.unwrap().0, weapon.unwrap().1);
+        }
+        dmg_manager
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -9,24 +9,23 @@ use combat_core::participant::Participant;
 use combat_core::resources::ResourceManager;
 use combat_core::skills::SkillManager;
 use combat_core::triggers::TriggerManager;
-use rand_var::rv_traits::prob_type::RVProb;
 
 use crate::monster::{ability_scores_by_cr, ac_to_cr, prof_by_cr};
 
 #[derive(Debug, Clone)]
-pub struct TargetDummy<T: RVProb> {
+pub struct TargetDummy {
     max_hp: isize,
     ac: isize,
     prof: isize,
     resistances: HashSet<DamageType>,
     ability_scores: AbilityScores,
     skill_manager: SkillManager,
-    action_manager: ActionManager<T>,
+    action_manager: ActionManager,
     resource_manager: ResourceManager,
     condition_manager: ConditionManager,
 }
 
-impl<T: RVProb> TargetDummy<T> {
+impl TargetDummy {
     pub fn new(hp: isize, ac: isize) -> Self {
         let cr = ac_to_cr(ac);
         TargetDummy {
@@ -43,7 +42,7 @@ impl<T: RVProb> TargetDummy<T> {
     }
 }
 
-impl<T: RVProb> Participant<T> for TargetDummy<T> {
+impl Participant for TargetDummy {
     fn get_ac(&self) -> isize {
         self.ac
     }
@@ -68,7 +67,7 @@ impl<T: RVProb> Participant<T> for TargetDummy<T> {
         &self.skill_manager
     }
 
-    fn get_action_manager(&self) -> &ActionManager<T> {
+    fn get_action_manager(&self) -> &ActionManager {
         &self.action_manager
     }
 

@@ -18,14 +18,14 @@ use crate::combat_result_rv::prob_combat_result::ProbCombatResult;
 
 #[derive(Debug, Clone)]
 pub struct ProbCombatState<'pm, T: RVProb> {
-    participants: &'pm ParticipantManager<T>,
+    participants: &'pm ParticipantManager,
     state: CombatState,
     dmg: Vec<RandomVariable<T>>,
     prob: T,
 }
 
 impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
-    pub fn new(pm: &'pm ParticipantManager<T>) -> Self {
+    pub fn new(pm: &'pm ParticipantManager) -> Self {
         let mut dmg = Vec::with_capacity(pm.len());
         for _ in 0..pm.len() {
             dmg.push(RandomVariable::new_constant(0).unwrap());

@@ -1,5 +1,3 @@
-use rand_var::rv_traits::prob_type::RVProb;
-
 use crate::actions::{ActionName, AttackType};
 use crate::attack::AttackResult;
 use crate::combat_state::CombatState;
@@ -20,8 +18,8 @@ impl SneakAttackStrBuilder {
     }
 }
 
-impl<T: RVProb> StrategyBuilder<T> for SneakAttackStrBuilder {
-    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember<T>>, me: ParticipantId) -> Box<dyn Strategy<T> + 'pm> {
+impl StrategyBuilder for SneakAttackStrBuilder {
+    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
         let str = SneakAttackStr {
             participants,
             my_pid: me,
@@ -32,14 +30,14 @@ impl<T: RVProb> StrategyBuilder<T> for SneakAttackStrBuilder {
 }
 
 #[derive(Debug)]
-pub struct SneakAttackStr<'pm, T: RVProb> {
-    participants: &'pm Vec<TeamMember<T>>,
+pub struct SneakAttackStr<'pm> {
+    participants: &'pm Vec<TeamMember>,
     my_pid: ParticipantId,
     greedy: bool,
 }
 
-impl<'pm, T: RVProb> Strategy<T> for SneakAttackStr<'pm, T> {
-    fn get_participants(&self) -> &Vec<TeamMember<T>> {
+impl<'pm> Strategy for SneakAttackStr<'pm> {
+    fn get_participants(&self) -> &Vec<TeamMember> {
         self.participants
     }
 

@@ -1,7 +1,5 @@
 use std::fmt::Debug;
 
-use rand_var::rv_traits::prob_type::RVProb;
-
 use crate::actions::{ActionName, ActionType};
 use crate::CCError;
 use crate::combat_state::CombatState;
@@ -80,19 +78,19 @@ impl From<ActionName> for StrategicAction {
     }
 }
 
-pub trait StrategyBuilder<T: RVProb> {
-    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember<T>>, me: ParticipantId) -> Box<dyn Strategy<T> + 'pm>;
+pub trait StrategyBuilder {
+    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm>;
 }
 
-pub trait Strategy<T: RVProb> : Debug {
-    fn get_participants(&self) -> &Vec<TeamMember<T>>;
+pub trait Strategy : Debug {
+    fn get_participants(&self) -> &Vec<TeamMember>;
     fn get_my_pid(&self) -> ParticipantId;
 
     fn get_action(&self, state: &CombatState) -> StrategyDecision;
 
     fn handle_trigger(&self, tt: TriggerType, tc: TriggerContext, state: &CombatState) -> Vec<TriggerResponse>;
 
-    fn get_me(&self) -> &Box<dyn Participant<T>> {
+    fn get_me(&self) -> &Box<dyn Participant> {
         &self.get_participants().get(self.get_my_pid().0).unwrap().participant
     }
 
@@ -110,14 +108,14 @@ pub trait Strategy<T: RVProb> : Debug {
     }
 }
 
-pub struct StrategyManager<'pm, T: RVProb> {
-    pm: &'pm ParticipantManager<T>,
-    strategies: Vec<Box<dyn Strategy<T> + 'pm>>,
+pub struct StrategyManager<'pm> {
+    pm: &'pm ParticipantManager,
+    strategies: Vec<Box<dyn Strategy + 'pm>>,
     compiled: bool
 }
 
-impl<'pm, T: RVProb> StrategyManager<'pm, T> {
-    pub fn new(pm: &'pm ParticipantManager<T>) -> Result<Self, CCError> {
+impl<'pm> StrategyManager<'pm> {
+    pub fn new(pm: &'pm ParticipantManager) -> Result<Self, CCError> {
         if !pm.is_compiled() {
             return Err(CCError::PMNotCompiled);
         }
@@ -128,7 +126,7 @@ impl<'pm, T: RVProb> StrategyManager<'pm, T> {
         })
     }
 
-    pub fn add_participant(&mut self, str_bldr: impl StrategyBuilder<T>) -> Result<(), CCError> {
+    pub fn add_participant(&mut self, str_bldr: impl StrategyBuilder) -> Result<(), CCError> {
         if self.compiled {
             return Err(CCError::SMPushAfterCompile);
         }
@@ -142,7 +140,7 @@ impl<'pm, T: RVProb> StrategyManager<'pm, T> {
         Ok(())
     }
 
-    pub fn get_pm(&self) -> &'pm ParticipantManager<T> {
+    pub fn get_pm(&self) -> &'pm ParticipantManager {
         self.pm
     }
 
@@ -158,7 +156,7 @@ impl<'pm, T: RVProb> StrategyManager<'pm, T> {
         self.strategies.len()
     }
 
-    pub fn get_strategy(&self, pid: ParticipantId) -> &Box<dyn Strategy<T> + 'pm> {
+    pub fn get_strategy(&self, pid: ParticipantId) -> &Box<dyn Strategy + 'pm> {
         self.strategies.get(pid.0).unwrap()
     }
 }

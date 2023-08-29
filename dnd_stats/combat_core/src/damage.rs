@@ -148,6 +148,41 @@ impl<DE: DiceExpr + Clone> DamageManager<DE> {
         }
     }
 
+    pub fn prebuilt<IDE: Into<DE>>(base: DamageExpression<IDE>, crit: DamageExpression<IDE>, miss: DamageExpression<IDE>) -> Self {
+        let mut new_base = HashMap::new();
+        for (edt, ide) in base {
+            new_base.insert(edt, ide.into());
+        }
+        let mut new_crit = HashMap::new();
+        for (edt, ide) in crit {
+            new_crit.insert(edt, ide.into());
+        }
+        let mut new_miss = HashMap::new();
+        for (edt, ide) in miss {
+            new_miss.insert(edt, ide.into());
+        }
+        Self {
+            base_dmg: new_base,
+            bonus_crit_dmg: new_crit,
+            miss_dmg: new_miss,
+            damage_features: HashSet::new(),
+            weapon_die: None,
+            weapon_dmg_type: None,
+        }
+    }
+
+    pub fn get_dmg_features(&self) -> &HashSet<DamageFeature> {
+        &self.damage_features
+    }
+
+    pub fn get_weapon_stats(&self) -> Option<(DamageDice, DamageType)> {
+        if self.weapon_die.is_none() || self.weapon_dmg_type.is_none() {
+            None
+        } else {
+            Some((self.weapon_die.unwrap(), self.weapon_dmg_type.unwrap()))
+        }
+    }
+
     fn merge_dmg(de: &mut DamageExpression<DE>, dtv: Vec<DamageTerm>) {
         for dt in dtv.into_iter() {
             DamageManager::add_dmg_term(de, dt);
@@ -179,6 +214,10 @@ impl<DE: DiceExpr + Clone> DamageManager<DE> {
 
     pub fn add_damage_feature(&mut self, dmg_feat: DamageFeature) {
         self.damage_features.insert(dmg_feat);
+    }
+
+    pub fn add_all_damage_features(&mut self, new_dmg_feats: HashSet<DamageFeature>) {
+        self.damage_features.extend(new_dmg_feats.iter());
     }
 
     fn get_dmg_type(&self, edt: &ExtendedDamageType) -> Result<DamageType, CCError> {

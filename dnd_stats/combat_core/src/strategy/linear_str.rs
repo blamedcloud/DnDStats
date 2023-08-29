@@ -1,45 +1,36 @@
-use std::marker::PhantomData;
-
-use rand_var::rv_traits::prob_type::RVProb;
-
 use crate::combat_state::CombatState;
 use crate::participant::{ParticipantId, TeamMember};
 use crate::strategy::{Strategy, StrategyBuilder, StrategyDecision};
 use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
 
-pub struct PairStrBuilder<T, S1, S2>
+pub struct PairStrBuilder<S1, S2>
 where
-    T: RVProb,
-    S1: StrategyBuilder<T>,
-    S2: StrategyBuilder<T>,
+    S1: StrategyBuilder,
+    S2: StrategyBuilder,
 {
-    _t: PhantomData<T>,
     str1: S1,
     str2: S2,
 }
 
-impl<T, S1, S2> PairStrBuilder<T, S1, S2>
+impl<S1, S2> PairStrBuilder<S1, S2>
 where
-    T: RVProb,
-    S1: StrategyBuilder<T>,
-    S2: StrategyBuilder<T>,
+    S1: StrategyBuilder,
+    S2: StrategyBuilder,
 {
     pub fn new(s1: S1, s2: S2) -> Self {
         Self {
-            _t: PhantomData,
             str1: s1,
             str2: s2,
         }
     }
 }
 
-impl<T, S1, S2> StrategyBuilder<T> for PairStrBuilder<T, S1, S2>
+impl<S1, S2> StrategyBuilder for PairStrBuilder<S1, S2>
 where
-    T: RVProb,
-    S1: StrategyBuilder<T>,
-    S2: StrategyBuilder<T>,
+    S1: StrategyBuilder,
+    S2: StrategyBuilder,
 {
-    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember<T>>, me: ParticipantId) -> Box<dyn Strategy<T> + 'pm> {
+    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
         let strategies = vec!(
             self.str1.build_strategy(participants, me),
             self.str2.build_strategy(participants, me),
@@ -51,12 +42,12 @@ where
 }
 
 #[derive(Debug)]
-pub struct LinearStrategy<'pm, T: RVProb> {
-    strategies: Vec<Box<dyn Strategy<T> + 'pm>>,
+pub struct LinearStrategy<'pm> {
+    strategies: Vec<Box<dyn Strategy + 'pm>>,
 }
 
-impl<'pm, T: RVProb> Strategy<T> for LinearStrategy<'pm, T> {
-    fn get_participants(&self) -> &Vec<TeamMember<T>> {
+impl<'pm> Strategy for LinearStrategy<'pm> {
+    fn get_participants(&self) -> &Vec<TeamMember> {
         self.strategies.first().unwrap().get_participants()
     }
 

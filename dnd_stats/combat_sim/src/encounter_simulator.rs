@@ -1,11 +1,10 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use num::{BigRational, Rational64};
 
-use combat_core::CCError;
 use combat_core::actions::{ActionName, ActionType, CombatAction};
 use combat_core::attack::{Attack, AttackResult};
+use combat_core::CCError;
 use combat_core::combat_event::{CombatEvent, CombatTiming};
 use combat_core::conditions::{ConditionLifetime, ConditionName};
 use combat_core::damage::DamageTerm;
@@ -32,8 +31,8 @@ type ResultHA<'pm, T> = Result<HandledAction<'pm, T>, CSError>;
 type ResultCSE = Result<(), CSError>;
 
 pub struct EncounterSimulator<'sm ,'pm, T: RVProb> {
-    participants: &'pm ParticipantManager<T>,
-    strategies: &'sm StrategyManager<'pm, T>,
+    participants: &'pm ParticipantManager,
+    strategies: &'sm StrategyManager<'pm>,
     round_num: u8,
     cs_rv: CombatStateRV<'pm, T>,
     merge_transpositions: bool,
@@ -43,7 +42,7 @@ pub type ES64<'sm, 'pm> = EncounterSimulator<'sm, 'pm, Rational64>;
 pub type ESBig<'sm, 'pm> = EncounterSimulator<'sm, 'pm, BigRational>;
 
 impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
-    pub fn new(sm: &'sm StrategyManager<'pm, T>) -> Result<Self, CSError> {
+    pub fn new(sm: &'sm StrategyManager<'pm>) -> Result<Self, CSError> {
         if !sm.is_compiled() {
             return Err(CSError::CCE(CCError::SMNotCompiled));
         }
@@ -129,7 +128,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         Ok(())
     }
 
-    fn get_strategy(&self, pid: ParticipantId) -> &Box<dyn Strategy<T> + 'pm> {
+    fn get_strategy(&self, pid: ParticipantId) -> &Box<dyn Strategy + 'pm> {
         self.strategies.get_strategy(pid)
     }
 
@@ -225,7 +224,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         }
     }
 
-    fn get_participant(&self, pid: ParticipantId) -> &Box<dyn Participant<T>> {
+    fn get_participant(&self, pid: ParticipantId) -> &Box<dyn Participant> {
         &self.participants.get_participant(pid).participant
     }
 
@@ -339,7 +338,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         Ok(results)
     }
 
-    fn handle_attack(&self, pcs: ProbCombatState<'pm, T>, atk: &Rc<dyn Attack<T>>, atker_pid: ParticipantId, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
+    fn handle_attack(&self, pcs: ProbCombatState<'pm, T>, atk: &impl Attack, atker_pid: ParticipantId, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
         let attacker = self.get_participant(atker_pid);
         let target = self.get_participant(target_pid);
         let dead_at_zero = self.is_dead_at_zero(target_pid);
@@ -424,7 +423,6 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
 mod tests {
     use num::{One, Rational64};
 
-    use combat_core::attack::basic_attack::BasicAttack;
     use character_builder::Character;
     use character_builder::classes::ClassName;
     use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};
@@ -432,6 +430,7 @@ mod tests {
     use combat_core::ability_scores::AbilityScores;
     use combat_core::actions::{ActionName, AttackType};
     use combat_core::attack::AttackResult;
+    use combat_core::attack::basic_attack::BasicAttack;
     use combat_core::combat_event::{CombatEvent, CombatTiming, RoundId};
     use combat_core::D20RollType;
     use combat_core::damage::{DamageDice, DamageType};

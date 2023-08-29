@@ -1,5 +1,3 @@
-use rand_var::rv_traits::prob_type::RVProb;
-
 use crate::actions::{ActionName, AttackType};
 use crate::combat_state::CombatState;
 use crate::participant::{ParticipantId, TeamMember};
@@ -9,8 +7,8 @@ use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
 
 pub struct DualWieldStrBuilder;
 
-impl<T: RVProb> StrategyBuilder<T> for DualWieldStrBuilder {
-    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember<T>>, me: ParticipantId) -> Box<dyn Strategy<T> + 'pm> {
+impl StrategyBuilder for DualWieldStrBuilder {
+    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
         let str = DualWieldStr {
             participants,
             my_pid: me,
@@ -20,13 +18,13 @@ impl<T: RVProb> StrategyBuilder<T> for DualWieldStrBuilder {
 }
 
 #[derive(Debug)]
-pub struct DualWieldStr<'pm, T: RVProb> {
-    participants: &'pm Vec<TeamMember<T>>,
+pub struct DualWieldStr<'pm> {
+    participants: &'pm Vec<TeamMember>,
     my_pid: ParticipantId,
 }
 
-impl<'pm, T: RVProb> Strategy<T> for DualWieldStr<'pm, T> {
-    fn get_participants(&self) -> &Vec<TeamMember<T>> {
+impl<'pm> Strategy for DualWieldStr<'pm> {
+    fn get_participants(&self) -> &Vec<TeamMember> {
         self.participants
     }
 

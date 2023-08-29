@@ -54,8 +54,8 @@ pub struct CombatSimulator<T: RVProb> {
 
 // I'm not really sure why the compiler thinks this must be static
 // TODO: fix this ?
-impl<T: RVProb + 'static> CombatSimulator<T> {
-    pub fn do_encounter(character: Character, str_bldr: impl StrategyBuilder<T>, dummy_ac: isize, num_rounds: u8) -> Result<Self, CSError> {
+impl<T: RVProb> CombatSimulator<T> {
+    pub fn do_encounter(character: Character, str_bldr: impl StrategyBuilder, dummy_ac: isize, num_rounds: u8) -> Result<Self, CSError> {
         let player = Player::from(character);
         let dummy = TargetDummy::new(isize::MAX, dummy_ac);
 

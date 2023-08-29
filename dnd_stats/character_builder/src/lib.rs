@@ -16,14 +16,14 @@ use rand_var::rv_traits::RVError;
 
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType, CharacterDependant};
 use crate::classes::{ClassName, SubClass};
-use crate::damage_manager::CharDiceExpr;
+use crate::char_damage::CharDiceExpr;
 use crate::equipment::{ArmorType, Equipment};
 use crate::feature::Feature;
 use crate::weapon_attack::WeaponAttack;
 
 pub mod attributed_bonus;
 pub mod classes;
-pub mod damage_manager;
+pub mod char_damage;
 pub mod equipment;
 pub mod feature;
 pub mod weapon_attack;

@@ -1,8 +1,6 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 
-use rand_var::rv_traits::prob_type::RVProb;
-
 use crate::ability_scores::AbilityScores;
 use crate::actions::ActionManager;
 use crate::CCError;
@@ -12,14 +10,14 @@ use crate::resources::ResourceManager;
 use crate::skills::SkillManager;
 use crate::triggers::TriggerManager;
 
-pub trait Participant<T: RVProb> : Debug {
+pub trait Participant : Debug {
     fn get_ac(&self) -> isize;
     fn get_max_hp(&self) -> isize;
     fn get_prof(&self) -> isize;
     fn get_resistances(&self) -> &HashSet<DamageType>;
     fn get_ability_scores(&self) -> &AbilityScores;
     fn get_skill_manager(&self) -> &SkillManager;
-    fn get_action_manager(&self) -> &ActionManager<T>;
+    fn get_action_manager(&self) -> &ActionManager;
     fn get_resource_manager(&self) -> &ResourceManager;
     fn has_triggers(&self) -> bool;
     fn get_trigger_manager(&self) -> Option<&TriggerManager>;
@@ -33,12 +31,12 @@ pub enum Team {
 }
 
 #[derive(Debug)]
-pub struct TeamMember<T: RVProb> {
+pub struct TeamMember {
     pub team: Team,
-    pub participant: Box<dyn Participant<T>>,
+    pub participant: Box<dyn Participant>,
 }
-impl<T: RVProb> TeamMember<T> {
-    pub fn new(team: Team, participant: Box<dyn Participant<T>>) -> Self {
+impl TeamMember {
+    pub fn new(team: Team, participant: Box<dyn Participant>) -> Self {
         TeamMember {
             team,
             participant,
@@ -54,8 +52,8 @@ pub struct ParticipantData {
     pub resistances: HashSet<DamageType>,
 }
 
-impl<T: RVProb> From<&TeamMember<T>> for ParticipantData {
-    fn from(value: &TeamMember<T>) -> Self {
+impl From<&TeamMember> for ParticipantData {
+    fn from(value: &TeamMember) -> Self {
         Self {
             team: value.team,
             ac: value.participant.get_ac(),
@@ -74,14 +72,14 @@ impl From<usize> for ParticipantId {
 }
 
 #[derive(Debug)]
-pub struct ParticipantManager<T: RVProb> { // In order of initiative
-    participants: Vec<TeamMember<T>>,
+pub struct ParticipantManager { // In order of initiative
+    participants: Vec<TeamMember>,
     initial_resources: Vec<ResourceManager>,
     initial_conditions: Vec<ConditionManager>,
     compiled: bool,
 }
 
-impl<T: RVProb> ParticipantManager<T> {
+impl ParticipantManager {
     pub fn new() -> Self {
         Self {
             participants: Vec::new(),
@@ -91,15 +89,15 @@ impl<T: RVProb> ParticipantManager<T> {
         }
     }
 
-    pub fn add_player(&mut self, player: Box<dyn Participant<T>>) -> Result<(), CCError> {
+    pub fn add_player(&mut self, player: Box<dyn Participant>) -> Result<(), CCError> {
         self.add_participant(TeamMember::new(Team::Players, player))
     }
 
-    pub fn add_enemy(&mut self, enemy: Box<dyn Participant<T>>) -> Result<(), CCError> {
+    pub fn add_enemy(&mut self, enemy: Box<dyn Participant>) -> Result<(), CCError> {
         self.add_participant(TeamMember::new(Team::Enemies, enemy))
     }
 
-    pub fn add_participant(&mut self, tm: TeamMember<T>) -> Result<(), CCError> {
+    pub fn add_participant(&mut self, tm: TeamMember) -> Result<(), CCError> {
         if self.compiled {
             return Err(CCError::PMPushAfterCompile);
         }
@@ -121,11 +119,11 @@ impl<T: RVProb> ParticipantManager<T> {
         self.participants.len()
     }
 
-    pub fn get_participants(&self) -> &Vec<TeamMember<T>> {
+    pub fn get_participants(&self) -> &Vec<TeamMember> {
         &self.participants
     }
 
-    pub fn get_participant(&self, pid: ParticipantId) -> &TeamMember<T> {
+    pub fn get_participant(&self, pid: ParticipantId) -> &TeamMember {
         self.participants.get(pid.0).unwrap()
     }
 

@@ -1,9 +1,5 @@
 use std::collections::HashMap;
-use std::rc::Rc;
-
-use rand_var::rv_traits::prob_type::RVProb;
-
-use crate::attack::Attack;
+use crate::attack::basic_attack::BasicAttack;
 use crate::damage::dice_expr::DiceExpression;
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
@@ -40,8 +36,8 @@ pub enum CABuilder<A, D> {
 }
 
 #[derive(Debug, Clone)]
-pub enum CombatAction<T: RVProb> {
-    Attack(Rc<dyn Attack<T>>),
+pub enum CombatAction {
+    Attack(BasicAttack),
     SelfHeal(DiceExpression),
     AdditionalAttacks(u8),
     ByName,
@@ -72,8 +68,8 @@ impl<CA> CombatOption<CA> {
     }
 }
 
-impl<T: RVProb> From<(ActionType, CombatAction<T>)> for CombatOption<CombatAction<T>> {
-    fn from(value: (ActionType, CombatAction<T>)) -> Self {
+impl From<(ActionType, CombatAction)> for CombatOption<CombatAction> {
+    fn from(value: (ActionType, CombatAction)) -> Self {
         CombatOption {
             action_type: value.0,
             action: value.1,
@@ -103,4 +99,4 @@ pub enum ActionName {
 }
 
 pub type ActionBuilder<A, D> = HashMap<ActionName, CombatOption<CABuilder<A, D>>>;
-pub type ActionManager<T> = HashMap<ActionName, CombatOption<CombatAction<T>>>;
+pub type ActionManager = HashMap<ActionName, CombatOption<CombatAction>>;

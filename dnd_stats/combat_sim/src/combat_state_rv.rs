@@ -17,7 +17,7 @@ pub struct CombatStateRV<'pm, T: RVProb> {
 }
 
 impl<'pm, T: RVProb> CombatStateRV<'pm, T> {
-    pub fn new(pm: &'pm ParticipantManager<T>) -> Self {
+    pub fn new(pm: &'pm ParticipantManager) -> Self {
         let mut states = Vec::new();
         states.push(ProbCombatState::new(pm));
         Self {

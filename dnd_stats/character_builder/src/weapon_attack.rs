@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use combat_core::{CCError, D20RollType, D20Type};
 use combat_core::ability_scores::Ability;
 use combat_core::attack::{AccMRV, AoMRV, ArMRV, AtkDmgMap, Attack, AttackResult};
+use combat_core::attack::basic_attack::BasicAttack;
 use combat_core::conditions::AttackDistance;
 use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
 use combat_core::movement::Feet;
@@ -13,7 +14,7 @@ use rand_var::rv_traits::sequential::Pair;
 use crate::{CBError, Character};
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType};
 use combat_core::damage::dice_expr::DiceExprTerm;
-use crate::damage_manager::CharDmgManager;
+use crate::char_damage::CharDmgManager;
 use crate::equipment::{OffHand, Weapon, WeaponProperty, WeaponRange};
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -175,7 +176,7 @@ impl WeaponAttack {
         }
     }
 
-    pub fn get_hit_bonus(&self) -> &AttributedBonus {
+    pub fn get_to_hit_bonus(&self) -> &AttributedBonus {
         &self.hit_bonus
     }
 
@@ -217,25 +218,32 @@ impl WeaponAttack {
     }
 }
 
-impl<T: RVProb> Attack<T> for WeaponAttack {
-    fn get_miss_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+impl From<WeaponAttack> for BasicAttack {
+    fn from(value: WeaponAttack) -> Self {
+        let to_hit = value.get_hit_bonus();
+        BasicAttack::prebuilt(value.damage.into(), to_hit, value.crit_lb)
+    }
+}
+
+impl Attack for WeaponAttack {
+    fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
         Ok(self.damage.cdm.get_miss_dmg(resistances, bonus_dmg)?)
     }
 
-    fn get_hit_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+    fn get_hit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
         Ok(self.damage.cdm.get_base_dmg(resistances, bonus_dmg)?)
     }
 
-    fn get_crit_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+    fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
         Ok(self.damage.cdm.get_crit_dmg(resistances, bonus_dmg)?)
     }
 
-    fn get_acc_rv(&self, hit_type: D20RollType) -> Result<AccMRV<T>, CCError> {
+    fn get_acc_rv<T: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<T>, CCError> {
         let rv = hit_type.get_rv(self.get_d20_type());
-        if let None = self.get_hit_bonus().get_saved_value() {
+        if let None = self.get_to_hit_bonus().get_saved_value() {
             return Err(CBError::NoCache.into());
         }
-        let hit_const = self.get_hit_bonus().get_saved_value().unwrap() as isize;
+        let hit_const = self.get_to_hit_bonus().get_saved_value().unwrap() as isize;
         Ok(rv.into_mrv().map_keys(|roll| Pair(roll, roll + hit_const)))
     }
 
@@ -253,12 +261,16 @@ impl<T: RVProb> Attack<T> for WeaponAttack {
         }
     }
 
-    fn get_dmg_map(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CCError> {
-        Ok(self.get_damage().cdm.get_attack_dmg_map(resistances)?)
+    fn get_crit_lb(&self) -> isize {
+        self.crit_lb
     }
 
-    fn get_crit_lb(&self) -> isize {
-        self.get_crit_lb()
+    fn get_hit_bonus(&self) -> isize {
+        self.hit_bonus.get_saved_value().unwrap_or(0) as isize
+    }
+
+    fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CCError> {
+        Ok(self.get_damage().cdm.get_attack_dmg_map(resistances)?)
     }
 }
 

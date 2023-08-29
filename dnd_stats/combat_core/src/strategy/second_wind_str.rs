@@ -1,7 +1,3 @@
-use std::marker::PhantomData;
-
-use rand_var::rv_traits::prob_type::RVProb;
-
 use crate::actions::ActionName;
 use crate::combat_state::CombatState;
 use crate::health::Health;
@@ -12,10 +8,9 @@ use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
 
 pub struct SecondWindStrBuilder;
 
-impl<T: RVProb> StrategyBuilder<T> for SecondWindStrBuilder {
-    fn build_strategy<'pm>(self, _: &'pm Vec<TeamMember<T>>, me: ParticipantId) -> Box<dyn Strategy<T> + 'pm> {
+impl StrategyBuilder for SecondWindStrBuilder {
+    fn build_strategy<'pm>(self, _: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
         let str = SecondWindStr {
-            _t: PhantomData,
             my_pid: me,
         };
         Box::new(str)
@@ -23,13 +18,12 @@ impl<T: RVProb> StrategyBuilder<T> for SecondWindStrBuilder {
 }
 
 #[derive(Debug)]
-pub struct SecondWindStr<T> {
-    _t: PhantomData<T>,
+pub struct SecondWindStr {
     my_pid: ParticipantId
 }
 
-impl<T:RVProb> Strategy<T> for SecondWindStr<T> {
-    fn get_participants(&self) -> &Vec<TeamMember<T>> {
+impl Strategy for SecondWindStr {
+    fn get_participants(&self) -> &Vec<TeamMember> {
         panic!("Should never call this!");
     }
 

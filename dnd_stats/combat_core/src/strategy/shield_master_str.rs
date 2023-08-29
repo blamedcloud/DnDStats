@@ -1,5 +1,3 @@
-use rand_var::rv_traits::prob_type::RVProb;
-
 use crate::actions::{ActionName, AttackType};
 use crate::combat_state::CombatState;
 use crate::participant::{ParticipantId, TeamMember};
@@ -8,8 +6,8 @@ use crate::strategy::{StrategicAction, Strategy, StrategyBuilder, StrategyDecisi
 use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
 
 pub struct ShieldMasterStrBuilder;
-impl<T: RVProb> StrategyBuilder<T> for ShieldMasterStrBuilder {
-    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember<T>>, me: ParticipantId) -> Box<dyn Strategy<T> + 'pm> {
+impl StrategyBuilder for ShieldMasterStrBuilder {
+    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
         let str = ShieldMasterStr {
             participants,
             my_pid: me,
@@ -19,13 +17,13 @@ impl<T: RVProb> StrategyBuilder<T> for ShieldMasterStrBuilder {
 }
 
 #[derive(Debug)]
-pub struct ShieldMasterStr<'pm, T: RVProb> {
-    participants: &'pm Vec<TeamMember<T>>,
+pub struct ShieldMasterStr<'pm> {
+    participants: &'pm Vec<TeamMember>,
     my_pid: ParticipantId,
 }
 
-impl<'pm, T: RVProb> Strategy<T> for ShieldMasterStr<'pm, T> {
-    fn get_participants(&self) -> &Vec<TeamMember<T>> {
+impl<'pm> Strategy for ShieldMasterStr<'pm> {
+    fn get_participants(&self) -> &Vec<TeamMember> {
         self.participants
     }
 
