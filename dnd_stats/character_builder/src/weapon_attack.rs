@@ -4,7 +4,7 @@ use combat_core::{CCError, D20RollType, D20Type};
 use combat_core::ability_scores::Ability;
 use combat_core::attack::{AccMRV, AoMRV, ArMRV, AtkDmgMap, Attack, AttackResult};
 use combat_core::conditions::AttackDistance;
-use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
+use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
 use combat_core::movement::Feet;
 use rand_var::RandomVariable;
 use rand_var::rv_traits::prob_type::RVProb;
@@ -12,7 +12,8 @@ use rand_var::rv_traits::sequential::Pair;
 
 use crate::{CBError, Character};
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType};
-use crate::damage_manager::DamageManager;
+use combat_core::damage::dice_expr::DiceExprTerm;
+use crate::damage_manager::CharDmgManager;
 use crate::equipment::{OffHand, Weapon, WeaponProperty, WeaponRange};
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -35,7 +36,7 @@ pub struct WeaponAttack {
     hand_type: HandType,
     ability: Ability,
     hit_bonus: AttributedBonus,
-    damage: DamageManager,
+    damage: CharDmgManager,
     crit_lb: isize,
     d20_rv: D20Type,
 }
@@ -86,10 +87,10 @@ impl WeaponAttack {
         }
         hit_bonus.add_term(BonusTerm::new(BonusType::Modifier(ability)));
 
-        let mut damage = DamageManager::new();
-        damage.set_weapon(WeaponAttack::get_weapon_die(weapon, num_hands), *weapon.get_dmg_type());
-        damage.add_base_dmg(DamageTerm::new(
-            ExpressionTerm::Die(ExtendedDamageDice::WeaponDice),
+        let mut damage = CharDmgManager::new();
+        damage.cdm.set_weapon(WeaponAttack::get_weapon_die(weapon, num_hands), *weapon.get_dmg_type());
+        damage.cdm.add_base_dmg(DamageTerm::new(
+            DiceExprTerm::Die(ExtendedDamageDice::WeaponDice),
             ExtendedDamageType::WeaponDamage,
         ));
 
@@ -105,8 +106,8 @@ impl WeaponAttack {
                 BonusType::Constant(b as i32),
                 String::from("magic bonus"),
             ));
-            damage.add_base_dmg(DamageTerm::new(
-                ExpressionTerm::Const(b as isize),
+            damage.cdm.add_base_dmg(DamageTerm::new(
+                DiceExprTerm::Const(b as isize),
                 ExtendedDamageType::WeaponDamage,
             ));
         }
@@ -139,7 +140,7 @@ impl WeaponAttack {
     pub fn as_pam_attack(&self) -> Self {
         let mut new_attack = self.clone();
         let new_weapon = self.weapon.as_pam();
-        new_attack.damage.set_weapon(*new_weapon.get_dice(), *new_weapon.get_dmg_type());
+        new_attack.damage.cdm.set_weapon(*new_weapon.get_dice(), *new_weapon.get_dmg_type());
         new_attack.weapon = new_weapon;
         new_attack
     }
@@ -178,15 +179,15 @@ impl WeaponAttack {
         &self.hit_bonus
     }
 
-    pub fn get_damage(&self) -> &DamageManager {
+    pub fn get_damage(&self) -> &CharDmgManager {
         &self.damage
     }
-    pub fn get_damage_mut(&mut self) -> &mut DamageManager {
+    pub fn get_damage_mut(&mut self) -> &mut CharDmgManager {
         &mut self.damage
     }
 
     pub fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CBError> {
-        Ok(self.damage.get_attack_dmg_map(resistances)?)
+        Ok(self.damage.cdm.get_attack_dmg_map(resistances)?)
     }
 
     pub fn get_accuracy_rv<T: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<T>, CBError> {
@@ -218,15 +219,15 @@ impl WeaponAttack {
 
 impl<T: RVProb> Attack<T> for WeaponAttack {
     fn get_miss_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
-        Ok(self.damage.get_miss_dmg(resistances, bonus_dmg)?)
+        Ok(self.damage.cdm.get_miss_dmg(resistances, bonus_dmg)?)
     }
 
     fn get_hit_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
-        Ok(self.damage.get_base_dmg(resistances, bonus_dmg)?)
+        Ok(self.damage.cdm.get_base_dmg(resistances, bonus_dmg)?)
     }
 
     fn get_crit_dmg(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
-        Ok(self.damage.get_crit_dmg(resistances, bonus_dmg)?)
+        Ok(self.damage.cdm.get_crit_dmg(resistances, bonus_dmg)?)
     }
 
     fn get_acc_rv(&self, hit_type: D20RollType) -> Result<AccMRV<T>, CCError> {
@@ -253,14 +254,12 @@ impl<T: RVProb> Attack<T> for WeaponAttack {
     }
 
     fn get_dmg_map(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CCError> {
-        Ok(self.get_damage().get_attack_dmg_map(resistances)?)
+        Ok(self.get_damage().cdm.get_attack_dmg_map(resistances)?)
     }
 
     fn get_crit_lb(&self) -> isize {
         self.get_crit_lb()
     }
-
-
 }
 
 #[cfg(test)]

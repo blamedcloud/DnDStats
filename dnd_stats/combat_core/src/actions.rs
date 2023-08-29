@@ -4,7 +4,7 @@ use std::rc::Rc;
 use rand_var::rv_traits::prob_type::RVProb;
 
 use crate::attack::Attack;
-use crate::damage::DamageRV;
+use crate::damage::dice_expr::DiceExpression;
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ActionType {
@@ -42,7 +42,7 @@ pub enum CABuilder<A, D> {
 #[derive(Debug, Clone)]
 pub enum CombatAction<T: RVProb> {
     Attack(Rc<dyn Attack<T>>),
-    SelfHeal(Rc<dyn DamageRV<T>>),
+    SelfHeal(DiceExpression),
     AdditionalAttacks(u8),
     ByName,
 }

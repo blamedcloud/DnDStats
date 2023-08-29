@@ -1,18 +1,18 @@
 use std::collections::HashSet;
 
-use combat_core::{CCError, D20RollType, D20Type};
-use combat_core::attack::{AccMRV, AtkDmgMap, Attack};
-use combat_core::conditions::AttackDistance;
-use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
 use rand_var::RandomVariable;
 use rand_var::rv_traits::prob_type::RVProb;
 use rand_var::rv_traits::sequential::Pair;
 
-use crate::damage_manager::DamageManager;
+use crate::{CCError, D20RollType, D20Type};
+use crate::attack::{AccMRV, AtkDmgMap, Attack};
+use crate::conditions::AttackDistance;
+use crate::damage::{DamageDice, DamageManager, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
+use crate::damage::dice_expr::{DiceExpression, DiceExprTerm};
 
 #[derive(Debug, Clone)]
 pub struct BasicAttack {
-    damage: DamageManager,
+    damage: DamageManager<DiceExpression>,
     hit_bonus: isize,
 }
 
@@ -20,16 +20,16 @@ impl BasicAttack {
     pub fn new(hit_bonus: isize, dmg_type: DamageType, dmg_const: isize, dmg_die: DamageDice, num_dice: u8) -> Self {
         let mut damage = DamageManager::new();
         let e_dmg_type = ExtendedDamageType::Basic(dmg_type);
-        damage.add_base_dmg(DamageTerm::new(ExpressionTerm::Const(dmg_const), e_dmg_type));
+        damage.add_base_dmg(DamageTerm::new(DiceExprTerm::Const(dmg_const), e_dmg_type));
         let e_dmg_die = ExtendedDamageDice::Basic(dmg_die);
-        damage.add_base_dmg(DamageTerm::new(ExpressionTerm::Dice(num_dice, e_dmg_die), e_dmg_type));
+        damage.add_base_dmg(DamageTerm::new(DiceExprTerm::Dice(num_dice, e_dmg_die), e_dmg_type));
         Self {
             damage,
             hit_bonus
         }
     }
 
-    pub fn get_damage(&self) -> &DamageManager {
+    pub fn get_damage(&self) -> &DamageManager<DiceExpression> {
         &self.damage
     }
 

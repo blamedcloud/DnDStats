@@ -1,5 +1,6 @@
 use combat_core::ability_scores::Ability;
-use combat_core::damage::{DamageDice, DamageTerm, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
+use combat_core::damage::{DamageDice, DamageTerm, ExtendedDamageDice, ExtendedDamageType};
+use combat_core::damage::dice_expr::DiceExprTerm;
 use combat_core::resources::{RefreshTiming, Resource, ResourceName};
 use combat_core::resources::resource_amounts::{RefreshBy, ResourceCap};
 use combat_core::triggers::{TriggerAction, TriggerName, TriggerType};
@@ -85,7 +86,7 @@ pub struct SneakAttack(pub u8); // TODO: check conditions for this: How?
 impl Feature for SneakAttack {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
         let damage = DamageTerm::new(
-            ExpressionTerm::Dice(self.0, ExtendedDamageDice::Basic(DamageDice::D6)),
+            DiceExprTerm::Dice(self.0, ExtendedDamageDice::Basic(DamageDice::D6)),
             ExtendedDamageType::WeaponDamage
         );
 
@@ -107,7 +108,8 @@ impl Feature for SneakAttack {
 #[cfg(test)]
 mod tests {
     use combat_core::ability_scores::Ability;
-    use combat_core::damage::{DamageDice, ExpressionTerm, ExtendedDamageDice, ExtendedDamageType};
+    use combat_core::damage::{DamageDice, ExtendedDamageDice, ExtendedDamageType};
+    use combat_core::damage::dice_expr::DiceExprTerm;
     use combat_core::triggers::{TriggerAction, TriggerName};
 
     use crate::Character;
@@ -152,7 +154,7 @@ mod tests {
         let snr = &rogue.trigger_manager.get_response(TriggerName::SneakAttack).unwrap();
         if let TriggerAction::AddAttackDamage(dt) = snr.action {
             assert_eq!(ExtendedDamageType::WeaponDamage, *dt.get_dmg_type());
-            assert_eq!(ExpressionTerm::Dice(10, ExtendedDamageDice::Basic(DamageDice::D6)), *dt.get_expr())
+            assert_eq!(DiceExprTerm::Dice(10, ExtendedDamageDice::Basic(DamageDice::D6)), *dt.get_expr())
         } else {
             panic!("Wrong sneak attack action");
         }

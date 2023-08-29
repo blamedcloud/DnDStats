@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use character_builder::basic_attack::BasicAttack;
+use combat_core::attack::basic_attack::BasicAttack;
 use combat_core::ability_scores::{Ability, AbilityScores};
 use combat_core::actions::{ActionManager, ActionName, ActionType, AttackType, CombatAction, CombatOption};
 use combat_core::conditions::ConditionManager;

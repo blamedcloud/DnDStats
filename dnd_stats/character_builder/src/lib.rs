@@ -16,13 +16,12 @@ use rand_var::rv_traits::RVError;
 
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType, CharacterDependant};
 use crate::classes::{ClassName, SubClass};
-use crate::damage_manager::DiceExpression;
+use crate::damage_manager::CharDiceExpr;
 use crate::equipment::{ArmorType, Equipment};
 use crate::feature::Feature;
 use crate::weapon_attack::WeaponAttack;
 
 pub mod attributed_bonus;
-pub mod basic_attack;
 pub mod classes;
 pub mod damage_manager;
 pub mod equipment;
@@ -39,12 +38,19 @@ pub enum CBError {
     InvalidLevel,
     RequirementsNotMet,
     RVError(RVError),
+    CCE(CCError),
     Other(String),
 }
 
 impl From<RVError> for CBError {
     fn from(value: RVError) -> Self {
         CBError::RVError(value)
+    }
+}
+
+impl From<CCError> for CBError {
+    fn from(value: CCError) -> Self {
+        CBError::CCE(value)
     }
 }
 
@@ -56,7 +62,7 @@ impl From<CBError> for CCError {
     }
 }
 
-pub type CharacterCO = CombatOption<CABuilder<WeaponAttack, DiceExpression>>;
+pub type CharacterCO = CombatOption<CABuilder<WeaponAttack, CharDiceExpr>>;
 
 #[derive(Debug, Clone)]
 pub struct Character {
@@ -68,7 +74,7 @@ pub struct Character {
     sub_classes: HashMap<ClassName, Rc<dyn SubClass>>,
     equipment: Equipment,
     armor_class: AttributedBonus,
-    combat_actions: ActionBuilder<WeaponAttack, DiceExpression>,
+    combat_actions: ActionBuilder<WeaponAttack, CharDiceExpr>,
     resource_manager: ResourceManager,
     resistances: HashSet<DamageType>,
     trigger_manager: TriggerManager,
@@ -264,7 +270,7 @@ impl Character {
         })
     }
 
-    pub fn get_action_builder(&self) -> &ActionBuilder<WeaponAttack, DiceExpression> {
+    pub fn get_action_builder(&self) -> &ActionBuilder<WeaponAttack, CharDiceExpr> {
         &self.combat_actions
     }
 
@@ -297,7 +303,7 @@ impl Character {
 }
 
 
-pub fn create_character_ab(character: &Character) -> ActionBuilder<WeaponAttack, DiceExpression> {
+pub fn create_character_ab(character: &Character) -> ActionBuilder<WeaponAttack, CharDiceExpr> {
     let mut am = ActionBuilder::new();
     am.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CABuilder::AdditionalAttacks(1)));
 

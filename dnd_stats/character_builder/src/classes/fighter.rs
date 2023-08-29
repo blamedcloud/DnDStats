@@ -1,12 +1,13 @@
 use combat_core::actions::{ActionName, ActionType, CABuilder, CombatOption};
-use combat_core::damage::{DamageDice, ExpressionTerm, ExtendedDamageDice};
+use combat_core::damage::{DamageDice, ExtendedDamageDice};
+use combat_core::damage::dice_expr::{DiceExpr, DiceExprTerm};
 use combat_core::resources::{RefreshTiming, Resource, ResourceName};
 use combat_core::resources::resource_amounts::{RefreshBy, ResourceCap};
 
 use crate::{CBError, Character};
 use crate::attributed_bonus::{BonusTerm, BonusType};
 use crate::classes::{Class, ClassName, SubClass};
-use crate::damage_manager::DiceExpression;
+use crate::damage_manager::CharDiceExpr;
 use crate::feature::{ExtraAttack, Feature};
 
 pub struct FighterClass;
@@ -64,8 +65,8 @@ impl SubClass for ChampionFighter {
 pub struct SecondWind;
 impl Feature for SecondWind {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        let mut heal = DiceExpression::new();
-        heal.add_term(ExpressionTerm::Die(ExtendedDamageDice::Basic(DamageDice::D10)));
+        let mut heal = CharDiceExpr::new();
+        heal.add_term(DiceExprTerm::Die(ExtendedDamageDice::Basic(DamageDice::D10)));
         heal.add_char_term(BonusTerm::new(BonusType::ClassLevel(ClassName::Fighter)));
         character.combat_actions.insert(ActionName::SecondWind, CombatOption::new(ActionType::BonusAction, CABuilder::SelfHeal(heal)));
 

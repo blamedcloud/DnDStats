@@ -9,6 +9,7 @@ use combat_core::attack::{Attack, AttackResult};
 use combat_core::combat_event::{CombatEvent, CombatTiming};
 use combat_core::conditions::{ConditionLifetime, ConditionName};
 use combat_core::damage::DamageTerm;
+use combat_core::damage::dice_expr::DiceExpr;
 use combat_core::participant::{Participant, ParticipantId, ParticipantManager, Team};
 use combat_core::resources::{ResourceActionType, ResourceName};
 use combat_core::resources::resource_amounts::ResourceCount;
@@ -423,7 +424,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
 mod tests {
     use num::{One, Rational64};
 
-    use character_builder::basic_attack::BasicAttack;
+    use combat_core::attack::basic_attack::BasicAttack;
     use character_builder::Character;
     use character_builder::classes::ClassName;
     use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};

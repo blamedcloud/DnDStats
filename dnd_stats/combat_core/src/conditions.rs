@@ -1,8 +1,8 @@
 use std::collections::{BTreeSet, HashMap};
-use crate::ability_scores::Ability;
 
-use crate::actions::ActionType;
 use crate::{CCError, D20RollType};
+use crate::ability_scores::Ability;
+use crate::actions::ActionType;
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ConditionName {

@@ -1,5 +1,7 @@
-use rand_var::rv_traits::prob_type::RVProb;
 use std::marker::PhantomData;
+
+use rand_var::rv_traits::prob_type::RVProb;
+
 use crate::actions::ActionName;
 use crate::combat_state::CombatState;
 use crate::health::Health;

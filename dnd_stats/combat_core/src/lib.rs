@@ -29,6 +29,7 @@ pub enum CCError {
     SMNotCompiled,
     SMPushAfterCompile,
     UnknownCondition,
+    NoWeaponSet,
     RVE(RVError),
     Other(String),
 }

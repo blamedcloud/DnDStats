@@ -44,7 +44,7 @@ impl<T: RVProb> From<Character> for Player<T> {
             let req_t = co.req_target;
             let ca: CombatAction<T> = match cab {
                 CABuilder::WeaponAttack(wa) => CombatAction::Attack(Rc::new(wa)),
-                CABuilder::SelfHeal(de) => CombatAction::SelfHeal(Rc::new(de)),
+                CABuilder::SelfHeal(cde) => CombatAction::SelfHeal(cde.into()),
                 CABuilder::AdditionalAttacks(aa) => CombatAction::AdditionalAttacks(aa),
                 CABuilder::ByName => CombatAction::ByName,
             };

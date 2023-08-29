@@ -61,7 +61,7 @@ impl FightingStyle {
         for (_, co) in character.combat_actions.iter_mut() {
             if let CABuilder::WeaponAttack(attack) = &mut co.action {
                 if attack.get_num_hands() == &NumHands::TwoHand && attack.get_weapon().get_type().is_melee() {
-                    attack.get_damage_mut().add_damage_feature(DamageFeature::GWF);
+                    attack.get_damage_mut().cdm.add_damage_feature(DamageFeature::GWF);
                 }
             }
         }

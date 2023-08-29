@@ -14,6 +14,8 @@ use crate::combat_event::CombatEvent;
 use crate::conditions::AttackDistance;
 use crate::damage::{DamageTerm, DamageType};
 
+pub mod basic_attack;
+
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum AttackResult {
     Miss,
