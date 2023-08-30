@@ -79,7 +79,7 @@ impl From<ActionName> for StrategicAction {
 }
 
 pub trait StrategyBuilder {
-    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm>;
+    fn build_strategy<'pm>(&self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm>;
 }
 
 pub trait Strategy : Debug {

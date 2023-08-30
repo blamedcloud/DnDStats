@@ -682,6 +682,9 @@ mod tests {
     fn fighter_vs_orc_strategy() {
         let mut fighter = get_test_fighter_lvl_0();
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
+        //let mut fighter_str = LinearStrategyBuilder::new();
+        //fighter_str.add_str_bldr(Box::new(BasicAtkStrBuilder));
+        //fighter_str.add_str_bldr(Box::new(SecondWindStrBuilder));
         let fighter_str = PairStrBuilder::new(BasicAtkStrBuilder, SecondWindStrBuilder);
         let player = Player::from(fighter.clone());
 

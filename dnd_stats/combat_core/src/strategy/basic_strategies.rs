@@ -9,7 +9,7 @@ use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
 
 pub struct DoNothingBuilder;
 impl StrategyBuilder for DoNothingBuilder {
-    fn build_strategy<'pm>(self, _: &'pm Vec<TeamMember>, _: ParticipantId) -> Box<dyn Strategy + 'pm> {
+    fn build_strategy<'pm>(&self, _: &'pm Vec<TeamMember>, _: ParticipantId) -> Box<dyn Strategy + 'pm> {
         Box::new(DoNothing)
     }
 }
@@ -36,7 +36,7 @@ impl Strategy for DoNothing {
 
 pub struct RemoveCondBuilder;
 impl StrategyBuilder for RemoveCondBuilder {
-    fn build_strategy<'pm>(self, _: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
+    fn build_strategy<'pm>(&self, _: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
         let str = RemoveConditions {
             my_pid: me,
         };

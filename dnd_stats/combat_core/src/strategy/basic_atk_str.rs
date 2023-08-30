@@ -7,7 +7,7 @@ use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
 
 pub struct BasicAtkStrBuilder;
 impl StrategyBuilder for BasicAtkStrBuilder {
-    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
+    fn build_strategy<'pm>(&self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
         let str = BasicAttackStr {
             participants,
             my_pid: me,

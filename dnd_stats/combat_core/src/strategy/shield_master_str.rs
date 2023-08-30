@@ -7,7 +7,7 @@ use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
 
 pub struct ShieldMasterStrBuilder;
 impl StrategyBuilder for ShieldMasterStrBuilder {
-    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
+    fn build_strategy<'pm>(&self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
         let str = ShieldMasterStr {
             participants,
             my_pid: me,

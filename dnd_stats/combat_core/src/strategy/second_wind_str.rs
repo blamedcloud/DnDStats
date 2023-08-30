@@ -9,7 +9,7 @@ use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
 pub struct SecondWindStrBuilder;
 
 impl StrategyBuilder for SecondWindStrBuilder {
-    fn build_strategy<'pm>(self, _: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
+    fn build_strategy<'pm>(&self, _: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
         let str = SecondWindStr {
             my_pid: me,
         };

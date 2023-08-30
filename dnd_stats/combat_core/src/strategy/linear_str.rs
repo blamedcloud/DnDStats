@@ -1,7 +1,9 @@
+use std::fmt::Debug;
 use crate::combat_state::CombatState;
 use crate::participant::{ParticipantId, TeamMember};
 use crate::strategy::{Strategy, StrategyBuilder, StrategyDecision};
 use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
+
 
 pub struct PairStrBuilder<S1, S2>
 where
@@ -30,13 +32,51 @@ where
     S1: StrategyBuilder,
     S2: StrategyBuilder,
 {
-    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
+    fn build_strategy<'pm>(&self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
         let strategies = vec!(
             self.str1.build_strategy(participants, me),
             self.str2.build_strategy(participants, me),
         );
         Box::new(LinearStrategy {
             strategies,
+        })
+    }
+}
+
+pub struct LinearStrategyBuilder {
+    str_builders: Vec<Box<dyn StrategyBuilder>>,
+}
+
+impl LinearStrategyBuilder {
+    pub fn new() -> Self {
+        Self {
+            str_builders: Vec::new(),
+        }
+    }
+
+    pub fn add_str_bldr(&mut self, str_bldr: Box<dyn StrategyBuilder>) {
+        self.str_builders.push(str_bldr);
+    }
+}
+
+impl From<Vec<Box<dyn StrategyBuilder>>> for LinearStrategyBuilder {
+    fn from(value: Vec<Box<dyn StrategyBuilder>>) -> Self {
+        let mut lsb = LinearStrategyBuilder::new();
+        for sb in value {
+            lsb.add_str_bldr(sb);
+        }
+        lsb
+    }
+}
+
+impl StrategyBuilder for LinearStrategyBuilder {
+    fn build_strategy<'pm>(&self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
+        let mut strategies = Vec::new();
+        for str_bldr in self.str_builders.iter() {
+            strategies.push(str_bldr.build_strategy(participants, me));
+        }
+        Box::new(LinearStrategy {
+            strategies
         })
     }
 }

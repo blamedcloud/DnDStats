@@ -19,7 +19,7 @@ impl SneakAttackStrBuilder {
 }
 
 impl StrategyBuilder for SneakAttackStrBuilder {
-    fn build_strategy<'pm>(self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
+    fn build_strategy<'pm>(&self, participants: &'pm Vec<TeamMember>, me: ParticipantId) -> Box<dyn Strategy + 'pm> {
         let str = SneakAttackStr {
             participants,
             my_pid: me,

@@ -96,9 +96,10 @@ mod tests {
     use combat_core::participant::ParticipantId;
     use combat_core::strategy::basic_atk_str::BasicAtkStrBuilder;
     use combat_core::strategy::dual_wield_str::DualWieldStrBuilder;
-    use combat_core::strategy::linear_str::PairStrBuilder;
+    use combat_core::strategy::linear_str::LinearStrategyBuilder;
     use combat_core::strategy::shield_master_str::ShieldMasterStrBuilder;
     use combat_core::strategy::sneak_atk_str::SneakAttackStrBuilder;
+    use combat_core::strategy::StrategyBuilder;
     use rand_var::num_rand_var::NumRandVar;
     use rand_var::vec_rand_var::VRV64;
     use rand_var::rand_var::RandVar;
@@ -161,8 +162,11 @@ mod tests {
     #[test]
     fn test_sneak_attack() {
         let rogue = get_test_rogue_lvl_3();
-        let rogue_str = PairStrBuilder::new(DualWieldStrBuilder, SneakAttackStrBuilder::new(false));
-        let cs = CombatSimulator::do_encounter(rogue, rogue_str,14, 1).unwrap();
+        let mut str_vec: Vec<Box<dyn StrategyBuilder>> = Vec::new();
+        str_vec.push(Box::new(DualWieldStrBuilder));
+        str_vec.push(Box::new(SneakAttackStrBuilder::new(false)));
+        let rogue_str = LinearStrategyBuilder::from(str_vec);
+        let cs = CombatSimulator::do_encounter(rogue, rogue_str, 14, 1).unwrap();
         let cr_rv = cs.get_cr_rv();
         {
             assert_eq!(1, cr_rv.len());
