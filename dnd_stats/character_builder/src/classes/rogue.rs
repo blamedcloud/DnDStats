@@ -70,6 +70,7 @@ impl SubClass for ScoutRogue {
         ClassName::Rogue
     }
 
+
     // TODO: impl some features
     fn get_static_features(&self, level: u8) -> Result<Vec<Box<dyn Feature>>, CBError> {
         match level {

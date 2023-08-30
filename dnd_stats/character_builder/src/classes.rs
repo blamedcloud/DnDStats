@@ -6,11 +6,14 @@ use combat_core::health::HitDice;
 
 use crate::{CBError, Character};
 use crate::classes::fighter::FighterClass;
+use crate::classes::ranger::VariantRangerClass;
 use crate::classes::rogue::RogueClass;
 use crate::feature::{Feature, SaveProficiencies};
 
 pub mod fighter;
+pub mod ranger;
 pub mod rogue;
+
 
 pub trait Class {
     fn get_class_name(&self) -> ClassName;
@@ -26,6 +29,10 @@ pub trait Class {
 pub trait SubClass : Debug {
     fn get_class_name(&self) -> ClassName;
     fn get_static_features(&self, level: u8) -> Result<Vec<Box<dyn Feature>>, CBError>;
+
+    fn get_spellcasting_override(&self) -> Option<SpellCasterType> {
+        None
+    }
 }
 
 pub struct ChooseSubClass<SC: SubClass + Clone>(pub SC);
@@ -55,6 +62,14 @@ impl Feature for SubclassFeatures {
 }
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+pub enum SpellCasterType {
+    Martial,
+    ThirdCaster,
+    HalfCaster,
+    FullCaster
+}
+
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ClassName {
     Barbarian,
     Bard,
@@ -74,6 +89,7 @@ impl ClassName {
     pub fn get_class(&self) -> Result<Box<dyn Class>, CBError> {
         match self {
             ClassName::Fighter => Ok(Box::new(FighterClass)),
+            ClassName::Ranger => Ok(Box::new(VariantRangerClass)),
             ClassName::Rogue => Ok(Box::new(RogueClass)),
             _ => Err(CBError::NotImplemented)
         }
@@ -112,6 +128,23 @@ impl ClassName {
             ClassName::Wizard => (Ability::INT, Ability::WIS),
         };
         profs.into()
+    }
+
+    pub fn get_default_spellcasting(&self) -> SpellCasterType {
+        match self {
+            ClassName::Barbarian => SpellCasterType::Martial,
+            ClassName::Bard => SpellCasterType::FullCaster,
+            ClassName::Cleric => SpellCasterType::FullCaster,
+            ClassName::Druid => SpellCasterType::FullCaster,
+            ClassName::Fighter => SpellCasterType::Martial,
+            ClassName::Monk => SpellCasterType::Martial,
+            ClassName::Paladin => SpellCasterType::HalfCaster,
+            ClassName::Ranger => SpellCasterType::HalfCaster,
+            ClassName::Rogue => SpellCasterType::Martial,
+            ClassName::Sorcerer => SpellCasterType::FullCaster,
+            ClassName::Warlock => SpellCasterType::FullCaster,
+            ClassName::Wizard => SpellCasterType::FullCaster,
+        }
     }
 }
 

@@ -110,7 +110,7 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
 
     pub fn apply_default_condition(&mut self, pid: ParticipantId, cn: ConditionName) {
         let cm = self.get_cm_mut(pid);
-        cm.add_default_condition(cn).unwrap();
+        cm.add_basic_condition(cn).unwrap();
         self.push(CombatEvent::ApplyCond(cn, pid));
     }
 

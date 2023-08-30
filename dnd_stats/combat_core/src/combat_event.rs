@@ -6,7 +6,7 @@ use crate::participant::ParticipantId;
 use crate::resources::RefreshTiming;
 use crate::skills::{ContestResult, SkillName};
 
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct RoundId(pub u8);
 impl From<u8> for RoundId {
     fn from(value: u8) -> Self {
@@ -14,7 +14,7 @@ impl From<u8> for RoundId {
     }
 }
 
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum CombatTiming {
     EncounterBegin,
     EncounterEnd,

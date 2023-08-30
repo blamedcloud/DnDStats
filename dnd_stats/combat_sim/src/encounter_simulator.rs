@@ -309,7 +309,8 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
                     }
                     _ => Err(CSError::ActionNotHandled),
                 }
-            }
+            },
+            _ => Err(CSError::UnknownAction)
         }
     }
 

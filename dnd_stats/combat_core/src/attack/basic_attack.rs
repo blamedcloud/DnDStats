@@ -55,6 +55,7 @@ impl Attack for BasicAttack {
         Ok(self.damage.get_miss_dmg(resistances, bonus_dmg)?)
     }
 
+    // TODO: also add a possible list of damage features ? or just specific ones...
     fn get_hit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
         Ok(self.damage.get_base_dmg(resistances, bonus_dmg)?)
     }

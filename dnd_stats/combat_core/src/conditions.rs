@@ -1,14 +1,19 @@
 use std::collections::{BTreeSet, HashMap};
+use std::vec;
 
 use crate::{CCError, D20RollType};
 use crate::ability_scores::Ability;
 use crate::actions::ActionType;
+use crate::combat_event::CombatTiming;
+use crate::damage::{DamageFeature, DamageTerm};
+use crate::participant::ParticipantId;
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ConditionName {
     Concentration,
     Invisible,
     Prone,
+    PlanarWarriorTarget,
 }
 
 impl ConditionName {
@@ -22,9 +27,9 @@ impl ConditionName {
                 );
                 Ok(Condition {
                     effects,
-                    lifetime: ConditionLifetime::UntilSpendAT(ActionType::HalfMove)
+                    lifetimes: vec!(ConditionLifetime::UntilSpendAT(ActionType::HalfMove))
                 })
-            },
+            }
             _ => Err(CCError::UnknownCondition)
         }
     }
@@ -49,23 +54,28 @@ impl AttackDistance {
     }
 }
 
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum ConditionEffect {
     RollActionMod(RollAction, Ability, D20RollType), // ~ "you have dis.adv. on DEX saves
     AttackerMod(AttackDistance, D20RollType), // ~ "your attacks have advantage"
     AtkTargetedMod(AttackDistance, D20RollType), // ~ "attacks against you have advantage"
+    TakeBonusDmgFrom(DamageTerm, ParticipantId), // planar warrior / hunter's mark
+    TakeDmgFeatureFrom(DamageFeature, ParticipantId), // planar warrior convert to force dmg
 }
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ConditionLifetime {
     Permanent,
     UntilSpendAT(ActionType),
+    OnTakeDmg,
+    UntilTime(CombatTiming),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Condition {
     pub effects: Vec<ConditionEffect>,
-    pub lifetime: ConditionLifetime,
+    // conditions go away when any of the lifetimes are met (logical OR)
+    pub lifetimes: Vec<ConditionLifetime>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -102,32 +112,36 @@ impl ConditionManager {
         self.by_lifetime.get(cl).unwrap()
     }
 
-    pub fn add_default_condition(&mut self, cn: ConditionName) -> Result<(), CCError> {
+    pub fn add_basic_condition(&mut self, cn: ConditionName) -> Result<(), CCError> {
         self.add_condition(cn, cn.get_basic_cond()?);
         Ok(())
     }
 
     pub fn add_condition(&mut self, cn: ConditionName, cond: Condition) {
-        let lifetime = cond.lifetime;
-        self.conditions.insert(cn, cond);
-        if self.by_lifetime.contains_key(&lifetime) {
-            let mut cns = self.by_lifetime.remove(&lifetime).unwrap();
-            cns.insert(cn);
-            self.by_lifetime.insert(lifetime, cns);
-        } else {
-            let mut cns = BTreeSet::new();
-            cns.insert(cn);
-            self.by_lifetime.insert(lifetime, cns);
+        let lifetimes = &cond.lifetimes;
+        for lifetime in lifetimes {
+            if self.by_lifetime.contains_key(lifetime) {
+                let mut cns = self.by_lifetime.remove(lifetime).unwrap();
+                cns.insert(cn);
+                self.by_lifetime.insert(*lifetime, cns);
+            } else {
+                let mut cns = BTreeSet::new();
+                cns.insert(cn);
+                self.by_lifetime.insert(*lifetime, cns);
+            }
         }
+        self.conditions.insert(cn, cond);
     }
 
     pub fn remove_condition(&mut self, cn: &ConditionName) {
         let cond = self.conditions.remove(cn).unwrap();
-        let lt = cond.lifetime;
-        let mut cns = self.by_lifetime.remove(&lt).unwrap();
-        cns.remove(cn);
-        if cns.len() > 0 {
-            self.by_lifetime.insert(lt, cns);
+        let lts = cond.lifetimes;
+        for lt in lts {
+            let mut cns = self.by_lifetime.remove(&lt).unwrap();
+            cns.remove(cn);
+            if cns.len() > 0 {
+                self.by_lifetime.insert(lt, cns);
+            }
         }
     }
 

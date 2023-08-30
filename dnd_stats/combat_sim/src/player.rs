@@ -45,6 +45,8 @@ impl From<Character> for Player {
                 CABuilder::SelfHeal(cde) => CombatAction::SelfHeal(cde.into()),
                 CABuilder::AdditionalAttacks(aa) => CombatAction::AdditionalAttacks(aa),
                 CABuilder::ByName => CombatAction::ByName,
+                CABuilder::ApplyCondition(cn) => CombatAction::ApplyBasicCondition(cn),
+                CABuilder::ApplyComplexCondition(cn, cond) => CombatAction::ApplyComplexCondition(cn, cond),
             };
             let co = CombatOption::new_target(at, ca, req_t);
             am.insert(an, co);

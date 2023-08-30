@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use crate::attack::basic_attack::BasicAttack;
+use crate::conditions::{Condition, ConditionName};
 use crate::damage::dice_expr::DiceExpression;
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
@@ -27,11 +28,17 @@ impl ActionType {
     }
 }
 
+// TODO:
+// either rename this one or parameterize the other one
+// now that CombatAction isn't prob-parameterized, we can
+// just make the ActionManager type know which attack and heal it uses.
 #[derive(Debug, Clone)]
 pub enum CABuilder<A, H> {
     WeaponAttack(A),
     SelfHeal(H),
     AdditionalAttacks(u8),
+    ApplyCondition(ConditionName),
+    ApplyComplexCondition(ConditionName, Condition),
     ByName,
 }
 
@@ -40,6 +47,8 @@ pub enum CombatAction {
     Attack(BasicAttack),
     SelfHeal(DiceExpression),
     AdditionalAttacks(u8),
+    ApplyBasicCondition(ConditionName),
+    ApplyComplexCondition(ConditionName, Condition),
     ByName,
 }
 

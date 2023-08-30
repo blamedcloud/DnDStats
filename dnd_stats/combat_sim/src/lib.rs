@@ -26,6 +26,7 @@ pub enum CSError {
     ActionNotHandled,
     InvalidTarget,
     InvalidAction,
+    UnknownAction,
     UnknownEvent(CombatEvent),
     InvalidTriggerResponse,
     RVE(RVError),
@@ -53,10 +54,13 @@ pub struct CombatSimulator<P: RVProb> {
 }
 
 impl<P: RVProb> CombatSimulator<P> {
-    pub fn do_encounter(character: Character, str_bldr: impl StrategyBuilder, dummy_ac: isize, num_rounds: u8) -> Result<Self, CSError> {
-        let player = Player::from(character);
+    pub fn dmg_sponge(character: Character, str_bldr: impl StrategyBuilder, dummy_ac: isize, num_rounds: u8) -> Result<Self, CSError> {
         let dummy = TargetDummy::new(isize::MAX, dummy_ac);
+        CombatSimulator::vs_dummy(character, str_bldr, dummy, num_rounds)
+    }
 
+    pub fn vs_dummy(character: Character, str_bldr: impl StrategyBuilder, dummy: TargetDummy, num_rounds: u8) -> Result<Self, CSError> {
+        let player = Player::from(character);
         let mut pm = ParticipantManager::new();
         pm.add_player(Box::new(player))?;
         pm.add_enemy(Box::new(dummy))?;
@@ -82,17 +86,21 @@ impl<P: RVProb> CombatSimulator<P> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
     use num::Rational64;
 
     use character_builder::Character;
     use character_builder::classes::{ChooseSubClass, ClassName};
     use character_builder::classes::fighter::ChampionFighter;
+    use character_builder::classes::ranger::HorizonWalkerRanger;
     use character_builder::classes::rogue::ScoutRogue;
     use character_builder::equipment::{ACSource, Armor, Equipment, OffHand, Weapon};
+    use character_builder::feature::AbilityScoreIncrease;
     use character_builder::feature::feats::ShieldMaster;
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
-    use combat_core::ability_scores::AbilityScores;
+    use combat_core::ability_scores::{Ability, AbilityScores};
     use combat_core::D20RollType;
+    use combat_core::damage::DamageType;
     use combat_core::participant::ParticipantId;
     use combat_core::strategy::basic_atk_str::BasicAtkStrBuilder;
     use combat_core::strategy::dual_wield_str::DualWieldStrBuilder;
@@ -105,6 +113,7 @@ mod tests {
     use rand_var::rand_var::RandVar;
 
     use crate::CombatSimulator;
+    use crate::target_dummy::TargetDummy;
 
     pub fn get_str_based() -> AbilityScores {
         AbilityScores::new(16,12,16,8,13,10)
@@ -145,7 +154,7 @@ mod tests {
     #[test]
     fn fighter_basic_attack_dmg() {
         let fighter = get_test_fighter_lvl_1();
-        let cs = CombatSimulator::do_encounter(fighter.clone(), BasicAtkStrBuilder, 14, 1).unwrap();
+        let cs = CombatSimulator::dmg_sponge(fighter.clone(), BasicAtkStrBuilder, 14, 1).unwrap();
         let cr_rv = cs.get_cr_rv();
         let dummy_data = cr_rv.get_pcr(0).get_participant_data().get(1).unwrap();
 
@@ -153,7 +162,7 @@ mod tests {
         let atk_dmg: VRV64 = fighter.get_weapon_attack().unwrap().get_attack_dmg_rv(D20RollType::Normal, dummy_data.ac, &dummy_data.resistances).unwrap();
         assert_eq!(atk_dmg, dmg_rv);
 
-        let cs = CombatSimulator::do_encounter(fighter.clone(), BasicAtkStrBuilder, 14, 2).unwrap();
+        let cs = CombatSimulator::dmg_sponge(fighter.clone(), BasicAtkStrBuilder, 14, 2).unwrap();
         let cr_rv = cs.get_cr_rv();
         let dmg_rv = cr_rv.get_dmg(ParticipantId(1));
         assert_eq!(atk_dmg.multiple(2), dmg_rv);
@@ -166,7 +175,7 @@ mod tests {
         str_vec.push(Box::new(DualWieldStrBuilder));
         str_vec.push(Box::new(SneakAttackStrBuilder::new(false)));
         let rogue_str = LinearStrategyBuilder::from(str_vec);
-        let cs = CombatSimulator::do_encounter(rogue, rogue_str, 14, 1).unwrap();
+        let cs = CombatSimulator::dmg_sponge(rogue, rogue_str, 14, 1).unwrap();
         let cr_rv = cs.get_cr_rv();
         {
             assert_eq!(1, cr_rv.len());
@@ -193,7 +202,7 @@ mod tests {
         fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(ChampionFighter)))).unwrap();
         fighter.level_up(ClassName::Fighter, vec!(Box::new(ShieldMaster))).unwrap();
 
-        let cs = CombatSimulator::do_encounter(fighter.clone(), ShieldMasterStrBuilder, 14, 1).unwrap();
+        let cs = CombatSimulator::dmg_sponge(fighter.clone(), ShieldMasterStrBuilder, 14, 1).unwrap();
         let cr_rv = cs.get_cr_rv();
         {
             assert_eq!(1, cr_rv.len());
@@ -204,6 +213,41 @@ mod tests {
             // we're getting to the point that I'm not sure how to verify this is
             // correct, so I'll just take the code's word for it I guess.
             assert_eq!(Rational64::new(624639, 80000), dmg.expected_value());
+        }
+    }
+
+    #[test]
+    fn planar_warrior_test() {
+        let name = String::from("WorldHopper");
+        let ability_scores = get_dex_based();
+        let equipment = Equipment::new(
+            Armor::studded_leather(),
+            Weapon::longbow(),
+            OffHand::Free,
+        );
+        let mut ranger = Character::new(name, ability_scores, equipment);
+        ranger.level_up(ClassName::Ranger, vec!()).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(FightingStyle(FightingStyles::Archery)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(HorizonWalkerRanger)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
+        ranger.level_up_basic().unwrap();
+
+        let mut resistances = HashSet::new();
+        resistances.insert(DamageType::Slashing);
+        resistances.insert(DamageType::Piercing);
+        resistances.insert(DamageType::Bludgeoning);
+
+        let angery_dummy = TargetDummy::resistant(isize::MAX, 15, resistances);
+
+        let cs = CombatSimulator::vs_dummy(ranger.clone(), BasicAtkStrBuilder, angery_dummy, 1).unwrap();
+        let cr_rv = cs.get_cr_rv();
+        {
+            assert_eq!(1, cr_rv.len());
+
+            let dmg = cr_rv.get_dmg(ParticipantId(1));
+            assert_eq!(0, dmg.lower_bound());
+            assert_eq!(20, dmg.upper_bound());
+            assert_eq!(Rational64::new(249, 40), dmg.expected_value());
         }
     }
 }

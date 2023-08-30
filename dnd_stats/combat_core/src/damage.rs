@@ -71,6 +71,7 @@ impl From<DamageDice> for ExtendedDamageDice {
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum DamageFeature {
     GWF,
+    DmgTypeConversion(DamageType),
 }
 
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]

@@ -28,11 +28,26 @@ pub struct TargetDummy {
 impl TargetDummy {
     pub fn new(hp: isize, ac: isize) -> Self {
         let cr = ac_to_cr(ac);
-        TargetDummy {
+        Self {
             max_hp: hp,
             ac,
             prof: prof_by_cr(cr),
             resistances: HashSet::new(),
+            ability_scores: ability_scores_by_cr(cr, Ability::STR),
+            skill_manager: SkillManager::new(),
+            action_manager: ActionManager::new(),
+            resource_manager: ResourceManager::just_action_types(),
+            condition_manager: ConditionManager::new(),
+        }
+    }
+
+    pub fn resistant(hp: isize, ac: isize, resistances: HashSet<DamageType>) -> Self {
+        let cr = ac_to_cr(ac);
+        Self {
+            max_hp: hp,
+            ac,
+            prof: prof_by_cr(cr),
+            resistances,
             ability_scores: ability_scores_by_cr(cr, Ability::STR),
             skill_manager: SkillManager::new(),
             action_manager: ActionManager::new(),
