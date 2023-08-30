@@ -23,7 +23,7 @@ pub enum DamageDice {
 }
 
 impl DamageDice {
-    pub fn get_rv<T: RVProb>(&self) -> VecRandVar<T> {
+    pub fn get_rv<P: RVProb>(&self) -> VecRandVar<P> {
         match self {
             DamageDice::D4 => VecRandVar::new_dice(4).unwrap(),
             DamageDice::D6 => VecRandVar::new_dice(6).unwrap(),
@@ -34,7 +34,7 @@ impl DamageDice {
         }
     }
 
-    pub fn get_rv_gwf<T: RVProb>(&self) -> VecRandVar<T> {
+    pub fn get_rv_gwf<P: RVProb>(&self) -> VecRandVar<P> {
         match self {
             DamageDice::D4 => VecRandVar::new_dice_reroll(4, 2).unwrap(),
             DamageDice::D6 => VecRandVar::new_dice_reroll(6, 2).unwrap(),
@@ -234,7 +234,7 @@ impl<DE: DiceExpr + Clone> DamageManager<DE> {
         }
     }
 
-    fn get_total_dmg<T: RVProb>(&self, dmg_expr: &DamageExpression<DE>, resistances: &HashSet<DamageType>, double_dice: bool) -> Result<VecRandVar<T>, CCError> {
+    fn get_total_dmg<P: RVProb>(&self, dmg_expr: &DamageExpression<DE>, resistances: &HashSet<DamageType>, double_dice: bool) -> Result<VecRandVar<P>, CCError> {
         let mut rv = VecRandVar::new_constant(0).unwrap();
         for (k, de) in dmg_expr.iter() {
             let mut dice_rv = de.get_dice_rv(&self.damage_features, self.weapon_die)?;
@@ -254,7 +254,7 @@ impl<DE: DiceExpr + Clone> DamageManager<DE> {
         Ok(rv)
     }
 
-    pub fn get_base_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
+    pub fn get_base_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
         if dtv.len() == 0 {
             self.get_total_dmg(&self.base_dmg, resistances, false)
         } else {
@@ -264,7 +264,7 @@ impl<DE: DiceExpr + Clone> DamageManager<DE> {
         }
     }
 
-    pub fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
+    pub fn get_crit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
         if dtv.len() == 0 {
             // double base dice + base const
             let mut rv = self.get_total_dmg(&self.base_dmg, resistances, true)?;
@@ -282,7 +282,7 @@ impl<DE: DiceExpr + Clone> DamageManager<DE> {
         }
     }
 
-    pub fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
+    pub fn get_miss_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
         if dtv.len() == 0 {
             self.get_total_dmg(&self.miss_dmg, resistances, false)
         } else {
@@ -294,11 +294,11 @@ impl<DE: DiceExpr + Clone> DamageManager<DE> {
 
     // this is often easier for "half dmg on save" than building
     // an actual miss_dmg DamageExpression
-    pub fn get_half_base_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<VecRandVar<T>, CCError> {
+    pub fn get_half_base_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<VecRandVar<P>, CCError> {
         Ok(self.get_base_dmg(resistances, vec!())?.half().unwrap())
     }
 
-    pub fn get_attack_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CCError> {
+    pub fn get_attack_dmg_map<P: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<P>, CCError> {
         let map = AtkDmgMap::new(
             self.get_miss_dmg(resistances, vec!())?,
             self.get_base_dmg(resistances, vec!())?,
@@ -307,7 +307,6 @@ impl<DE: DiceExpr + Clone> DamageManager<DE> {
         Ok(map)
     }
 }
-
 
 #[cfg(test)]
 mod tests {

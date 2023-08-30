@@ -51,19 +51,19 @@ impl BasicAttack {
 }
 
 impl Attack for BasicAttack {
-    fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
+    fn get_miss_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
         Ok(self.damage.get_miss_dmg(resistances, bonus_dmg)?)
     }
 
-    fn get_hit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
+    fn get_hit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
         Ok(self.damage.get_base_dmg(resistances, bonus_dmg)?)
     }
 
-    fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
+    fn get_crit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
         Ok(self.damage.get_crit_dmg(resistances, bonus_dmg)?)
     }
 
-    fn get_acc_rv<T: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<T>, CCError> {
+    fn get_acc_rv<P: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<P>, CCError> {
         let rv = hit_type.get_rv(&D20Type::D20);
         Ok(rv.into_mrv().map_keys(|roll| Pair(roll, roll + self.hit_bonus)))
     }
@@ -81,7 +81,7 @@ impl Attack for BasicAttack {
         self.hit_bonus
     }
 
-    fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CCError> {
+    fn get_dmg_map<P: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<P>, CCError> {
         Ok(self.damage.get_attack_dmg_map(resistances)?)
     }
 }

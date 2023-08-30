@@ -187,11 +187,11 @@ impl WeaponAttack {
         &mut self.damage
     }
 
-    pub fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CBError> {
+    pub fn get_dmg_map<P: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<P>, CBError> {
         Ok(self.damage.cdm.get_attack_dmg_map(resistances)?)
     }
 
-    pub fn get_accuracy_rv<T: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<T>, CBError> {
+    pub fn get_accuracy_rv<P: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<P>, CBError> {
         let rv = hit_type.get_rv(&self.d20_rv);
         if let None = self.hit_bonus.get_saved_value() {
             return Err(CBError::NoCache.into());
@@ -200,18 +200,18 @@ impl WeaponAttack {
         Ok(rv.into_mrv().map_keys(|roll| Pair(roll, roll + hit_const)))
     }
 
-    pub fn get_attack_result_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize) -> Result<ArMRV<T>, CBError> {
+    pub fn get_attack_result_rv<P: RVProb>(&self, hit_type: D20RollType, target_ac: isize) -> Result<ArMRV<P>, CBError> {
         let hit_rv = self.get_accuracy_rv(hit_type)?;
         Ok(hit_rv.map_keys(|hit| AttackResult::from(hit, target_ac, self.get_crit_lb())))
     }
 
-    pub fn get_attack_dmg_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<VecRandVar<T>, CBError> {
+    pub fn get_attack_dmg_rv<P: RVProb>(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<VecRandVar<P>, CBError> {
         let attack_result_rv = self.get_attack_result_rv(hit_type, target_ac)?;
         let dmg_map = self.get_dmg_map(resistances)?;
         Ok(attack_result_rv.consolidate(&dmg_map.into_ar_map())?.into())
     }
 
-    pub fn get_attack_outcome_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<AoMRV<T>, CBError> {
+    pub fn get_attack_outcome_rv<P: RVProb>(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<AoMRV<P>, CBError> {
         let attack_result_rv = self.get_attack_result_rv(hit_type, target_ac)?;
         let dmg_map = self.get_dmg_map(resistances)?;
         Ok(attack_result_rv.projection(&dmg_map.into_ar_map())?)
@@ -226,19 +226,19 @@ impl From<WeaponAttack> for BasicAttack {
 }
 
 impl Attack for WeaponAttack {
-    fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
+    fn get_miss_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
         Ok(self.damage.cdm.get_miss_dmg(resistances, bonus_dmg)?)
     }
 
-    fn get_hit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
+    fn get_hit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
         Ok(self.damage.cdm.get_base_dmg(resistances, bonus_dmg)?)
     }
 
-    fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
+    fn get_crit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
         Ok(self.damage.cdm.get_crit_dmg(resistances, bonus_dmg)?)
     }
 
-    fn get_acc_rv<T: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<T>, CCError> {
+    fn get_acc_rv<P: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<P>, CCError> {
         let rv = hit_type.get_rv(self.get_d20_type());
         if let None = self.get_to_hit_bonus().get_saved_value() {
             return Err(CBError::NoCache.into());
@@ -269,7 +269,7 @@ impl Attack for WeaponAttack {
         self.hit_bonus.get_saved_value().unwrap_or(0) as isize
     }
 
-    fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CCError> {
+    fn get_dmg_map<P: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<P>, CCError> {
         Ok(self.get_damage().cdm.get_attack_dmg_map(resistances)?)
     }
 }

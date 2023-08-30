@@ -20,14 +20,14 @@ use rand_var::vec_rand_var::VecRandVar;
 use crate::combat_result_rv::prob_combat_result::ProbCombatResult;
 
 #[derive(Debug, Clone)]
-pub struct ProbCombatState<'pm, T: RVProb> {
+pub struct ProbCombatState<'pm, P: RVProb> {
     participants: &'pm ParticipantManager,
     state: CombatState,
-    dmg: Vec<VecRandVar<T>>,
-    prob: T,
+    dmg: Vec<VecRandVar<P>>,
+    prob: P,
 }
 
-impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
+impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
     pub fn new(pm: &'pm ParticipantManager) -> Self {
         let mut dmg = Vec::with_capacity(pm.len());
         for _ in 0..pm.len() {
@@ -37,7 +37,7 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
             participants: pm,
             state: CombatState::new(pm.get_initial_rms(), pm.get_initial_cms()),
             dmg,
-            prob: T::one(),
+            prob: P::one(),
         }
     }
 
@@ -53,7 +53,7 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         self.state.get_last_event()
     }
 
-    pub fn get_prob(&self) -> &T {
+    pub fn get_prob(&self) -> &P {
         &self.prob
     }
 
@@ -121,10 +121,10 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         self.push(CombatEvent::RemoveCond(cn));
     }
 
-    pub fn get_dmg(&self, pid: ParticipantId) -> &VecRandVar<T> {
+    pub fn get_dmg(&self, pid: ParticipantId) -> &VecRandVar<P> {
         self.dmg.get(pid.0).unwrap()
     }
-    fn set_dmg(&mut self, pid: ParticipantId, rv: VecRandVar<T>) {
+    fn set_dmg(&mut self, pid: ParticipantId, rv: VecRandVar<P>) {
         self.dmg[pid.0] = rv;
     }
 
@@ -175,7 +175,7 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         self.state.set_health(pid, h);
     }
 
-    pub fn split(self, rv: MapRandVar<CombatEvent, T>) -> Vec<Self> {
+    pub fn split(self, rv: MapRandVar<CombatEvent, P>) -> Vec<Self> {
         let mut vec = Vec::with_capacity(rv.len());
         let child_state = self.state.into_child();
         for ce in rv.get_keys() {
@@ -191,7 +191,7 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         vec
     }
 
-    pub fn split_dmg(self, state_rv: MapRandVar<CombatEvent, T>, dmg_map: BTreeMap<CombatEvent, VecRandVar<T>>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
+    pub fn split_dmg(self, state_rv: MapRandVar<CombatEvent, P>, dmg_map: BTreeMap<CombatEvent, VecRandVar<P>>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
         let children = self.split(state_rv);
         let mut result = Vec::with_capacity(children.len());
         for pcs in children.into_iter() {
@@ -201,7 +201,7 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         result
     }
 
-    pub fn add_dmg(mut self, dmg: &VecRandVar<T>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
+    pub fn add_dmg(mut self, dmg: &VecRandVar<P>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
         let old_health = self.get_health(target);
         let hp = self.get_max_hp(target);
         let bloody_hp = Health::calc_bloodied(hp);
@@ -244,11 +244,11 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
     }
 }
 
-impl<'pm, T: RVProb> Transposition for ProbCombatState<'pm, T> {
+impl<'pm, P: RVProb> Transposition for ProbCombatState<'pm, P> {
     fn is_transposition(&self, other: &Self) -> bool {
         let valid_state = CombatState::is_transposition(&self.state, &other.state);
         let valid_dmg = self.dmg.len() == other.dmg.len();
-        let valid_prob = self.prob.clone() + other.prob.clone() <= T::one();
+        let valid_prob = self.prob.clone() + other.prob.clone() <= P::one();
         let valid_part = ptr::eq(self.participants, other.participants);
         valid_state && valid_dmg && valid_prob && valid_part
     }
@@ -270,8 +270,8 @@ impl<'pm, T: RVProb> Transposition for ProbCombatState<'pm, T> {
     }
 }
 
-impl<'pm, T: RVProb> From<ProbCombatState<'pm, T>> for ProbCombatResult<T> {
-    fn from(value: ProbCombatState<'pm, T>) -> Self {
+impl<'pm, P: RVProb> From<ProbCombatState<'pm, P>> for ProbCombatResult<P> {
+    fn from(value: ProbCombatState<'pm, P>) -> Self {
         let mut part_data = Vec::new();
         for i in 0..value.participants.len() {
             part_data.push(value.participants.get_participant(ParticipantId(i)).into());

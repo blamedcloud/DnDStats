@@ -4,15 +4,15 @@ use rand_var::vec_rand_var::VecRandVar;
 use rand_var::rand_var::prob_type::RVProb;
 
 #[derive(Debug, Clone)]
-pub struct ProbCombatResult<T: RVProb> {
+pub struct ProbCombatResult<P: RVProb> {
     participants: Vec<ParticipantData>,
     state: CombatState,
-    dmg: Vec<VecRandVar<T>>,
-    prob: T,
+    dmg: Vec<VecRandVar<P>>,
+    prob: P,
 }
 
-impl<T: RVProb> ProbCombatResult<T> {
-    pub fn new(participants: Vec<ParticipantData>, state: CombatState, dmg: Vec<VecRandVar<T>>, prob: T) -> Self {
+impl<P: RVProb> ProbCombatResult<P> {
+    pub fn new(participants: Vec<ParticipantData>, state: CombatState, dmg: Vec<VecRandVar<P>>, prob: P) -> Self {
         Self {
             participants,
             state,
@@ -29,11 +29,11 @@ impl<T: RVProb> ProbCombatResult<T> {
         &self.state
     }
 
-    pub fn get_dmg(&self, pid: ParticipantId) -> &VecRandVar<T> {
+    pub fn get_dmg(&self, pid: ParticipantId) -> &VecRandVar<P> {
         self.dmg.get(pid.0).unwrap()
     }
 
-    pub fn get_prob(&self) -> &T {
+    pub fn get_prob(&self) -> &P {
         &self.prob
     }
 

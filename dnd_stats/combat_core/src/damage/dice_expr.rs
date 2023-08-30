@@ -73,15 +73,15 @@ impl From<(Vec<ExtendedDamageDice>, isize)> for DiceExpression {
 
 pub trait DiceExpr: Debug + From<DiceExprTerm> {
     fn add_term(&mut self, term: DiceExprTerm);
-    fn get_dice_rv<T: RVProb>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<VecRandVar<T>, CCError>;
+    fn get_dice_rv<P: RVProb>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<VecRandVar<P>, CCError>;
     fn get_const(&self) -> isize;
 
-    fn get_base_dice_rv<T: RVProb>(&self) -> Result<VecRandVar<T>, CCError> {
+    fn get_base_dice_rv<P: RVProb>(&self) -> Result<VecRandVar<P>, CCError> {
         self.get_dice_rv(&HashSet::new(), None)
     }
 
     // healing is currently just negative damage
-    fn get_heal_rv<T: RVProb> (&self) -> Result<VecRandVar<T>, CCError> {
+    fn get_heal_rv<P: RVProb> (&self) -> Result<VecRandVar<P>, CCError> {
         let rv_base = self.get_base_dice_rv();
         rv_base.map(|rv| rv.opposite_rv())
     }
@@ -100,9 +100,9 @@ impl DiceExpr for DiceExpression {
         };
     }
 
-    fn get_dice_rv<T: RVProb>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<VecRandVar<T>, CCError> {
+    fn get_dice_rv<P: RVProb>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<VecRandVar<P>, CCError> {
         let gwf = dmg_feats.contains(&DamageFeature::GWF);
-        let mut rv: VecRandVar<T> = VecRandVar::new_constant(0).unwrap();
+        let mut rv: VecRandVar<P> = VecRandVar::new_constant(0).unwrap();
         for ext_dice in self.dice_terms.iter() {
             let dice = DiceExpression::get_die(ext_dice, weapon_dmg)?;
             if gwf {

@@ -48,11 +48,11 @@ impl From<RVError> for CSError {
     }
 }
 
-pub struct CombatSimulator<T: RVProb> {
-    cr_rv: CombatResultRV<T>,
+pub struct CombatSimulator<P: RVProb> {
+    cr_rv: CombatResultRV<P>,
 }
 
-impl<T: RVProb> CombatSimulator<T> {
+impl<P: RVProb> CombatSimulator<P> {
     pub fn do_encounter(character: Character, str_bldr: impl StrategyBuilder, dummy_ac: isize, num_rounds: u8) -> Result<Self, CSError> {
         let player = Player::from(character);
         let dummy = TargetDummy::new(isize::MAX, dummy_ac);
@@ -66,7 +66,7 @@ impl<T: RVProb> CombatSimulator<T> {
         sm.add_participant(str_bldr)?;
         sm.add_participant(RemoveCondBuilder)?;
 
-        let mut em: EncounterSimulator<T> = EncounterSimulator::new(&sm)?;
+        let mut em: EncounterSimulator<P> = EncounterSimulator::new(&sm)?;
         em.set_do_merges(true);
         em.simulate_n_rounds(num_rounds)?;
         let cs_rv = em.get_state_rv().clone();
@@ -75,7 +75,7 @@ impl<T: RVProb> CombatSimulator<T> {
         })
     }
 
-    pub fn get_cr_rv(&self) -> &CombatResultRV<T> {
+    pub fn get_cr_rv(&self) -> &CombatResultRV<P> {
         &self.cr_rv
     }
 }

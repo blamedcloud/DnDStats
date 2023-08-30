@@ -12,28 +12,28 @@ use crate::combat_state_rv::CombatStateRV;
 pub mod prob_combat_result;
 
 #[derive(Debug, Clone)]
-pub struct CombatResultRV<T: RVProb> {
-    states: Vec<ProbCombatResult<T>>,
+pub struct CombatResultRV<P: RVProb> {
+    states: Vec<ProbCombatResult<P>>,
 }
 
-impl<T: RVProb> CombatResultRV<T> {
+impl<P: RVProb> CombatResultRV<P> {
     pub fn len(&self) -> usize {
         self.states.len()
     }
 
-    pub fn get_pcr(&self, i: usize) -> &ProbCombatResult<T> {
+    pub fn get_pcr(&self, i: usize) -> &ProbCombatResult<P> {
         &self.states.get(i).unwrap()
     }
 
-    pub fn get_index_rv(&self) -> VecRandVar<T> {
-        let v: Vec<T> = self.states.iter().map(|pcs| pcs.get_prob()).cloned().collect();
+    pub fn get_index_rv(&self) -> VecRandVar<P> {
+        let v: Vec<P> = self.states.iter().map(|pcs| pcs.get_prob()).cloned().collect();
         let ub = (self.len() as isize) - 1;
         VecRandVar::new(0, ub, v).unwrap()
     }
 
-    pub fn get_dmg(&self, target: ParticipantId) -> VecRandVar<T> {
+    pub fn get_dmg(&self, target: ParticipantId) -> VecRandVar<P> {
         let dmg_rvs = self.states.iter().map(|pcs| pcs.get_dmg(target));
-        let mut pdf_map: BTreeMap<isize, T> = BTreeMap::new();
+        let mut pdf_map: BTreeMap<isize, P> = BTreeMap::new();
         for (i, rv) in dmg_rvs.enumerate() {
             let prob = self.get_pcr(i).get_prob();
             for dmg in rv.get_keys() {
@@ -50,8 +50,8 @@ impl<T: RVProb> CombatResultRV<T> {
     }
 }
 
-impl<'pm, T: RVProb> From<CombatStateRV<'pm, T>> for CombatResultRV<T> {
-    fn from(value: CombatStateRV<'pm, T>) -> Self {
+impl<'pm, P: RVProb> From<CombatStateRV<'pm, P>> for CombatResultRV<P> {
+    fn from(value: CombatStateRV<'pm, P>) -> Self {
         let mut states = Vec::new();
         for state in value.get_states() {
             states.push(state.clone().into())

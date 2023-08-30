@@ -70,7 +70,7 @@ impl SkillCheck {
         }
     }
 
-    pub fn get_default_rv<T: RVProb>(&self) -> VecRandVar<T> {
+    pub fn get_default_rv<P: RVProb>(&self) -> VecRandVar<P> {
         self.default_roll_type.get_rv(&self.d20_type)
     }
 }
@@ -111,7 +111,7 @@ impl SkillManager {
         }
     }
 
-    pub fn get_rv<T: RVProb>(&self, skill: SkillName, ability_scores: &AbilityScores, prof: isize) -> VecRandVar<T> {
+    pub fn get_skill_rv<P: RVProb>(&self, skill: SkillName, ability_scores: &AbilityScores, prof: isize) -> VecRandVar<P> {
         let skill_check = self.get_skill_check(skill);
         let ability = skill_check.override_ability.unwrap_or(skill.get_ability());
         let mut check_bonus = ability_scores.get_score(&ability).get_mod() as isize;
@@ -122,8 +122,8 @@ impl SkillManager {
         rv
     }
 
-    pub fn meets_dc<T: RVProb>(&self, skill: SkillName, ability_scores: &AbilityScores, prof: isize, dc: isize) -> MapRandVar<BinaryOutcome, T> {
-        let skill_rv = self.get_rv(skill, ability_scores, prof);
+    pub fn meets_dc<P: RVProb>(&self, skill: SkillName, ability_scores: &AbilityScores, prof: isize, dc: isize) -> MapRandVar<BinaryOutcome, P> {
+        let skill_rv = self.get_skill_rv(skill, ability_scores, prof);
         skill_rv.into_mrv().map_keys(|check| {
             if check >= dc {
                 BinaryOutcome::Pass
@@ -155,9 +155,9 @@ impl SkillManager {
         }
     }
 
-    pub fn get_grapple_defense_rv<T: RVProb>(&self, ability_scores: &AbilityScores, prof: isize) -> VecRandVar<T> {
+    pub fn get_grapple_defense_rv<P: RVProb>(&self, ability_scores: &AbilityScores, prof: isize) -> VecRandVar<P> {
         let skill = self.choose_grapple_defense(ability_scores, prof);
-        self.get_rv(skill, ability_scores, prof)
+        self.get_skill_rv(skill, ability_scores, prof)
     }
 }
 
@@ -168,12 +168,12 @@ pub enum ContestResult {
 }
 
 #[derive(Debug, Clone)]
-pub struct SkillContest<T: RVProb> {
-    pub result: MapRandVar<ContestResult, T>,
+pub struct SkillContest<P: RVProb> {
+    pub result: MapRandVar<ContestResult, P>,
 }
 
-impl<T: RVProb> SkillContest<T> {
-    pub fn new(initiator_rv: &VecRandVar<T>, defender_rv: &VecRandVar<T>) -> Self {
+impl<P: RVProb> SkillContest<P> {
+    pub fn new(initiator_rv: &VecRandVar<P>, defender_rv: &VecRandVar<P>) -> Self {
         let result = initiator_rv.minus_rv(defender_rv)
             .into_mrv()
             .map_keys(|result| {
@@ -191,8 +191,8 @@ impl<T: RVProb> SkillContest<T> {
     pub fn build(initiator: &Box<dyn Participant>, defender: &Box<dyn Participant>, initiator_skill: SkillName, defender_skill: SkillName) -> Self {
         let i_sm = initiator.get_skill_manager();
         let d_sm = defender.get_skill_manager();
-        let i_rv = i_sm.get_rv(initiator_skill, initiator.get_ability_scores(), initiator.get_prof());
-        let d_rv = d_sm.get_rv(defender_skill, defender.get_ability_scores(), defender.get_prof());
+        let i_rv = i_sm.get_skill_rv(initiator_skill, initiator.get_ability_scores(), initiator.get_prof());
+        let d_rv = d_sm.get_skill_rv(defender_skill, defender.get_ability_scores(), defender.get_prof());
         SkillContest::new(&i_rv, &d_rv)
     }
 
@@ -200,7 +200,7 @@ impl<T: RVProb> SkillContest<T> {
         let g_sm = grappler.get_skill_manager();
         let t_sm = target.get_skill_manager();
 
-        let g_rv = g_sm.get_rv(SkillName::Athletics, grappler.get_ability_scores(), grappler.get_prof());
+        let g_rv = g_sm.get_skill_rv(SkillName::Athletics, grappler.get_ability_scores(), grappler.get_prof());
         let t_rv = t_sm.get_grapple_defense_rv(target.get_ability_scores(), target.get_prof());
         if grappler_is_initiator {
             SkillContest::new(&g_rv, &t_rv)
@@ -237,12 +237,12 @@ mod tests {
         assert_eq!(D20Type::D20, acro.d20_type);
         assert_eq!(D20RollType::Normal, acro.default_roll_type);
         assert_eq!(ProfType::Normal, acro.prof_type);
-        let rv: VRV64 = default_sm.get_rv(SkillName::Acrobatics, &get_dex_based(), 2);
+        let rv: VRV64 = default_sm.get_skill_rv(SkillName::Acrobatics, &get_dex_based(), 2);
         assert_eq!(4, rv.lower_bound());
         assert_eq!(23, rv.upper_bound());
 
         default_sm.acrobatics.prof_type = ProfType::Proficient;
-        let rv: VRV64 = default_sm.get_rv(SkillName::Acrobatics, &get_dex_based(), 2);
+        let rv: VRV64 = default_sm.get_skill_rv(SkillName::Acrobatics, &get_dex_based(), 2);
         assert_eq!(6, rv.lower_bound());
         assert_eq!(25, rv.upper_bound());
     }
@@ -265,7 +265,7 @@ mod tests {
         assert_eq!(27, rogue_rv.upper_bound());
         assert_eq!(Rational64::new(35, 2), rogue_rv.expected_value());
 
-        let barb_rv = barb_sm.get_rv(SkillName::Athletics, &barb_as, prof);
+        let barb_rv = barb_sm.get_skill_rv(SkillName::Athletics, &barb_as, prof);
         assert_eq!(6, barb_rv.lower_bound());
         assert_eq!(25, barb_rv.upper_bound());
         assert_eq!(Rational64::new(753, 40), barb_rv.expected_value());
@@ -298,7 +298,7 @@ mod tests {
         assert_eq!(33, rogue_rv.upper_bound());
         assert_eq!(Rational64::new(103, 4), rogue_rv.expected_value());
 
-        let barb_rv = barb_sm.get_rv(SkillName::Athletics, &barb_as, prof);
+        let barb_rv = barb_sm.get_skill_rv(SkillName::Athletics, &barb_as, prof);
         assert_eq!(10, barb_rv.lower_bound());
         assert_eq!(29, barb_rv.upper_bound());
         assert_eq!(Rational64::new(913, 40), barb_rv.expected_value());

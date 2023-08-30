@@ -113,9 +113,9 @@ impl DiceExpr for CharDiceExpr {
         };
     }
 
-    fn get_dice_rv<T: RVProb>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<VecRandVar<T>, CCError> {
+    fn get_dice_rv<P: RVProb>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<VecRandVar<P>, CCError> {
         let gwf = dmg_feats.contains(&DamageFeature::GWF);
-        let mut rv: VecRandVar<T> = VecRandVar::new_constant(0).unwrap();
+        let mut rv: VecRandVar<P> = VecRandVar::new_constant(0).unwrap();
         for ext_dice in self.dice_terms.iter() {
             let dice = CharDiceExpr::get_die(ext_dice, weapon_dmg)?;
             if gwf {

@@ -81,27 +81,27 @@ impl Seq for AttackResult {
     }
 }
 
-pub type AccMRV<T> = MapRandVar<RollPair, T>;
+pub type AccMRV<P> = MapRandVar<RollPair, P>;
 pub type AccMRV64 = MapRandVar<RollPair, Rational64>;
 pub type AccMRVBig = MapRandVar<RollPair, BigRational>;
 
-pub type ArMRV<T> = MapRandVar<AttackResult, T>;
+pub type ArMRV<P> = MapRandVar<AttackResult, P>;
 pub type ArMRV64 = MapRandVar<AttackResult, Rational64>;
 pub type ArMRVBig = MapRandVar<AttackResult, BigRational>;
 
-pub type AoMRV<T> = MapRandVar<Pair<AttackResult, isize>, T>;
+pub type AoMRV<P> = MapRandVar<Pair<AttackResult, isize>, P>;
 pub type AoMRV64 = MapRandVar<Pair<AttackResult, isize>, Rational64>;
 pub type AoMRVBig = MapRandVar<Pair<AttackResult, isize>, BigRational>;
 
 #[derive(Debug, Clone)]
-pub struct AtkDmgMap<T: RVProb> {
-    miss_dmg: VecRandVar<T>,
-    hit_dmg: VecRandVar<T>,
-    crit_dmg: VecRandVar<T>,
+pub struct AtkDmgMap<P: RVProb> {
+    miss_dmg: VecRandVar<P>,
+    hit_dmg: VecRandVar<P>,
+    crit_dmg: VecRandVar<P>,
 }
 
-impl<T: RVProb> AtkDmgMap<T> {
-    pub fn new(miss_dmg: VecRandVar<T>, hit_dmg: VecRandVar<T>, crit_dmg: VecRandVar<T>) -> Self {
+impl<P: RVProb> AtkDmgMap<P> {
+    pub fn new(miss_dmg: VecRandVar<P>, hit_dmg: VecRandVar<P>, crit_dmg: VecRandVar<P>) -> Self {
         Self {
             miss_dmg,
             hit_dmg,
@@ -109,7 +109,7 @@ impl<T: RVProb> AtkDmgMap<T> {
         }
     }
 
-    pub fn into_ar_map(self) -> BTreeMap<AttackResult, VecRandVar<T>> {
+    pub fn into_ar_map(self) -> BTreeMap<AttackResult, VecRandVar<P>> {
         let mut map = BTreeMap::new();
         map.insert(AttackResult::Miss, self.miss_dmg);
         map.insert(AttackResult::Hit, self.hit_dmg);
@@ -117,7 +117,7 @@ impl<T: RVProb> AtkDmgMap<T> {
         map
     }
 
-    pub fn into_ce_map(self) -> BTreeMap<CombatEvent, VecRandVar<T>> {
+    pub fn into_ce_map(self) -> BTreeMap<CombatEvent, VecRandVar<P>> {
         let mut map = BTreeMap::new();
         map.insert(CombatEvent::AR(AttackResult::Miss), self.miss_dmg);
         map.insert(CombatEvent::AR(AttackResult::Hit), self.hit_dmg);
@@ -127,11 +127,11 @@ impl<T: RVProb> AtkDmgMap<T> {
 }
 
 pub trait Attack : Debug {
-    fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError>;
-    fn get_hit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError>;
-    fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError>;
+    fn get_miss_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError>;
+    fn get_hit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError>;
+    fn get_crit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError>;
 
-    fn get_acc_rv<T: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<T>, CCError>;
+    fn get_acc_rv<P: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<P>, CCError>;
 
     // TODO: this should eventually return something like Equipment::WeaponRange instead
     // and then the map should validate this.
@@ -139,7 +139,7 @@ pub trait Attack : Debug {
     fn get_crit_lb(&self) -> isize;
     fn get_hit_bonus(&self) -> isize;
 
-    fn get_ar_dmg<T: RVProb>(&self, ar: AttackResult, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
+    fn get_ar_dmg<P: RVProb>(&self, ar: AttackResult, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
         match ar {
             AttackResult::Miss => self.get_miss_dmg(resistances, bonus_dmg),
             AttackResult::Hit => self.get_hit_dmg(resistances, bonus_dmg),
@@ -147,7 +147,7 @@ pub trait Attack : Debug {
         }
     }
 
-    fn get_dmg_map<T: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<T>, CCError> {
+    fn get_dmg_map<P: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<P>, CCError> {
         Ok(AtkDmgMap::new(
             self.get_miss_dmg(resistances, vec!())?,
             self.get_hit_dmg(resistances, vec!())?,
@@ -155,23 +155,23 @@ pub trait Attack : Debug {
         ))
     }
 
-    fn get_ar_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize) -> Result<ArMRV<T>, CCError> {
+    fn get_ar_rv<P: RVProb>(&self, hit_type: D20RollType, target_ac: isize) -> Result<ArMRV<P>, CCError> {
         let hit_rv = self.get_acc_rv(hit_type)?;
         Ok(hit_rv.map_keys(|hit| AttackResult::from(hit, target_ac, self.get_crit_lb())))
     }
 
-    fn get_ce_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize) -> Result<MapRandVar<CombatEvent, T>, CCError> {
+    fn get_ce_rv<P: RVProb>(&self, hit_type: D20RollType, target_ac: isize) -> Result<MapRandVar<CombatEvent, P>, CCError> {
         let ar_rv = self.get_ar_rv(hit_type, target_ac)?;
         Ok(ar_rv.map_keys(|ar| ar.into()))
     }
 
-    fn get_dmg_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<VecRandVar<T>, CCError> {
+    fn get_dmg_rv<P: RVProb>(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<VecRandVar<P>, CCError> {
         let attack_result_rv = self.get_ar_rv(hit_type, target_ac)?;
         let dmg_map = self.get_dmg_map(resistances)?;
         Ok(attack_result_rv.consolidate(&dmg_map.into_ar_map())?.into())
     }
 
-    fn get_ao_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<AoMRV<T>, CCError> {
+    fn get_ao_rv<P: RVProb>(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<AoMRV<P>, CCError> {
         let attack_result_rv = self.get_ar_rv(hit_type, target_ac)?;
         let dmg_map = self.get_dmg_map(resistances)?;
         Ok(attack_result_rv.projection(&dmg_map.into_ar_map())?)

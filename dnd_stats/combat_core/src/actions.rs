@@ -28,9 +28,9 @@ impl ActionType {
 }
 
 #[derive(Debug, Clone)]
-pub enum CABuilder<A, D> {
+pub enum CABuilder<A, H> {
     WeaponAttack(A),
-    SelfHeal(D),
+    SelfHeal(H),
     AdditionalAttacks(u8),
     ByName,
 }
@@ -98,5 +98,5 @@ pub enum ActionName {
     ShoveProne,
 }
 
-pub type ActionBuilder<A, D> = HashMap<ActionName, CombatOption<CABuilder<A, D>>>;
+pub type ActionBuilder<A, H> = HashMap<ActionName, CombatOption<CABuilder<A, H>>>;
 pub type ActionManager = HashMap<ActionName, CombatOption<CombatAction>>;

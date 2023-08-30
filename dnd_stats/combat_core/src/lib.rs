@@ -57,7 +57,7 @@ pub enum D20RollType {
 }
 
 impl D20RollType {
-    pub fn get_rv<T: RVProb>(&self, d20: &D20Type) -> VecRandVar<T> {
+    pub fn get_rv<P: RVProb>(&self, d20: &D20Type) -> VecRandVar<P> {
         let rv = d20.get_rv();
         match self {
             D20RollType::Disadvantage => rv.min_two_trials(),
@@ -115,7 +115,7 @@ pub enum D20Type {
 }
 
 impl D20Type {
-    pub fn get_rv<T: RVProb>(&self) -> VecRandVar<T> {
+    pub fn get_rv<P: RVProb>(&self) -> VecRandVar<P> {
         match self {
             D20Type::D20 => VecRandVar::new_dice(20).unwrap(),
             D20Type::D20R1 => VecRandVar::new_dice_reroll(20, 1).unwrap(),

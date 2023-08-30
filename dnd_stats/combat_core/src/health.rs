@@ -11,7 +11,7 @@ pub enum Health {
 }
 
 impl Health {
-    pub fn classify_bounds<T: RVProb>(dmg: &VecRandVar<T>, max_hp: isize, dead_at_zero: bool) -> (Health, Health) {
+    pub fn classify_bounds<P: RVProb>(dmg: &VecRandVar<P>, max_hp: isize, dead_at_zero: bool) -> (Health, Health) {
         let bloodied = Health::calc_bloodied(max_hp);
         let lb = dmg.lower_bound();
         let ub = dmg.upper_bound();

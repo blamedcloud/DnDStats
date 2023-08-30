@@ -23,26 +23,26 @@ use crate::combat_state_rv::CombatStateRV;
 use crate::combat_state_rv::prob_combat_state::ProbCombatState;
 use crate::CSError;
 
-pub enum HandledAction<'pm, T: RVProb> {
-    InPlace(ProbCombatState<'pm, T>),
-    Children(Vec<ProbCombatState<'pm, T>>)
+pub enum HandledAction<'pm, P: RVProb> {
+    InPlace(ProbCombatState<'pm, P>),
+    Children(Vec<ProbCombatState<'pm, P>>)
 }
 
-type ResultHA<'pm, T> = Result<HandledAction<'pm, T>, CSError>;
+type ResultHA<'pm, P> = Result<HandledAction<'pm, P>, CSError>;
 type ResultCSE = Result<(), CSError>;
 
-pub struct EncounterSimulator<'sm ,'pm, T: RVProb> {
+pub struct EncounterSimulator<'sm ,'pm, P: RVProb> {
     participants: &'pm ParticipantManager,
     strategies: &'sm StrategyManager<'pm>,
     round_num: u8,
-    cs_rv: CombatStateRV<'pm, T>,
+    cs_rv: CombatStateRV<'pm, P>,
     merge_transpositions: bool,
 }
 
 pub type ES64<'sm, 'pm> = EncounterSimulator<'sm, 'pm, Rational64>;
 pub type ESBig<'sm, 'pm> = EncounterSimulator<'sm, 'pm, BigRational>;
 
-impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
+impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
     pub fn new(sm: &'sm StrategyManager<'pm>) -> Result<Self, CSError> {
         if !sm.is_compiled() {
             return Err(CSError::CCE(CCError::SMNotCompiled));
@@ -75,7 +75,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         Ok(())
     }
 
-    pub fn get_state_rv(&self) -> &CombatStateRV<T> {
+    pub fn get_state_rv(&self) -> &CombatStateRV<P> {
         &self.cs_rv
     }
 
@@ -133,7 +133,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         self.strategies.get_strategy(pid)
     }
 
-    fn is_combat_over(&self, pcs: &mut ProbCombatState<'pm, T>) -> bool {
+    fn is_combat_over(&self, pcs: &mut ProbCombatState<'pm, P>) -> bool {
         if pcs.get_state().get_last_combat_timing().unwrap() == CombatTiming::EncounterEnd {
             return true;
         }
@@ -155,7 +155,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         true
     }
 
-    fn finish_turn(&self, mut pcs: ProbCombatState<'pm, T>, pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
+    fn finish_turn(&self, mut pcs: ProbCombatState<'pm, P>, pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, P>>, CSError> {
         if self.is_combat_over(&mut pcs) || pcs.is_dead(pid) {
             return Ok(vec!(pcs));
         }
@@ -191,7 +191,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         }
     }
 
-    fn possible_condition_removal(&self, pcs: &ProbCombatState<'pm, T>, pid: ParticipantId, cn: ConditionName, at: ActionType) -> bool {
+    fn possible_condition_removal(&self, pcs: &ProbCombatState<'pm, P>, pid: ParticipantId, cn: ConditionName, at: ActionType) -> bool {
         let cm = pcs.get_state().get_cm(pid);
         let has_cond = cm.has_condition(&cn);
         if !has_cond {
@@ -233,7 +233,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         self.get_team(pid) == Team::Enemies
     }
 
-    fn possible_action(&self, pcs: &ProbCombatState<'pm, T>, pid: ParticipantId, so: StrategicAction) -> bool {
+    fn possible_action(&self, pcs: &ProbCombatState<'pm, P>, pid: ParticipantId, so: StrategicAction) -> bool {
         let an = so.action_name;
         let participant = self.get_participant(pid);
         let has_action = participant.get_action_manager().contains_key(&an);
@@ -260,7 +260,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         has_action && valid_target && has_resources
     }
 
-    fn finish_action(&self, pcs: ProbCombatState<'pm, T>, pid: ParticipantId, so: StrategicAction) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
+    fn finish_action(&self, pcs: ProbCombatState<'pm, P>, pid: ParticipantId, so: StrategicAction) -> Result<Vec<ProbCombatState<'pm, P>>, CSError> {
         let handled_action = self.handle_action(pcs, pid, so)?;
         match handled_action {
             HandledAction::InPlace(p) => Ok(vec!(p)),
@@ -268,7 +268,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         }
     }
 
-    fn handle_action(&self, mut pcs: ProbCombatState<'pm, T>, pid: ParticipantId, so: StrategicAction) -> ResultHA<'pm, T> {
+    fn handle_action(&self, mut pcs: ProbCombatState<'pm, P>, pid: ParticipantId, so: StrategicAction) -> ResultHA<'pm, P> {
         let an = so.action_name;
         let participant = self.get_participant(pid);
         let co = participant.get_action_manager().get(&an).unwrap();
@@ -287,7 +287,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
                 }
             },
             CombatAction::SelfHeal(de) => {
-                let heal: VecRandVar<T> = de.get_heal_rv()?;
+                let heal: VecRandVar<P> = de.get_heal_rv()?;
                 Ok(HandledAction::Children(pcs.add_dmg(&heal, pid, self.is_dead_at_zero(pid))))
             },
             CombatAction::AdditionalAttacks(aa) => {
@@ -313,7 +313,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         }
     }
 
-    fn handle_shove_prone(&self, mut pcs: ProbCombatState<'pm, T>, shover_pid: ParticipantId, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
+    fn handle_shove_prone(&self, mut pcs: ProbCombatState<'pm, P>, shover_pid: ParticipantId, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, P>>, CSError> {
         let shover = self.get_participant(shover_pid);
         let target = self.get_participant(target_pid);
         let t_sm = target.get_skill_manager();
@@ -339,14 +339,14 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         Ok(results)
     }
 
-    fn handle_attack(&self, pcs: ProbCombatState<'pm, T>, atk: &impl Attack, atker_pid: ParticipantId, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, T>>, CSError> {
+    fn handle_attack(&self, pcs: ProbCombatState<'pm, P>, atk: &impl Attack, atker_pid: ParticipantId, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, P>>, CSError> {
         let attacker = self.get_participant(atker_pid);
         let target = self.get_participant(target_pid);
         let dead_at_zero = self.is_dead_at_zero(target_pid);
         let atk_cm = pcs.get_state().get_cm(atker_pid);
         let target_cm = pcs.get_state().get_cm(target_pid);
         let roll_type = atk_cm.overall_atk_mod(target_cm, atk.get_atk_range());
-        let ce_rv: MapRandVar<CombatEvent, T> = atk.get_ce_rv(roll_type, target.get_ac())?;
+        let ce_rv: MapRandVar<CombatEvent, P> = atk.get_ce_rv(roll_type, target.get_ac())?;
         // TODO: handle AC boosts somehow...
 
         if attacker.has_triggers() && attacker.get_trigger_manager().unwrap().has_triggers(TriggerType::SuccessfulAttack) {
@@ -394,7 +394,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
         v
     }
 
-    fn validate_trigger_cost(&self, pcs: &ProbCombatState<'pm, T>, pid: ParticipantId, tt: TriggerType, response: &Vec<TriggerResponse>) -> Option<HashMap<ResourceName, usize>> {
+    fn validate_trigger_cost(&self, pcs: &ProbCombatState<'pm, P>, pid: ParticipantId, tt: TriggerType, response: &Vec<TriggerResponse>) -> Option<HashMap<ResourceName, usize>> {
         match tt {
             TriggerType::WasHit => todo!(),
             TriggerType::SuccessfulAttack => {

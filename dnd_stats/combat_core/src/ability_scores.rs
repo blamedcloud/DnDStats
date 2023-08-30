@@ -111,7 +111,7 @@ impl AbilityScore {
         &self.default_roll_type
     }
 
-    pub fn get_rv<T: RVProb>(&self, prof: isize) -> VecRandVar<T> {
+    pub fn get_save_rv<P: RVProb>(&self, prof: isize) -> VecRandVar<P> {
         let mut bonus = (self.get_mod() + self.save_bonus) as isize;
         if self.prof_save {
             bonus += prof;
