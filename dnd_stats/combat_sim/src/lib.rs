@@ -6,8 +6,8 @@ use combat_core::combat_event::CombatEvent;
 use combat_core::participant::ParticipantManager;
 use combat_core::strategy::{StrategyBuilder, StrategyManager};
 use combat_core::strategy::basic_strategies::RemoveCondBuilder;
-use rand_var::rv_traits::prob_type::RVProb;
-use rand_var::rv_traits::RVError;
+use rand_var::rand_var::prob_type::RVProb;
+use rand_var::RVError;
 
 use crate::combat_result_rv::CombatResultRV;
 use crate::encounter_simulator::EncounterSimulator;
@@ -99,8 +99,9 @@ mod tests {
     use combat_core::strategy::linear_str::PairStrBuilder;
     use combat_core::strategy::shield_master_str::ShieldMasterStrBuilder;
     use combat_core::strategy::sneak_atk_str::SneakAttackStrBuilder;
-    use rand_var::RV64;
-    use rand_var::rv_traits::{NumRandVar, RandVar};
+    use rand_var::num_rand_var::NumRandVar;
+    use rand_var::vec_rand_var::VRV64;
+    use rand_var::rand_var::RandVar;
 
     use crate::CombatSimulator;
 
@@ -148,7 +149,7 @@ mod tests {
         let dummy_data = cr_rv.get_pcr(0).get_participant_data().get(1).unwrap();
 
         let dmg_rv = cr_rv.get_dmg(ParticipantId(1));
-        let atk_dmg: RV64 = fighter.get_weapon_attack().unwrap().get_attack_dmg_rv(D20RollType::Normal, dummy_data.ac, &dummy_data.resistances).unwrap();
+        let atk_dmg: VRV64 = fighter.get_weapon_attack().unwrap().get_attack_dmg_rv(D20RollType::Normal, dummy_data.ac, &dummy_data.resistances).unwrap();
         assert_eq!(atk_dmg, dmg_rv);
 
         let cs = CombatSimulator::do_encounter(fighter.clone(), BasicAtkStrBuilder, 14, 2).unwrap();

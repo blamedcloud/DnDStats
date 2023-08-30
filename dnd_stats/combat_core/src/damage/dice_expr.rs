@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 
-use rand_var::RandomVariable;
-use rand_var::rv_traits::NumRandVar;
-use rand_var::rv_traits::prob_type::RVProb;
+use rand_var::vec_rand_var::VecRandVar;
+use rand_var::num_rand_var::NumRandVar;
+use rand_var::rand_var::prob_type::RVProb;
 
 use crate::CCError;
 use crate::damage::{DamageDice, DamageFeature, ExtendedDamageDice};
@@ -73,15 +73,15 @@ impl From<(Vec<ExtendedDamageDice>, isize)> for DiceExpression {
 
 pub trait DiceExpr: Debug + From<DiceExprTerm> {
     fn add_term(&mut self, term: DiceExprTerm);
-    fn get_dice_rv<T: RVProb>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<RandomVariable<T>, CCError>;
+    fn get_dice_rv<T: RVProb>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<VecRandVar<T>, CCError>;
     fn get_const(&self) -> isize;
 
-    fn get_base_dice_rv<T: RVProb>(&self) -> Result<RandomVariable<T>, CCError> {
+    fn get_base_dice_rv<T: RVProb>(&self) -> Result<VecRandVar<T>, CCError> {
         self.get_dice_rv(&HashSet::new(), None)
     }
 
     // healing is currently just negative damage
-    fn get_heal_rv<T: RVProb> (&self) -> Result<RandomVariable<T>, CCError> {
+    fn get_heal_rv<T: RVProb> (&self) -> Result<VecRandVar<T>, CCError> {
         let rv_base = self.get_base_dice_rv();
         rv_base.map(|rv| rv.opposite_rv())
     }
@@ -100,9 +100,9 @@ impl DiceExpr for DiceExpression {
         };
     }
 
-    fn get_dice_rv<T: RVProb>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<RandomVariable<T>, CCError> {
+    fn get_dice_rv<T: RVProb>(&self, dmg_feats: &HashSet<DamageFeature>, weapon_dmg: Option<DamageDice>) -> Result<VecRandVar<T>, CCError> {
         let gwf = dmg_feats.contains(&DamageFeature::GWF);
-        let mut rv: RandomVariable<T> = RandomVariable::new_constant(0).unwrap();
+        let mut rv: VecRandVar<T> = VecRandVar::new_constant(0).unwrap();
         for ext_dice in self.dice_terms.iter() {
             let dice = DiceExpression::get_die(ext_dice, weapon_dmg)?;
             if gwf {

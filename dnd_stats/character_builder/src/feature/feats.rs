@@ -189,9 +189,10 @@ mod tests {
     use combat_core::actions::{ActionName, AttackType, CABuilder};
     use combat_core::attack::AccMRV64;
     use combat_core::D20RollType;
-    use rand_var::rv_traits::{NumRandVar, RandVar};
-    use rand_var::rv_traits::sequential::Pair;
-    use rand_var::RVBig;
+    use rand_var::num_rand_var::NumRandVar;
+    use rand_var::rand_var::RandVar;
+    use rand_var::rand_var::sequential::Pair;
+    use rand_var::vec_rand_var::VRVBig;
 
     use crate::{Character, CharacterCO};
     use crate::classes::{ChooseSubClass, ClassName};
@@ -237,7 +238,7 @@ mod tests {
         let acc: AccMRV64 = gwm_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
-        let dmg: RVBig = gwm_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let dmg: VRVBig = gwm_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
         assert_eq!(15, dmg.lower_bound());
         assert_eq!(25, dmg.upper_bound());
         assert_eq!(BigRational::from_isize(20).unwrap(), dmg.expected_value());
@@ -257,7 +258,7 @@ mod tests {
         let acc: AccMRV64 = ss_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
-        let dmg: RVBig = ss_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let dmg: VRVBig = ss_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
         assert_eq!(14, dmg.lower_bound());
         assert_eq!(21, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from_isize(35).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());
@@ -277,7 +278,7 @@ mod tests {
         let acc: AccMRV64 = pam_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 6), acc.lower_bound());
         assert_eq!(Pair(20, 25), acc.upper_bound());
-        let dmg: RVBig = pam_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let dmg: VRVBig = pam_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
         assert_eq!(4, dmg.lower_bound());
         assert_eq!(7, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from_isize(11).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());
@@ -304,7 +305,7 @@ mod tests {
         let acc: AccMRV64 = gwm_pam_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
-        let dmg: RVBig = gwm_pam_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let dmg: VRVBig = gwm_pam_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
         assert_eq!(14, dmg.lower_bound());
         assert_eq!(17, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from_isize(31).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());
@@ -331,7 +332,7 @@ mod tests {
         let acc: AccMRV64 = pam_gwm_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
-        let dmg: RVBig = pam_gwm_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let dmg: VRVBig = pam_gwm_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
         assert_eq!(14, dmg.lower_bound());
         assert_eq!(17, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from_isize(31).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());

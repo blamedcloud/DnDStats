@@ -7,9 +7,9 @@ use combat_core::attack::basic_attack::BasicAttack;
 use combat_core::conditions::AttackDistance;
 use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
 use combat_core::movement::Feet;
-use rand_var::RandomVariable;
-use rand_var::rv_traits::prob_type::RVProb;
-use rand_var::rv_traits::sequential::Pair;
+use rand_var::vec_rand_var::VecRandVar;
+use rand_var::rand_var::prob_type::RVProb;
+use rand_var::rand_var::sequential::Pair;
 
 use crate::{CBError, Character};
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType};
@@ -205,7 +205,7 @@ impl WeaponAttack {
         Ok(hit_rv.map_keys(|hit| AttackResult::from(hit, target_ac, self.get_crit_lb())))
     }
 
-    pub fn get_attack_dmg_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CBError> {
+    pub fn get_attack_dmg_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<VecRandVar<T>, CBError> {
         let attack_result_rv = self.get_attack_result_rv(hit_type, target_ac)?;
         let dmg_map = self.get_dmg_map(resistances)?;
         Ok(attack_result_rv.consolidate(&dmg_map.into_ar_map())?.into())
@@ -226,15 +226,15 @@ impl From<WeaponAttack> for BasicAttack {
 }
 
 impl Attack for WeaponAttack {
-    fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+    fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
         Ok(self.damage.cdm.get_miss_dmg(resistances, bonus_dmg)?)
     }
 
-    fn get_hit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+    fn get_hit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
         Ok(self.damage.cdm.get_base_dmg(resistances, bonus_dmg)?)
     }
 
-    fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+    fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
         Ok(self.damage.cdm.get_crit_dmg(resistances, bonus_dmg)?)
     }
 
@@ -282,9 +282,11 @@ mod tests {
 
     use combat_core::attack::{ArMRVBig, AttackResult};
     use combat_core::D20RollType;
-    use rand_var::{MRVBig, RandomVariable, RVBig};
-    use rand_var::rv_traits::{NumRandVar, RandVar};
-    use rand_var::rv_traits::sequential::Pair;
+    use rand_var::map_rand_var::MRVBig;
+    use rand_var::num_rand_var::NumRandVar;
+    use rand_var::rand_var::RandVar;
+    use rand_var::rand_var::sequential::Pair;
+    use rand_var::vec_rand_var::{VRVBig, VecRandVar};
 
     use crate::equipment::Weapon;
     use crate::tests::get_test_fighter;
@@ -303,12 +305,12 @@ mod tests {
 
         let damage = &attack.get_damage().cdm;
 
-        let two_d6: RVBig = RandomVariable::new_dice(6).unwrap().multiple(2);
+        let two_d6: VRVBig = VecRandVar::new_dice(6).unwrap().multiple(2);
         let base_dmg = two_d6.add_const(3);
         assert_eq!(base_dmg, damage.get_base_dmg(&no_resist, vec!()).unwrap());
         let crit_dmg = two_d6.multiple(2).add_const(3);
         assert_eq!(crit_dmg, damage.get_crit_dmg(&no_resist, vec!()).unwrap());
-        let miss_dmg: RVBig = RandomVariable::new_constant(0).unwrap();
+        let miss_dmg: VRVBig = VecRandVar::new_constant(0).unwrap();
         assert_eq!(miss_dmg, damage.get_miss_dmg(&no_resist, vec!()).unwrap());
 
         let mut dmg_map = BTreeMap::new();
@@ -316,12 +318,12 @@ mod tests {
         dmg_map.insert(AttackResult::Hit, base_dmg);
         dmg_map.insert(AttackResult::Miss, miss_dmg);
 
-        let d20: MRVBig = RandomVariable::new_dice(20).unwrap().into();
+        let d20: MRVBig = VecRandVar::new_dice(20).unwrap().into();
         let normal_hit = d20.map_keys(|r| Pair(r, r+5));
         assert_eq!(normal_hit, attack.get_accuracy_rv(D20RollType::Normal).unwrap());
         let target_ac = 13;
         let normal_result = normal_hit.map_keys(|hit| AttackResult::from(hit, target_ac, 20));
-        let normal_dmg: RVBig = normal_result.consolidate(&dmg_map).unwrap().into();
+        let normal_dmg: VRVBig = normal_result.consolidate(&dmg_map).unwrap().into();
         assert_eq!(normal_dmg, attack.get_attack_dmg_rv(D20RollType::Normal, target_ac, &no_resist).unwrap());
     }
 

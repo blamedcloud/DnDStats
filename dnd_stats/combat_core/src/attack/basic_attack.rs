@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
-use rand_var::RandomVariable;
-use rand_var::rv_traits::prob_type::RVProb;
-use rand_var::rv_traits::sequential::Pair;
+use rand_var::vec_rand_var::VecRandVar;
+use rand_var::rand_var::prob_type::RVProb;
+use rand_var::rand_var::sequential::Pair;
 
 use crate::{CCError, D20RollType, D20Type};
 use crate::attack::{AccMRV, AtkDmgMap, Attack};
@@ -51,15 +51,15 @@ impl BasicAttack {
 }
 
 impl Attack for BasicAttack {
-    fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+    fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
         Ok(self.damage.get_miss_dmg(resistances, bonus_dmg)?)
     }
 
-    fn get_hit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+    fn get_hit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
         Ok(self.damage.get_base_dmg(resistances, bonus_dmg)?)
     }
 
-    fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+    fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
         Ok(self.damage.get_crit_dmg(resistances, bonus_dmg)?)
     }
 

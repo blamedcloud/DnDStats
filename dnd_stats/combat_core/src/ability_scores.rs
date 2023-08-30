@@ -1,8 +1,8 @@
 use std::fmt::{Display, Formatter};
 
-use rand_var::RandomVariable;
-use rand_var::rv_traits::NumRandVar;
-use rand_var::rv_traits::prob_type::RVProb;
+use rand_var::vec_rand_var::VecRandVar;
+use rand_var::num_rand_var::NumRandVar;
+use rand_var::rand_var::prob_type::RVProb;
 
 use crate::{D20RollType, D20Type};
 
@@ -111,7 +111,7 @@ impl AbilityScore {
         &self.default_roll_type
     }
 
-    pub fn get_rv<T: RVProb>(&self, prof: isize) -> RandomVariable<T> {
+    pub fn get_rv<T: RVProb>(&self, prof: isize) -> VecRandVar<T> {
         let mut bonus = (self.get_mod() + self.save_bonus) as isize;
         if self.prof_save {
             bonus += prof;

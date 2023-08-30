@@ -1,8 +1,9 @@
 use num::{FromPrimitive, Rational64};
 
-use rand_var::{MapRandVar, RandomVariable, RV64};
-use rand_var::rv_traits::NumRandVar;
-use rand_var::rv_traits::prob_type::RVProb;
+use rand_var::map_rand_var::MapRandVar;
+use rand_var::num_rand_var::NumRandVar;
+use rand_var::rand_var::prob_type::RVProb;
+use rand_var::vec_rand_var::{VRV64, VecRandVar};
 
 use crate::{BinaryOutcome, D20RollType, D20Type};
 use crate::ability_scores::{Ability, AbilityScores};
@@ -69,7 +70,7 @@ impl SkillCheck {
         }
     }
 
-    pub fn get_default_rv<T: RVProb>(&self) -> RandomVariable<T> {
+    pub fn get_default_rv<T: RVProb>(&self) -> VecRandVar<T> {
         self.default_roll_type.get_rv(&self.d20_type)
     }
 }
@@ -110,7 +111,7 @@ impl SkillManager {
         }
     }
 
-    pub fn get_rv<T: RVProb>(&self, skill: SkillName, ability_scores: &AbilityScores, prof: isize) -> RandomVariable<T> {
+    pub fn get_rv<T: RVProb>(&self, skill: SkillName, ability_scores: &AbilityScores, prof: isize) -> VecRandVar<T> {
         let skill_check = self.get_skill_check(skill);
         let ability = skill_check.override_ability.unwrap_or(skill.get_ability());
         let mut check_bonus = ability_scores.get_score(&ability).get_mod() as isize;
@@ -137,14 +138,14 @@ impl SkillManager {
         let acro_abil = acro.override_ability.unwrap_or(SkillName::Acrobatics.get_ability());
         let mut acro_bonus = ability_scores.get_score(&acro_abil).get_mod() as isize;
         acro_bonus += acro.prof_type.get_bonus(prof);
-        let acro_rv: RV64 = acro.get_default_rv();
+        let acro_rv: VRV64 = acro.get_default_rv();
         let acro_ev = acro_rv.expected_value() + Rational64::from_isize(acro_bonus).unwrap();
 
         let athl = &self.athletics;
         let athl_abil = athl.override_ability.unwrap_or(SkillName::Athletics.get_ability());
         let mut athl_bonus = ability_scores.get_score(&athl_abil).get_mod() as isize;
         athl_bonus += athl.prof_type.get_bonus(prof);
-        let athl_rv: RV64 = athl.get_default_rv();
+        let athl_rv: VRV64 = athl.get_default_rv();
         let athl_ev = athl_rv.expected_value() + Rational64::from_isize(athl_bonus).unwrap();
 
         if acro_ev > athl_ev {
@@ -154,7 +155,7 @@ impl SkillManager {
         }
     }
 
-    pub fn get_grapple_defense_rv<T: RVProb>(&self, ability_scores: &AbilityScores, prof: isize) -> RandomVariable<T> {
+    pub fn get_grapple_defense_rv<T: RVProb>(&self, ability_scores: &AbilityScores, prof: isize) -> VecRandVar<T> {
         let skill = self.choose_grapple_defense(ability_scores, prof);
         self.get_rv(skill, ability_scores, prof)
     }
@@ -172,7 +173,7 @@ pub struct SkillContest<T: RVProb> {
 }
 
 impl<T: RVProb> SkillContest<T> {
-    pub fn new(initiator_rv: &RandomVariable<T>, defender_rv: &RandomVariable<T>) -> Self {
+    pub fn new(initiator_rv: &VecRandVar<T>, defender_rv: &VecRandVar<T>) -> Self {
         let result = initiator_rv.minus_rv(defender_rv)
             .into_mrv()
             .map_keys(|result| {
@@ -212,9 +213,10 @@ impl<T: RVProb> SkillContest<T> {
 #[cfg(test)]
 mod tests {
     use num::{One, Rational64};
+    use rand_var::num_rand_var::NumRandVar;
 
-    use rand_var::RV64;
-    use rand_var::rv_traits::{NumRandVar, RandVar};
+    use rand_var::vec_rand_var::VRV64;
+    use rand_var::rand_var::RandVar;
 
     use crate::{D20RollType, D20Type};
     use crate::ability_scores::AbilityScores;
@@ -235,12 +237,12 @@ mod tests {
         assert_eq!(D20Type::D20, acro.d20_type);
         assert_eq!(D20RollType::Normal, acro.default_roll_type);
         assert_eq!(ProfType::Normal, acro.prof_type);
-        let rv: RV64 = default_sm.get_rv(SkillName::Acrobatics, &get_dex_based(), 2);
+        let rv: VRV64 = default_sm.get_rv(SkillName::Acrobatics, &get_dex_based(), 2);
         assert_eq!(4, rv.lower_bound());
         assert_eq!(23, rv.upper_bound());
 
         default_sm.acrobatics.prof_type = ProfType::Proficient;
-        let rv: RV64 = default_sm.get_rv(SkillName::Acrobatics, &get_dex_based(), 2);
+        let rv: VRV64 = default_sm.get_rv(SkillName::Acrobatics, &get_dex_based(), 2);
         assert_eq!(6, rv.lower_bound());
         assert_eq!(25, rv.upper_bound());
     }

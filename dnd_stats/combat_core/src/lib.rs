@@ -1,9 +1,10 @@
 use std::cmp;
 use std::ops::{Add, AddAssign};
 
-use rand_var::RandomVariable;
-use rand_var::rv_traits::{RandVar, RVError};
-use rand_var::rv_traits::prob_type::RVProb;
+use rand_var::RVError;
+use rand_var::rand_var::RandVar;
+use rand_var::rand_var::prob_type::RVProb;
+use rand_var::vec_rand_var::VecRandVar;
 
 pub mod ability_scores;
 pub mod actions;
@@ -56,7 +57,7 @@ pub enum D20RollType {
 }
 
 impl D20RollType {
-    pub fn get_rv<T: RVProb>(&self, d20: &D20Type) -> RandomVariable<T> {
+    pub fn get_rv<T: RVProb>(&self, d20: &D20Type) -> VecRandVar<T> {
         let rv = d20.get_rv();
         match self {
             D20RollType::Disadvantage => rv.min_two_trials(),
@@ -114,11 +115,11 @@ pub enum D20Type {
 }
 
 impl D20Type {
-    pub fn get_rv<T: RVProb>(&self) -> RandomVariable<T> {
+    pub fn get_rv<T: RVProb>(&self) -> VecRandVar<T> {
         match self {
-            D20Type::D20 => RandomVariable::new_dice(20).unwrap(),
-            D20Type::D20R1 => RandomVariable::new_dice_reroll(20, 1).unwrap(),
-            D20Type::D20m10 => RandomVariable::new_dice(20).unwrap().cap_lb(10).unwrap(),
+            D20Type::D20 => VecRandVar::new_dice(20).unwrap(),
+            D20Type::D20R1 => VecRandVar::new_dice_reroll(20, 1).unwrap(),
+            D20Type::D20m10 => VecRandVar::new_dice(20).unwrap().cap_lb(10).unwrap(),
         }
     }
 }
@@ -135,7 +136,7 @@ pub enum BinaryOutcome {
 mod tests {
     use num::Rational64;
 
-    use rand_var::rv_traits::RandVar;
+    use rand_var::rand_var::RandVar;
 
     use crate::{D20RollType, D20Type};
 

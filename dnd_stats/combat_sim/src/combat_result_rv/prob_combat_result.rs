@@ -1,18 +1,18 @@
 use combat_core::combat_state::CombatState;
 use combat_core::participant::{ParticipantData, ParticipantId};
-use rand_var::RandomVariable;
-use rand_var::rv_traits::prob_type::RVProb;
+use rand_var::vec_rand_var::VecRandVar;
+use rand_var::rand_var::prob_type::RVProb;
 
 #[derive(Debug, Clone)]
 pub struct ProbCombatResult<T: RVProb> {
     participants: Vec<ParticipantData>,
     state: CombatState,
-    dmg: Vec<RandomVariable<T>>,
+    dmg: Vec<VecRandVar<T>>,
     prob: T,
 }
 
 impl<T: RVProb> ProbCombatResult<T> {
-    pub fn new(participants: Vec<ParticipantData>, state: CombatState, dmg: Vec<RandomVariable<T>>, prob: T) -> Self {
+    pub fn new(participants: Vec<ParticipantData>, state: CombatState, dmg: Vec<VecRandVar<T>>, prob: T) -> Self {
         Self {
             participants,
             state,
@@ -29,7 +29,7 @@ impl<T: RVProb> ProbCombatResult<T> {
         &self.state
     }
 
-    pub fn get_dmg(&self, pid: ParticipantId) -> &RandomVariable<T> {
+    pub fn get_dmg(&self, pid: ParticipantId) -> &VecRandVar<T> {
         self.dmg.get(pid.0).unwrap()
     }
 

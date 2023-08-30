@@ -15,8 +15,9 @@ use combat_core::resources::resource_amounts::ResourceCount;
 use combat_core::skills::{ContestResult, SkillContest, SkillName};
 use combat_core::strategy::{StrategicAction, Strategy, StrategyDecision, StrategyManager, Target};
 use combat_core::triggers::{TriggerAction, TriggerContext, TriggerResponse, TriggerType};
-use rand_var::{MapRandVar, RandomVariable};
-use rand_var::rv_traits::prob_type::RVProb;
+use rand_var::map_rand_var::MapRandVar;
+use rand_var::rand_var::prob_type::RVProb;
+use rand_var::vec_rand_var::VecRandVar;
 
 use crate::combat_state_rv::CombatStateRV;
 use crate::combat_state_rv::prob_combat_state::ProbCombatState;
@@ -286,7 +287,7 @@ impl<'sm, 'pm, T: RVProb> EncounterSimulator<'sm, 'pm, T> {
                 }
             },
             CombatAction::SelfHeal(de) => {
-                let heal: RandomVariable<T> = de.get_heal_rv()?;
+                let heal: VecRandVar<T> = de.get_heal_rv()?;
                 Ok(HandledAction::Children(pcs.add_dmg(&heal, pid, self.is_dead_at_zero(pid))))
             },
             CombatAction::AdditionalAttacks(aa) => {
@@ -441,8 +442,8 @@ mod tests {
     use combat_core::strategy::linear_str::PairStrBuilder;
     use combat_core::strategy::second_wind_str::SecondWindStrBuilder;
     use combat_core::strategy::StrategyManager;
-    use rand_var::RV64;
-    use rand_var::rv_traits::RandVar;
+    use rand_var::vec_rand_var::VRV64;
+    use rand_var::rand_var::RandVar;
 
     use crate::encounter_simulator::{EncounterSimulator, ES64};
     use crate::monster::Monster;
@@ -535,7 +536,7 @@ mod tests {
             assert_eq!(3, cs_rv.len());
 
             let index_rv = cs_rv.get_index_rv();
-            let ar_rv: RV64 = fighter.get_weapon_attack().unwrap()
+            let ar_rv: VRV64 = fighter.get_weapon_attack().unwrap()
                 .get_attack_result_rv(D20RollType::Normal, dummy.get_ac()).unwrap()
                 .map_keys(|ar| {
                     match ar {
@@ -636,7 +637,7 @@ mod tests {
             assert_eq!(orc.get_max_hp(), crit_die.upper_bound());
 
             let dmg_rv = cs_rv.get_dmg(orc_pid);
-            let atk_dmg: RV64 = fighter
+            let atk_dmg: VRV64 = fighter
                 .get_weapon_attack().unwrap()
                 .get_attack_dmg_rv(D20RollType::Normal, orc.get_ac(), orc.get_resistances()).unwrap()
                 .cap_ub(orc.get_max_hp()).unwrap();
@@ -671,7 +672,7 @@ mod tests {
         let orc_pid = ParticipantId(1);
         let dmg_rv = cs_rv.get_dmg(orc_pid);
         let wa = fighter.get_weapon_attack().unwrap();
-        let atk_dmg: RV64 = wa
+        let atk_dmg: VRV64 = wa
             .get_attack_dmg_rv(D20RollType::Normal, orc.get_ac(), orc.get_resistances()).unwrap()
             .cap_ub(orc.get_max_hp()).unwrap();
         assert_eq!(atk_dmg, dmg_rv);

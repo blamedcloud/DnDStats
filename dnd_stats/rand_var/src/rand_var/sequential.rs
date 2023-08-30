@@ -3,12 +3,12 @@ use std::collections::BTreeSet;
 use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Clone)]
-pub struct SeqIter<T: Ord + Clone> {
-    pub items: BTreeSet<T>,
+pub struct SeqIter<K: Ord + Clone> {
+    pub items: BTreeSet<K>,
 }
 
-impl<T: Ord + Clone> Iterator for SeqIter<T> {
-    type Item = T;
+impl<K: Ord + Clone> Iterator for SeqIter<K> {
+    type Item = K;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.items.pop_first()
@@ -24,9 +24,9 @@ where
     fn convex_bounds(iter: SeqIter<Self>) -> Option<(Self, Self)>;
 }
 
-pub fn always_convex_bounds<T>(iter: SeqIter<T>) -> Option<(T, T)>
+pub fn always_convex_bounds<K>(iter: SeqIter<K>) -> Option<(K, K)>
 where
-    T: Ord + Clone
+    K: Ord + Clone
 {
     if iter.items.len() == 0 {
         None

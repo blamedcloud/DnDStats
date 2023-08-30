@@ -10,9 +10,12 @@ use combat_core::participant::{ParticipantId, ParticipantManager};
 use combat_core::resources::{RefreshTiming, ResourceManager, ResourceName};
 use combat_core::resources::resource_amounts::ResourceCount;
 use combat_core::transposition::Transposition;
-use rand_var::{MapRandVar, RandomVariable};
-use rand_var::rv_traits::{NumRandVar, RandVar, RVPartition};
-use rand_var::rv_traits::prob_type::RVProb;
+use rand_var::map_rand_var::MapRandVar;
+use rand_var::num_rand_var::NumRandVar;
+use rand_var::rand_var::RandVar;
+use rand_var::rand_var::prob_type::RVProb;
+use rand_var::rand_var::rv_partition::RVPartition;
+use rand_var::vec_rand_var::VecRandVar;
 
 use crate::combat_result_rv::prob_combat_result::ProbCombatResult;
 
@@ -20,7 +23,7 @@ use crate::combat_result_rv::prob_combat_result::ProbCombatResult;
 pub struct ProbCombatState<'pm, T: RVProb> {
     participants: &'pm ParticipantManager,
     state: CombatState,
-    dmg: Vec<RandomVariable<T>>,
+    dmg: Vec<VecRandVar<T>>,
     prob: T,
 }
 
@@ -28,7 +31,7 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
     pub fn new(pm: &'pm ParticipantManager) -> Self {
         let mut dmg = Vec::with_capacity(pm.len());
         for _ in 0..pm.len() {
-            dmg.push(RandomVariable::new_constant(0).unwrap());
+            dmg.push(VecRandVar::new_constant(0).unwrap());
         }
         Self {
             participants: pm,
@@ -118,10 +121,10 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         self.push(CombatEvent::RemoveCond(cn));
     }
 
-    pub fn get_dmg(&self, pid: ParticipantId) -> &RandomVariable<T> {
+    pub fn get_dmg(&self, pid: ParticipantId) -> &VecRandVar<T> {
         self.dmg.get(pid.0).unwrap()
     }
-    fn set_dmg(&mut self, pid: ParticipantId, rv: RandomVariable<T>) {
+    fn set_dmg(&mut self, pid: ParticipantId, rv: VecRandVar<T>) {
         self.dmg[pid.0] = rv;
     }
 
@@ -175,7 +178,7 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
     pub fn split(self, rv: MapRandVar<CombatEvent, T>) -> Vec<Self> {
         let mut vec = Vec::with_capacity(rv.len());
         let child_state = self.state.into_child();
-        for ce in rv.valid_p() {
+        for ce in rv.get_keys() {
             let mut ce_state = child_state.clone();
             ce_state.push(ce);
             vec.push(Self {
@@ -188,7 +191,7 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         vec
     }
 
-    pub fn split_dmg(self, state_rv: MapRandVar<CombatEvent, T>, dmg_map: BTreeMap<CombatEvent, RandomVariable<T>>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
+    pub fn split_dmg(self, state_rv: MapRandVar<CombatEvent, T>, dmg_map: BTreeMap<CombatEvent, VecRandVar<T>>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
         let children = self.split(state_rv);
         let mut result = Vec::with_capacity(children.len());
         for pcs in children.into_iter() {
@@ -198,7 +201,7 @@ impl<'pm, T: RVProb> ProbCombatState<'pm, T> {
         result
     }
 
-    pub fn add_dmg(mut self, dmg: &RandomVariable<T>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
+    pub fn add_dmg(mut self, dmg: &VecRandVar<T>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
         let old_health = self.get_health(target);
         let hp = self.get_max_hp(target);
         let bloody_hp = Health::calc_bloodied(hp);

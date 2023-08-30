@@ -4,10 +4,11 @@ use std::fmt::{Debug, Display, Formatter};
 
 use num::{BigRational, Rational64};
 
-use rand_var::{MapRandVar, RandomVariable};
-use rand_var::rv_traits::prob_type::RVProb;
-use rand_var::rv_traits::sequential;
-use rand_var::rv_traits::sequential::{Pair, Seq, SeqIter};
+use rand_var::map_rand_var::MapRandVar;
+use rand_var::rand_var::prob_type::RVProb;
+use rand_var::rand_var::sequential;
+use rand_var::rand_var::sequential::{Pair, Seq, SeqIter};
+use rand_var::vec_rand_var::VecRandVar;
 
 use crate::{CCError, D20RollType};
 use crate::combat_event::CombatEvent;
@@ -94,13 +95,13 @@ pub type AoMRVBig = MapRandVar<Pair<AttackResult, isize>, BigRational>;
 
 #[derive(Debug, Clone)]
 pub struct AtkDmgMap<T: RVProb> {
-    miss_dmg: RandomVariable<T>,
-    hit_dmg: RandomVariable<T>,
-    crit_dmg: RandomVariable<T>,
+    miss_dmg: VecRandVar<T>,
+    hit_dmg: VecRandVar<T>,
+    crit_dmg: VecRandVar<T>,
 }
 
 impl<T: RVProb> AtkDmgMap<T> {
-    pub fn new(miss_dmg: RandomVariable<T>, hit_dmg: RandomVariable<T>, crit_dmg: RandomVariable<T>) -> Self {
+    pub fn new(miss_dmg: VecRandVar<T>, hit_dmg: VecRandVar<T>, crit_dmg: VecRandVar<T>) -> Self {
         Self {
             miss_dmg,
             hit_dmg,
@@ -108,7 +109,7 @@ impl<T: RVProb> AtkDmgMap<T> {
         }
     }
 
-    pub fn into_ar_map(self) -> BTreeMap<AttackResult, RandomVariable<T>> {
+    pub fn into_ar_map(self) -> BTreeMap<AttackResult, VecRandVar<T>> {
         let mut map = BTreeMap::new();
         map.insert(AttackResult::Miss, self.miss_dmg);
         map.insert(AttackResult::Hit, self.hit_dmg);
@@ -116,7 +117,7 @@ impl<T: RVProb> AtkDmgMap<T> {
         map
     }
 
-    pub fn into_ce_map(self) -> BTreeMap<CombatEvent, RandomVariable<T>> {
+    pub fn into_ce_map(self) -> BTreeMap<CombatEvent, VecRandVar<T>> {
         let mut map = BTreeMap::new();
         map.insert(CombatEvent::AR(AttackResult::Miss), self.miss_dmg);
         map.insert(CombatEvent::AR(AttackResult::Hit), self.hit_dmg);
@@ -126,9 +127,9 @@ impl<T: RVProb> AtkDmgMap<T> {
 }
 
 pub trait Attack : Debug {
-    fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
-    fn get_hit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
-    fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError>;
+    fn get_miss_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError>;
+    fn get_hit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError>;
+    fn get_crit_dmg<T: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError>;
 
     fn get_acc_rv<T: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<T>, CCError>;
 
@@ -138,7 +139,7 @@ pub trait Attack : Debug {
     fn get_crit_lb(&self) -> isize;
     fn get_hit_bonus(&self) -> isize;
 
-    fn get_ar_dmg<T: RVProb>(&self, ar: AttackResult, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<RandomVariable<T>, CCError> {
+    fn get_ar_dmg<T: RVProb>(&self, ar: AttackResult, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<T>, CCError> {
         match ar {
             AttackResult::Miss => self.get_miss_dmg(resistances, bonus_dmg),
             AttackResult::Hit => self.get_hit_dmg(resistances, bonus_dmg),
@@ -164,7 +165,7 @@ pub trait Attack : Debug {
         Ok(ar_rv.map_keys(|ar| ar.into()))
     }
 
-    fn get_dmg_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<RandomVariable<T>, CCError> {
+    fn get_dmg_rv<T: RVProb>(&self, hit_type: D20RollType, target_ac: isize, resistances: &HashSet<DamageType>) -> Result<VecRandVar<T>, CCError> {
         let attack_result_rv = self.get_ar_rv(hit_type, target_ac)?;
         let dmg_map = self.get_dmg_map(resistances)?;
         Ok(attack_result_rv.consolidate(&dmg_map.into_ar_map())?.into())

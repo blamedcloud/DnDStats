@@ -12,7 +12,7 @@ use combat_core::damage::DamageType;
 use combat_core::resources::ResourceManager;
 use combat_core::skills::SkillManager;
 use combat_core::triggers::TriggerManager;
-use rand_var::rv_traits::RVError;
+use rand_var::RVError;
 
 use crate::attributed_bonus::{AttributedBonus, BonusTerm, BonusType, CharacterDependant};
 use crate::classes::{ClassName, SubClass};
