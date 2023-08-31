@@ -5,7 +5,7 @@ use combat_core::actions::{ActionName, ActionType, AttackType, CombatAction, Com
 use combat_core::attack::AttackResult;
 use combat_core::damage::{DamageTerm, ExtendedDamageType};
 use combat_core::damage::dice_expr::DiceExprTerm;
-use combat_core::resources::{RefreshTiming, Resource, ResourceName};
+use combat_core::resources::{RefreshTiming, Resource, ResourceActionType, ResourceName};
 use combat_core::resources::resource_amounts::{RefreshBy, ResourceCap, ResourceCount};
 use combat_core::triggers::{TriggerAction, TriggerContext, TriggerInfo, TriggerName, TriggerResponse, TriggerType};
 
@@ -57,7 +57,13 @@ impl Feature for GreatWeaponMaster {
         for (ca, co) in new_actions.into_iter() {
             character.combat_actions.insert(ca, co);
         }
-        character.combat_actions.insert(ActionName::BonusGWMAttack, CombatOption::new(ActionType::BonusAction, CombatAction::AdditionalAttacks(1)));
+        character.combat_actions.insert(
+            ActionName::BonusGWMAttack,
+            CombatOption::new(
+                ActionType::BonusAction,
+                CombatAction::GainResource(ResourceName::RAT(ResourceActionType::SingleAttack), 1)
+            )
+        );
 
         let mut res = Resource::new(ResourceCap::Soft(0), ResourceCount::Count(0));
         res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToEmpty);
@@ -67,6 +73,7 @@ impl Feature for GreatWeaponMaster {
         let response = TriggerResponse::from(TriggerAction::AddResource(ResourceName::AN(ActionName::BonusGWMAttack), 1));
         let ti = TriggerInfo::new(TriggerType::SuccessfulAttack, TriggerContext::AR(AttackResult::Crit));
         character.trigger_manager.add_trigger(ti, TriggerName::GWMBonusAtk);
+        character.trigger_manager.add_trigger(TriggerType::OnKill.into(), TriggerName::GWMBonusAtk);
         character.trigger_manager.set_response(TriggerName::GWMBonusAtk, response);
         // TODO: add another trigger for OnKill
 

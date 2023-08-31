@@ -8,6 +8,7 @@ use crate::resources::ResourceName;
 pub enum TriggerType {
     WasHit,
     SuccessfulAttack,
+    OnKill,
 }
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]

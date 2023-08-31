@@ -64,6 +64,7 @@ impl CombatState {
         if h == Health::Dead {
             self.deaths.insert(pid);
         }
+        self.push(CombatEvent::HP(pid, h));
     }
 
     pub fn into_child(self) -> Self {

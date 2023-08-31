@@ -7,7 +7,7 @@ use combat_core::attack::basic_attack::BasicAttack;
 use combat_core::conditions::ConditionManager;
 use combat_core::damage::DamageType;
 use combat_core::participant::{Participant, ParticipantId};
-use combat_core::resources::ResourceManager;
+use combat_core::resources::{ResourceActionType, ResourceManager, ResourceName};
 use combat_core::skills::SkillManager;
 use combat_core::triggers::TriggerManager;
 
@@ -93,7 +93,13 @@ pub fn ability_scores_by_cr(cr: u8, primary_ability: Ability) -> AbilityScores {
 
 pub fn create_basic_attack_am(ba: BasicAttack, num_attacks: u8) -> ActionManager {
     let mut am = ActionManager::new();
-    am.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CombatAction::AdditionalAttacks(num_attacks)));
+    am.insert(
+        ActionName::AttackAction,
+        CombatOption::new(
+            ActionType::Action,
+            CombatAction::GainResource(ResourceName::RAT(ResourceActionType::SingleAttack), num_attacks as usize)
+        )
+    );
 
     let pa_co = CombatOption::new_target(ActionType::SingleAttack, CombatAction::Attack(ba), true);
     am.insert(ActionName::PrimaryAttack(AttackType::Normal), pa_co);

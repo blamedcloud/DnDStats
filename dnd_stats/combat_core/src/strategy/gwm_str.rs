@@ -31,6 +31,7 @@ impl StrategyBuilder for GWMStrBldr {
 pub struct GWMStr<'pm> {
     participants: &'pm Vec<TeamMember>,
     my_pid: ParticipantId,
+    // TODO: make a function of target AC ?
     use_gwm: bool // dyn Fn(isize) -> bool,
 }
 
@@ -68,7 +69,9 @@ impl<'pm> Strategy for GWMStr<'pm> {
 
     fn handle_trigger(&self, ti: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
         let mut v = Vec::new();
-        if ti.tt == TriggerType::SuccessfulAttack && ti.tc == TriggerContext::AR(AttackResult::Crit) {
+        let on_crit = TriggerInfo::new(TriggerType::SuccessfulAttack, TriggerContext::AR(AttackResult::Crit));
+        let on_kill = TriggerInfo::new(TriggerType::OnKill, TriggerContext::NoContext);
+        if ti == on_crit || ti == on_kill {
             let my_tm = self.get_me().get_trigger_manager().unwrap();
             v.push(my_tm.get_response(TriggerName::GWMBonusAtk).unwrap());
         }

@@ -75,8 +75,15 @@ where
     where
         Self: Sized + Clone,
     {
+        self.cab_lb_force(lb, false)
+    }
+
+    fn cab_lb_force(&self, lb: K, force: bool) -> Result<Self, RVError>
+    where
+        Self: Sized + Clone,
+    {
         if lb > self.lower_bound() {
-            let seq_iter = SeqIter { items: self.get_keys().filter(|k| *k >= lb).collect() };
+            let seq_iter = SeqIter { items: self.get_keys().filter(|k| k >= &lb).collect() };
             RandVar::build(seq_iter, |k| {
                 if k == lb {
                     self.cdf_ref(&lb)
@@ -85,7 +92,19 @@ where
                 }
             })
         } else {
-            Ok(self.clone())
+            if lb < self.lower_bound() && force {
+                let mut new_keys = self.get_keys().items;
+                new_keys.insert(lb.clone());
+                RandVar::build(SeqIter { items: new_keys }, |k| {
+                    if k == lb {
+                        P::zero()
+                    } else {
+                        self.pdf(k)
+                    }
+                })
+            } else {
+                Ok(self.clone())
+            }
         }
     }
 
@@ -93,8 +112,15 @@ where
     where
         Self: Sized + Clone,
     {
+        self.cap_ub_force(ub, false)
+    }
+
+    fn cap_ub_force(&self, ub: K, force: bool) -> Result<Self, RVError>
+    where
+        Self: Sized + Clone,
+    {
         if ub < self.upper_bound() {
-            let seq_iter = SeqIter { items: self.get_keys().filter(|k| *k <= ub).collect() };
+            let seq_iter = SeqIter { items: self.get_keys().filter(|k| k <= &ub).collect() };
             RandVar::build(seq_iter, |k| {
                 if k < ub {
                     self.pdf(k)
@@ -103,7 +129,19 @@ where
                 }
             })
         } else {
-            Ok(self.clone())
+            if ub > self.upper_bound() && force {
+                let mut new_keys = self.get_keys().items;
+                new_keys.insert(ub.clone());
+                RandVar::build(SeqIter { items: new_keys }, |k| {
+                    if k == ub {
+                        P::zero()
+                    } else {
+                        self.pdf(k)
+                    }
+                })
+            } else {
+                Ok(self.clone())
+            }
         }
     }
 

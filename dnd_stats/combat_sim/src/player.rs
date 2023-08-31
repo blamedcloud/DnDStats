@@ -45,7 +45,7 @@ impl From<Character> for Player {
             let ca: CombatAction<BasicAttack, DiceExpression> = match ca_old {
                 CombatAction::Attack(wa) => CombatAction::Attack(wa.into()),
                 CombatAction::SelfHeal(cde) => CombatAction::SelfHeal(cde.into()),
-                CombatAction::AdditionalAttacks(aa) => CombatAction::AdditionalAttacks(aa),
+                CombatAction::GainResource(rn, aa) => CombatAction::GainResource(rn, aa),
                 CombatAction::ApplyBasicCondition(cn) => CombatAction::ApplyBasicCondition(cn),
                 CombatAction::ApplyComplexCondition(cn, cond) => CombatAction::ApplyComplexCondition(cn, cond),
                 CombatAction::ByName => CombatAction::ByName

@@ -1,7 +1,7 @@
 use combat_core::actions::{ActionName, ActionType, CombatAction, CombatOption};
 use combat_core::damage::{DamageDice, ExtendedDamageDice};
 use combat_core::damage::dice_expr::{DiceExpr, DiceExprTerm};
-use combat_core::resources::{RefreshTiming, Resource, ResourceName};
+use combat_core::resources::{RefreshTiming, Resource, ResourceActionType, ResourceName};
 use combat_core::resources::resource_amounts::{RefreshBy, ResourceCap};
 
 use crate::{CBError, Character};
@@ -82,7 +82,13 @@ impl Feature for SecondWind {
 pub struct ActionSurge(pub usize);
 impl Feature for ActionSurge {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        character.combat_actions.insert(ActionName::ActionSurge, CombatOption::new(ActionType::FreeAction, CombatAction::ByName));
+        character.combat_actions.insert(
+            ActionName::ActionSurge,
+            CombatOption::new(
+                ActionType::FreeAction,
+                CombatAction::GainResource(ResourceName::RAT(ResourceActionType::Action), 1)
+            )
+        );
 
         let mut res = Resource::from(ResourceCap::Hard(self.0));
         res.add_refresh(RefreshTiming::ShortRest, RefreshBy::ToFull);

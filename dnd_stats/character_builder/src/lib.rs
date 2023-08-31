@@ -9,7 +9,7 @@ use combat_core::actions::{ActionBuilder, ActionName, ActionType, AttackType, Co
 use combat_core::CCError;
 use combat_core::conditions::ConditionManager;
 use combat_core::damage::DamageType;
-use combat_core::resources::ResourceManager;
+use combat_core::resources::{ResourceActionType, ResourceManager, ResourceName};
 use combat_core::skills::SkillManager;
 use combat_core::triggers::TriggerManager;
 use rand_var::RVError;
@@ -304,7 +304,7 @@ impl Character {
 
 pub fn create_character_ab(character: &Character) -> ActionBuilder<WeaponAttack, CharDiceExpr> {
     let mut am = ActionBuilder::new();
-    am.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CombatAction::AdditionalAttacks(1)));
+    am.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CombatAction::GainResource(ResourceName::RAT(ResourceActionType::SingleAttack), 1)));
 
     let wa = WeaponAttack::primary_weapon(character);
     let pa_co = CombatOption::new_target(ActionType::SingleAttack, CombatAction::Attack(wa), true);

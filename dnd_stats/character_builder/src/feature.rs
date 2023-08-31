@@ -1,5 +1,6 @@
 use combat_core::ability_scores::Ability;
 use combat_core::actions::{ActionName, ActionType, CombatAction, CombatOption};
+use combat_core::resources::{ResourceActionType, ResourceName};
 
 use crate::{CBError, Character};
 
@@ -51,10 +52,16 @@ impl From<(Ability, Ability)> for SaveProficiencies {
     }
 }
 
-pub struct ExtraAttack(pub u8);
+pub struct ExtraAttack(pub usize);
 impl Feature for ExtraAttack {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        character.combat_actions.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CombatAction::AdditionalAttacks(self.0)));
+        character.combat_actions.insert(
+            ActionName::AttackAction,
+            CombatOption::new(
+                ActionType::Action,
+                CombatAction::GainResource(ResourceName::RAT(ResourceActionType::SingleAttack), self.0)
+            )
+        );
         Ok(())
     }
 }

@@ -9,6 +9,7 @@ use combat_core::combat_event::{CombatEvent, CombatTiming};
 use combat_core::conditions::{ConditionLifetime, ConditionName};
 use combat_core::damage::DamageTerm;
 use combat_core::damage::dice_expr::DiceExpr;
+use combat_core::health::Health;
 use combat_core::participant::{Participant, ParticipantId, ParticipantManager, Team};
 use combat_core::resources::{ResourceActionType, ResourceName};
 use combat_core::resources::resource_amounts::ResourceCount;
@@ -29,6 +30,7 @@ pub enum HandledAction<'pm, P: RVProb> {
 }
 
 type ResultHA<'pm, P> = Result<HandledAction<'pm, P>, CSError>;
+type ResultVS<'pm, P> = Result<Vec<ProbCombatState<'pm, P>>, CSError>;
 type ResultCSE = Result<(), CSError>;
 
 pub struct EncounterSimulator<'sm ,'pm, P: RVProb> {
@@ -155,7 +157,7 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         true
     }
 
-    fn finish_turn(&self, mut pcs: ProbCombatState<'pm, P>, pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, P>>, CSError> {
+    fn finish_turn(&self, mut pcs: ProbCombatState<'pm, P>, pid: ParticipantId) -> ResultVS<'pm, P> {
         if self.is_combat_over(&mut pcs) || pcs.is_dead(pid) {
             return Ok(vec!(pcs));
         }
@@ -260,7 +262,7 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         has_action && valid_target && has_resources
     }
 
-    fn finish_action(&self, pcs: ProbCombatState<'pm, P>, pid: ParticipantId, so: StrategicAction) -> Result<Vec<ProbCombatState<'pm, P>>, CSError> {
+    fn finish_action(&self, pcs: ProbCombatState<'pm, P>, pid: ParticipantId, so: StrategicAction) -> ResultVS<'pm, P> {
         let handled_action = self.handle_action(pcs, pid, so)?;
         match handled_action {
             HandledAction::InPlace(p) => Ok(vec!(p)),
@@ -290,8 +292,8 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
                 let heal: VecRandVar<P> = de.get_heal_rv()?;
                 Ok(HandledAction::Children(pcs.add_dmg(&heal, pid, self.is_dead_at_zero(pid))))
             },
-            CombatAction::AdditionalAttacks(aa) => {
-                pcs.get_rm_mut(pid).gain(ResourceName::RAT(ResourceActionType::SingleAttack), *aa as usize);
+            CombatAction::GainResource(rn, aa) => {
+                pcs.get_rm_mut(pid).gain(*rn, *aa);
                 Ok(HandledAction::InPlace(pcs))
             },
             CombatAction::ApplyBasicCondition(cn) => {
@@ -334,7 +336,7 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         }
     }
 
-    fn handle_shove_prone(&self, mut pcs: ProbCombatState<'pm, P>, shover_pid: ParticipantId, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, P>>, CSError> {
+    fn handle_shove_prone(&self, mut pcs: ProbCombatState<'pm, P>, shover_pid: ParticipantId, target_pid: ParticipantId) -> ResultVS<'pm, P> {
         let shover = self.get_participant(shover_pid);
         let target = self.get_participant(target_pid);
         let t_sm = target.get_skill_manager();
@@ -360,7 +362,7 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         Ok(results)
     }
 
-    fn handle_attack(&self, pcs: ProbCombatState<'pm, P>, atk: &impl Attack, atker_pid: ParticipantId, target_pid: ParticipantId) -> Result<Vec<ProbCombatState<'pm, P>>, CSError> {
+    fn handle_attack(&self, pcs: ProbCombatState<'pm, P>, atk: &impl Attack, atker_pid: ParticipantId, target_pid: ParticipantId) -> ResultVS<'pm, P> {
         let attacker = self.get_participant(atker_pid);
         let target = self.get_participant(target_pid);
         let dead_at_zero = self.is_dead_at_zero(target_pid);
@@ -373,7 +375,7 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         let children = pcs.split(ce_rv);
         let mut results = Vec::with_capacity(children.len());
         let resist = target.get_resistances();
-        for mut child in children {
+        for child in children {
             if let CombatEvent::AR(ar) = child.get_last_event().unwrap() {
                 match ar {
                     AttackResult::Miss => {
@@ -381,29 +383,60 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
                         results.extend(v.into_iter());
                     },
                     _ => {
-                        let mut bonus_dmg = Vec::new();
-                        let ti = TriggerInfo::new(TriggerType::SuccessfulAttack, TriggerContext::AR(ar));
-                        if attacker.has_triggers() && attacker.get_trigger_manager().unwrap().has_triggers(ti) {
-                            let response = self.get_strategy(atker_pid).handle_trigger(ti, child.get_state());
-                            let cost = self.validate_trigger_cost(&child, atker_pid, &response);
-                            if cost.is_some() {
-                                child.spend_resource_cost(atker_pid, cost.unwrap());
-                                self.handle_add_resource_triggers(&mut child, atker_pid, &response);
-                                bonus_dmg = self.handle_dmg_bonus_triggers(&response);
-                            } else {
-                                return Err(CSError::InvalidTriggerResponse);
-                            }
-                        }
-                        let target_cm = child.get_state().get_cm(target_pid);
-                        let (dmg_feats, dmg_terms) = target_cm.overall_dmg_mods(atker_pid);
-                        bonus_dmg.extend(dmg_terms.into_iter());
-                        child.remove_condition_by_lifetime(target_pid, &ConditionLifetime::OnHitByAtk(atker_pid));
-                        let v = child.add_dmg(&atk.get_ar_dmg(ar, resist, bonus_dmg, dmg_feats)?, target_pid, dead_at_zero);
+                        let v = self.handle_successful_attack(child, atk, ar, atker_pid, target_pid)?;
                         results.extend(v.into_iter());
                     }
                 }
             } else {
                 return Err(CSError::UnknownEvent(child.get_last_event().unwrap()));
+            }
+        }
+        if attacker.has_triggers() && attacker.get_trigger_manager().unwrap().has_triggers(TriggerType::OnKill.into()) {
+            let mut health = Health::ZeroHP;
+            if dead_at_zero {
+                health = Health::Dead;
+            }
+            self.handle_on_kill_triggers(results, atker_pid, target_pid, health)
+        } else {
+            Ok(results)
+        }
+    }
+
+    fn handle_successful_attack(&self, mut pcs: ProbCombatState<'pm, P>, atk: &impl Attack, ar: AttackResult, atker_pid: ParticipantId, target_pid: ParticipantId) -> ResultVS<'pm, P> {
+        let attacker = self.get_participant(atker_pid);
+        let dead_at_zero = self.is_dead_at_zero(target_pid);
+        let resist = self.get_participant(target_pid).get_resistances();
+        let mut bonus_dmg = Vec::new();
+        let ti = TriggerInfo::new(TriggerType::SuccessfulAttack, TriggerContext::AR(ar));
+        if attacker.has_triggers() && attacker.get_trigger_manager().unwrap().has_triggers(ti) {
+            let response = self.get_strategy(atker_pid).handle_trigger(ti, pcs.get_state());
+            let cost = self.validate_trigger_cost(&pcs, atker_pid, &response);
+            if cost.is_some() {
+                pcs.spend_resource_cost(atker_pid, cost.unwrap());
+                self.handle_add_resource_triggers(&mut pcs, atker_pid, &response);
+                bonus_dmg = self.handle_dmg_bonus_triggers(&response);
+            } else {
+                return Err(CSError::InvalidTriggerResponse);
+            }
+        }
+        let target_cm = pcs.get_state().get_cm(target_pid);
+        let (dmg_feats, dmg_terms) = target_cm.overall_dmg_mods(atker_pid);
+        bonus_dmg.extend(dmg_terms.into_iter());
+        pcs.remove_condition_by_lifetime(target_pid, &ConditionLifetime::OnHitByAtk(atker_pid));
+        Ok(pcs.add_dmg(&atk.get_ar_dmg(ar, resist, bonus_dmg, dmg_feats)?, target_pid, dead_at_zero))
+    }
+
+    fn handle_on_kill_triggers(&self, mut results: Vec<ProbCombatState<'pm, P>>, atker_pid: ParticipantId, target_pid: ParticipantId, health: Health) -> ResultVS<'pm, P> {
+        for pcs in results.iter_mut() {
+            if pcs.get_last_event().unwrap() == CombatEvent::HP(target_pid, health) {
+                let response = self.get_strategy(atker_pid).handle_trigger(TriggerType::OnKill.into(), pcs.get_state());
+                let cost = self.validate_trigger_cost(pcs, atker_pid, &response);
+                if cost.is_some() {
+                    pcs.spend_resource_cost(atker_pid, cost.unwrap());
+                    self.handle_add_resource_triggers(pcs, atker_pid, &response);
+                } else {
+                    return Err(CSError::InvalidTriggerResponse);
+                }
             }
         }
         Ok(results)
@@ -451,6 +484,7 @@ mod tests {
     use character_builder::Character;
     use character_builder::classes::ClassName;
     use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};
+    use character_builder::feature::feats::GreatWeaponMaster;
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
     use combat_core::ability_scores::AbilityScores;
     use combat_core::actions::{ActionName, AttackType};
@@ -463,6 +497,7 @@ mod tests {
     use combat_core::participant::{Participant, ParticipantId, ParticipantManager};
     use combat_core::strategy::basic_atk_str::BasicAtkStrBuilder;
     use combat_core::strategy::basic_strategies::DoNothingBuilder;
+    use combat_core::strategy::gwm_str::GWMStrBldr;
     use combat_core::strategy::linear_str::PairStrBuilder;
     use combat_core::strategy::second_wind_str::SecondWindStrBuilder;
     use combat_core::strategy::StrategyManager;
@@ -706,9 +741,6 @@ mod tests {
     fn fighter_vs_orc_strategy() {
         let mut fighter = get_test_fighter_lvl_0();
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
-        //let mut fighter_str = LinearStrategyBuilder::new();
-        //fighter_str.add_str_bldr(Box::new(BasicAtkStrBuilder));
-        //fighter_str.add_str_bldr(Box::new(SecondWindStrBuilder));
         let fighter_str = PairStrBuilder::new(BasicAtkStrBuilder, SecondWindStrBuilder);
         let player = Player::from(fighter.clone());
 
@@ -755,6 +787,49 @@ mod tests {
                 CombatEvent::Timing(CombatTiming::EndRound(RoundId(1))),
             );
             assert_eq!(expected_events, full_log);
+        }
+    }
+
+    #[test]
+    fn gwm_kill_trigger_test() {
+        let mut fighter = get_test_fighter_lvl_0();
+        fighter.level_up(ClassName::Fighter, vec!(
+            Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)),
+            Box::new(GreatWeaponMaster)
+        )).unwrap();
+        let fighter_str = GWMStrBldr::new(false);
+        let player = Player::from(fighter.clone());
+
+        let minion = TargetDummy::new(1, 13);
+        let dummy = TargetDummy::new(isize::MAX, 13);
+
+        let mut pm = ParticipantManager::new();
+        pm.add_player(Box::new(player)).unwrap();
+        pm.add_enemy(Box::new(minion)).unwrap();
+        pm.add_enemy(Box::new(dummy)).unwrap();
+        pm.compile();
+
+        let mut sm = StrategyManager::new(&pm).unwrap();
+        sm.add_participant(fighter_str).unwrap();
+        sm.add_participant(DoNothingBuilder).unwrap();
+        sm.add_participant(DoNothingBuilder).unwrap();
+
+        let mut em: ES64 = EncounterSimulator::new(&sm).unwrap();
+        em.simulate_n_rounds(1).unwrap();
+
+        {
+            let cs_rv = em.get_state_rv();
+            // 1 (miss minion) + 3 for (hit minion -> kill bonus atk) + 3 for (crit minion -> crit/kill bonus atk)
+            assert_eq!(7, cs_rv.len());
+
+            let miss_atk = cs_rv.get_pcs(0);
+            assert_eq!(Health::Healthy, miss_atk.get_state().get_health(ParticipantId(1)));
+            assert_eq!(Health::Healthy, miss_atk.get_state().get_health(ParticipantId(2)));
+
+            for i in 1..=6 {
+                let pcs = cs_rv.get_pcs(i);
+                assert_eq!(Health::Dead, pcs.get_state().get_health(ParticipantId(1)));
+            }
         }
     }
 }

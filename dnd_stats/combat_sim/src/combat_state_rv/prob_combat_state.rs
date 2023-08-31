@@ -227,8 +227,14 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
         let hp = self.get_max_hp(target);
         let bloody_hp = Health::calc_bloodied(hp);
         let old_dmg = self.get_dmg(target);
-        let new_dmg = old_dmg.add_rv(dmg).cap_lb(0).unwrap().cap_ub(hp).unwrap();
-
+        let uncapped_dmg = old_dmg.add_rv(dmg);
+        let new_dmg;
+        if hp < uncapped_dmg.lower_bound() {
+            // this hit always kills
+            new_dmg = VecRandVar::new_constant(hp).unwrap();
+        } else {
+            new_dmg = uncapped_dmg.cap_lb(0).unwrap().cap_ub(hp).unwrap();
+        }
         let (new_hlb, new_hub) = Health::classify_bounds(&new_dmg, hp, dead_at_zero);
         let mut result = Vec::new();
 
@@ -238,7 +244,6 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
                 result.push(self);
             } else {
                 self.set_dmg(target, new_dmg);
-                self.push(CombatEvent::HP(target, new_hlb));
                 self.set_health(target, new_hlb);
                 result.push(self);
             }
@@ -248,7 +253,6 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
             for (new_health, partition) in partitions.into_iter() {
                 let mut state = child_state.clone();
                 if old_health != new_health {
-                    state.push(CombatEvent::HP(target, new_health));
                     state.set_health(target, new_health);
                 }
                 let mut child = Self {
