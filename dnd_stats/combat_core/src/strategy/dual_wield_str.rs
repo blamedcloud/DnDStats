@@ -3,7 +3,7 @@ use crate::combat_state::CombatState;
 use crate::participant::{ParticipantId, TeamMember};
 use crate::resources::{ResourceActionType, ResourceName};
 use crate::strategy::{StrategicAction, Strategy, StrategyBuilder, StrategyDecision};
-use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
+use crate::triggers::{TriggerInfo, TriggerResponse};
 
 pub struct DualWieldStrBuilder;
 
@@ -55,7 +55,7 @@ impl<'pm> Strategy for DualWieldStr<'pm> {
         StrategyDecision::DoNothing
     }
 
-    fn handle_trigger(&self, _: TriggerType, _: TriggerContext, _: &CombatState) -> Vec<TriggerResponse> {
+    fn handle_trigger(&self, _: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
         Vec::new()
     }
 }

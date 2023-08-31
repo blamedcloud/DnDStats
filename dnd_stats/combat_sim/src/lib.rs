@@ -96,14 +96,16 @@ mod tests {
     use character_builder::classes::rogue::ScoutRogue;
     use character_builder::equipment::{ACSource, Armor, Equipment, OffHand, Weapon};
     use character_builder::feature::AbilityScoreIncrease;
-    use character_builder::feature::feats::ShieldMaster;
+    use character_builder::feature::feats::{GreatWeaponMaster, ShieldMaster};
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
     use combat_core::ability_scores::{Ability, AbilityScores};
     use combat_core::D20RollType;
     use combat_core::damage::DamageType;
     use combat_core::participant::ParticipantId;
+    use combat_core::strategy::action_surge_str::ActionSurgeStrBuilder;
     use combat_core::strategy::basic_atk_str::BasicAtkStrBuilder;
     use combat_core::strategy::dual_wield_str::DualWieldStrBuilder;
+    use combat_core::strategy::gwm_str::GWMStrBldr;
     use combat_core::strategy::linear_str::LinearStrategyBuilder;
     use combat_core::strategy::planar_warrior_str::PlanarWarriorStrBldr;
     use combat_core::strategy::shield_master_str::ShieldMasterStrBuilder;
@@ -250,6 +252,68 @@ mod tests {
             // (2*(2D8) + 4) + (2*(1D8) + 4)/2 = 46
             assert_eq!(46, dmg.upper_bound());
             assert_eq!(Rational64::new(4827, 320), dmg.expected_value());
+        }
+    }
+
+    #[test]
+    fn great_weapon_master_test() {
+        let name = String::from("Cloud");
+        let ability_scores = get_str_based();
+        let equipment = Equipment::new(
+            Armor::chain_mail(),
+            Weapon::greatsword(),
+            OffHand::Free,
+        );
+        let mut fighter = Character::new(name, ability_scores, equipment);
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
+        fighter.level_up_basic().unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(ChampionFighter)))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(GreatWeaponMaster))).unwrap();
+        fighter.level_up_basic().unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(AbilityScoreIncrease::from(Ability::STR)))).unwrap();
+
+        let cs = CombatSimulator::dmg_sponge(fighter.clone(), GWMStrBldr::new(true), 15, 1).unwrap();
+        let cr_rv = cs.get_cr_rv();
+        {
+            assert_eq!(1, cr_rv.len());
+
+            let dmg = cr_rv.get_dmg(ParticipantId(1));
+            assert_eq!(0, dmg.lower_bound());
+            // 3*(2*(2D6) + 14) = 114
+            assert_eq!(114, dmg.upper_bound());
+            assert_eq!(Rational64::new(21389, 1000), dmg.expected_value());
+        }
+    }
+
+    #[test]
+    fn action_surge_choose_no_gmw_test() {
+        let name = String::from("Cloud");
+        let ability_scores = get_str_based();
+        let equipment = Equipment::new(
+            Armor::chain_mail(),
+            Weapon::greatsword(),
+            OffHand::Free,
+        );
+        let mut fighter = Character::new(name, ability_scores, equipment);
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
+        fighter.level_up_basic().unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(ChampionFighter)))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(GreatWeaponMaster))).unwrap();
+
+        let mut fighter_str = LinearStrategyBuilder::new();
+        fighter_str.add_str_bldr(Box::new(ActionSurgeStrBuilder));
+        fighter_str.add_str_bldr(Box::new(GWMStrBldr::new(false)));
+
+        let cs = CombatSimulator::dmg_sponge(fighter.clone(), fighter_str, 15, 1).unwrap();
+        let cr_rv = cs.get_cr_rv();
+        {
+            assert_eq!(1, cr_rv.len());
+
+            let dmg = cr_rv.get_dmg(ParticipantId(1));
+            assert_eq!(0, dmg.lower_bound());
+            // 3*(2*(2D6) + 3) = 81
+            assert_eq!(81, dmg.upper_bound());
+            assert_eq!(Rational64::new(3869, 250), dmg.expected_value());
         }
     }
 }

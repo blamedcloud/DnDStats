@@ -105,7 +105,7 @@ mod tests {
     use crate::tests::get_dex_based;
 
     #[test]
-    fn lvl_20_rogue() {
+    fn lvl_20_ranger() {
         let equipment = Equipment::new(
             Armor::studded_leather(),
             Weapon::longbow(),
@@ -135,6 +135,5 @@ mod tests {
         assert_eq!(20, ranger.get_level());
         assert_eq!(20, ranger.ability_scores.dexterity.get_score());
         assert_eq!(20, ranger.ability_scores.constitution.get_score());
-
     }
 }

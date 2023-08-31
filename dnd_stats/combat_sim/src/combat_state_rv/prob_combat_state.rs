@@ -142,6 +142,13 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
         self.dmg[pid.0] = rv;
     }
 
+    pub fn add_resource(&mut self, pid: ParticipantId, rn: ResourceName, amount: usize) {
+        let rm = self.get_rm_mut(pid);
+        if rm.has_resource(rn) {
+            rm.gain(rn, amount);
+        }
+    }
+
     pub fn spend_action_resources(&mut self, pid: ParticipantId, an: ActionName, at: ActionType) {
         let rm = self.get_rm_mut(pid);
         if rm.has_resource(ResourceName::AN(an)) {

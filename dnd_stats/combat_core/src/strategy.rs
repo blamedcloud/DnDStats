@@ -6,11 +6,13 @@ use crate::combat_state::CombatState;
 use crate::conditions::ConditionName;
 use crate::movement::Square;
 use crate::participant::{Participant, ParticipantId, ParticipantManager, TeamMember};
-use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
+use crate::triggers::{TriggerInfo, TriggerResponse};
 
+pub mod action_surge_str;
 pub mod basic_atk_str;
 pub mod basic_strategies;
 pub mod dual_wield_str;
+pub mod gwm_str;
 pub mod linear_str;
 pub mod planar_warrior_str;
 pub mod second_wind_str;
@@ -89,7 +91,7 @@ pub trait Strategy : Debug {
 
     fn get_action(&self, state: &CombatState) -> StrategyDecision;
 
-    fn handle_trigger(&self, tt: TriggerType, tc: TriggerContext, state: &CombatState) -> Vec<TriggerResponse>;
+    fn handle_trigger(&self, ti: TriggerInfo, state: &CombatState) -> Vec<TriggerResponse>;
 
     fn get_me(&self) -> &Box<dyn Participant> {
         &self.get_participants().get(self.get_my_pid().0).unwrap().participant

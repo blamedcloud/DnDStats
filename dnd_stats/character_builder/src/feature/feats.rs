@@ -2,10 +2,12 @@ use std::clone::Clone;
 
 use combat_core::ability_scores::Ability;
 use combat_core::actions::{ActionName, ActionType, AttackType, CombatAction, CombatOption};
+use combat_core::attack::AttackResult;
 use combat_core::damage::{DamageTerm, ExtendedDamageType};
 use combat_core::damage::dice_expr::DiceExprTerm;
 use combat_core::resources::{RefreshTiming, Resource, ResourceName};
 use combat_core::resources::resource_amounts::{RefreshBy, ResourceCap, ResourceCount};
+use combat_core::triggers::{TriggerAction, TriggerContext, TriggerInfo, TriggerName, TriggerResponse, TriggerType};
 
 use crate::{CBError, Character, CharacterCO};
 use crate::attributed_bonus::{BonusTerm, BonusType};
@@ -57,10 +59,16 @@ impl Feature for GreatWeaponMaster {
         }
         character.combat_actions.insert(ActionName::BonusGWMAttack, CombatOption::new(ActionType::BonusAction, CombatAction::AdditionalAttacks(1)));
 
-        let mut res = Resource::new(ResourceCap::Soft(1), ResourceCount::Count(0));
+        let mut res = Resource::new(ResourceCap::Soft(0), ResourceCount::Count(0));
         res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToEmpty);
         res.add_refresh(RefreshTiming::EndMyTurn, RefreshBy::ToEmpty);
         character.resource_manager.add_perm(ResourceName::AN(ActionName::BonusGWMAttack), res);
+
+        let response = TriggerResponse::from(TriggerAction::AddResource(ResourceName::AN(ActionName::BonusGWMAttack), 1));
+        let ti = TriggerInfo::new(TriggerType::SuccessfulAttack, TriggerContext::AR(AttackResult::Crit));
+        character.trigger_manager.add_trigger(ti, TriggerName::GWMBonusAtk);
+        character.trigger_manager.set_response(TriggerName::GWMBonusAtk, response);
+        // TODO: add another trigger for OnKill
 
         Ok(())
     }

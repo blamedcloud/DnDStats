@@ -1,9 +1,10 @@
 use combat_core::ability_scores::Ability;
+use combat_core::attack::AttackResult;
 use combat_core::damage::{DamageDice, DamageTerm, ExtendedDamageDice, ExtendedDamageType};
 use combat_core::damage::dice_expr::DiceExprTerm;
 use combat_core::resources::{RefreshTiming, Resource, ResourceName};
 use combat_core::resources::resource_amounts::{RefreshBy, ResourceCap};
-use combat_core::triggers::{TriggerAction, TriggerName, TriggerType};
+use combat_core::triggers::{TriggerAction, TriggerContext, TriggerInfo, TriggerName, TriggerType};
 
 use crate::{CBError, Character};
 use crate::classes::{Class, ClassName, SubClass};
@@ -92,7 +93,10 @@ impl Feature for SneakAttack {
         );
 
         let response = (TriggerAction::AddAttackDamage(damage), ResourceName::TN(TriggerName::SneakAttack)).into();
-        character.trigger_manager.add_trigger(TriggerType::SuccessfulAttack, TriggerName::SneakAttack);
+        let on_hit = TriggerInfo::new(TriggerType::SuccessfulAttack, TriggerContext::AR(AttackResult::Hit));
+        let on_crit = TriggerInfo::new(TriggerType::SuccessfulAttack, TriggerContext::AR(AttackResult::Crit));
+        character.trigger_manager.add_trigger(on_hit, TriggerName::SneakAttack);
+        character.trigger_manager.add_trigger(on_crit, TriggerName::SneakAttack);
         character.trigger_manager.set_response(TriggerName::SneakAttack, response);
 
         let mut res = Resource::from(ResourceCap::Hard(1));

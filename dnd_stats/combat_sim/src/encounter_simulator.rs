@@ -14,7 +14,7 @@ use combat_core::resources::{ResourceActionType, ResourceName};
 use combat_core::resources::resource_amounts::ResourceCount;
 use combat_core::skills::{ContestResult, SkillContest, SkillName};
 use combat_core::strategy::{StrategicAction, Strategy, StrategyDecision, StrategyManager, Target};
-use combat_core::triggers::{TriggerAction, TriggerContext, TriggerResponse, TriggerType};
+use combat_core::triggers::{TriggerAction, TriggerContext, TriggerInfo, TriggerResponse, TriggerType};
 use rand_var::map_rand_var::MapRandVar;
 use rand_var::rand_var::prob_type::RVProb;
 use rand_var::vec_rand_var::VecRandVar;
@@ -382,12 +382,14 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
                     },
                     _ => {
                         let mut bonus_dmg = Vec::new();
-                        if attacker.has_triggers() && attacker.get_trigger_manager().unwrap().has_triggers(TriggerType::SuccessfulAttack) {
-                            let response = self.get_strategy(atker_pid).handle_trigger(TriggerType::SuccessfulAttack, TriggerContext::AR(ar), child.get_state());
-                            let cost = self.validate_trigger_cost(&child, atker_pid, TriggerType::SuccessfulAttack, &response);
+                        let ti = TriggerInfo::new(TriggerType::SuccessfulAttack, TriggerContext::AR(ar));
+                        if attacker.has_triggers() && attacker.get_trigger_manager().unwrap().has_triggers(ti) {
+                            let response = self.get_strategy(atker_pid).handle_trigger(ti, child.get_state());
+                            let cost = self.validate_trigger_cost(&child, atker_pid, &response);
                             if cost.is_some() {
                                 child.spend_resource_cost(atker_pid, cost.unwrap());
-                                bonus_dmg = self.handle_dmg_bonus(response);
+                                self.handle_add_resource_triggers(&mut child, atker_pid, &response);
+                                bonus_dmg = self.handle_dmg_bonus_triggers(&response);
                             } else {
                                 return Err(CSError::InvalidTriggerResponse);
                             }
@@ -407,7 +409,15 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         Ok(results)
     }
 
-    fn handle_dmg_bonus(&self, response: Vec<TriggerResponse>) -> Vec<DamageTerm> {
+    fn handle_add_resource_triggers(&self, pcs: &mut ProbCombatState<'pm, P>, pid: ParticipantId, response: &Vec<TriggerResponse>) {
+        for tr in response {
+            if let TriggerAction::AddResource(rn, amount) = tr.action {
+                pcs.add_resource(pid, rn, amount);
+            }
+        }
+    }
+
+    fn handle_dmg_bonus_triggers(&self, response: &Vec<TriggerResponse>) -> Vec<DamageTerm> {
         let mut v = Vec::with_capacity(response.len());
         for tr in response {
             if let TriggerAction::AddAttackDamage(dt) = tr.action {
@@ -417,28 +427,19 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         v
     }
 
-    fn validate_trigger_cost(&self, pcs: &ProbCombatState<'pm, P>, pid: ParticipantId, tt: TriggerType, response: &Vec<TriggerResponse>) -> Option<HashMap<ResourceName, usize>> {
-        match tt {
-            TriggerType::WasHit => todo!(),
-            TriggerType::SuccessfulAttack => {
-                let mut resource_cost: HashMap<ResourceName, usize> = HashMap::new();
-                for tr in response.iter() {
-                    if let TriggerAction::AddAttackDamage(_) = &tr.action {
-                        for rn in &tr.resources {
-                            resource_cost.entry(*rn)
-                                .and_modify(|count| *count += 1)
-                                .or_insert(1);
-                        }
-                    } else {
-                        return None;
-                    }
-                }
-                if pcs.get_rm(pid).check_counts(&resource_cost) {
-                    Some(resource_cost)
-                } else {
-                    None
-                }
+    fn validate_trigger_cost(&self, pcs: &ProbCombatState<'pm, P>, pid: ParticipantId, response: &Vec<TriggerResponse>) -> Option<HashMap<ResourceName, usize>> {
+        let mut resource_cost: HashMap<ResourceName, usize> = HashMap::new();
+        for tr in response.iter() {
+            for rn in &tr.resources {
+                resource_cost.entry(*rn)
+                    .and_modify(|count| *count += 1)
+                    .or_insert(1);
             }
+        }
+        if pcs.get_rm(pid).check_counts(&resource_cost) {
+            Some(resource_cost)
+        } else {
+            None
         }
     }
 }

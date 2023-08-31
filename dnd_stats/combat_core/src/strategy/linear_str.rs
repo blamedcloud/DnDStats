@@ -2,8 +2,7 @@ use std::fmt::Debug;
 use crate::combat_state::CombatState;
 use crate::participant::{ParticipantId, TeamMember};
 use crate::strategy::{Strategy, StrategyBuilder, StrategyDecision};
-use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
-
+use crate::triggers::{TriggerInfo, TriggerResponse};
 
 pub struct PairStrBuilder<S1, S2>
 where
@@ -105,10 +104,10 @@ impl<'pm> Strategy for LinearStrategy<'pm> {
         StrategyDecision::DoNothing
     }
 
-    fn handle_trigger(&self, tt: TriggerType, tc: TriggerContext, state: &CombatState) -> Vec<TriggerResponse> {
+    fn handle_trigger(&self, ti: TriggerInfo, state: &CombatState) -> Vec<TriggerResponse> {
         let mut v = Vec::new();
         for str in self.strategies.iter() {
-            let sub_v = str.handle_trigger(tt, tc, state);
+            let sub_v = str.handle_trigger(ti, state);
             v.extend(sub_v.into_iter());
         }
         v

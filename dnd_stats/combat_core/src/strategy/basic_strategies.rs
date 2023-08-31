@@ -5,7 +5,7 @@ use crate::combat_state::CombatState;
 use crate::conditions::ConditionLifetime;
 use crate::participant::{ParticipantId, TeamMember};
 use crate::strategy::{Strategy, StrategyBuilder, StrategyDecision};
-use crate::triggers::{TriggerContext, TriggerResponse, TriggerType};
+use crate::triggers::{TriggerInfo, TriggerResponse};
 
 pub struct DoNothingBuilder;
 impl StrategyBuilder for DoNothingBuilder {
@@ -29,7 +29,7 @@ impl Strategy for DoNothing {
         StrategyDecision::DoNothing
     }
 
-    fn handle_trigger(&self, _: TriggerType, _: TriggerContext, _: &CombatState) -> Vec<TriggerResponse> {
+    fn handle_trigger(&self, _: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
         Vec::new()
     }
 }
@@ -69,7 +69,7 @@ impl Strategy for RemoveConditions {
         StrategyDecision::DoNothing
     }
 
-    fn handle_trigger(&self, _: TriggerType, _: TriggerContext, _: &CombatState) -> Vec<TriggerResponse> {
+    fn handle_trigger(&self, _: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
         Vec::new()
     }
 }
