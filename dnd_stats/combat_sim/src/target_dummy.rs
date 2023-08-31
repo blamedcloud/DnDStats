@@ -2,10 +2,10 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 use combat_core::ability_scores::{Ability, AbilityScores};
-use combat_core::actions::ActionManager;
+use combat_core::actions::{ActionManager, register_pid};
 use combat_core::conditions::ConditionManager;
 use combat_core::damage::DamageType;
-use combat_core::participant::Participant;
+use combat_core::participant::{Participant, ParticipantId};
 use combat_core::resources::ResourceManager;
 use combat_core::skills::SkillManager;
 use combat_core::triggers::TriggerManager;
@@ -100,5 +100,9 @@ impl Participant for TargetDummy {
 
     fn get_condition_manager(&self) -> &ConditionManager {
         &self.condition_manager
+    }
+
+    fn register_pid(&mut self, pid: ParticipantId) {
+        register_pid(&mut self.action_manager, pid);
     }
 }

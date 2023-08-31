@@ -1,4 +1,4 @@
-use combat_core::actions::{ActionName, ActionType, CABuilder, CombatOption};
+use combat_core::actions::{ActionName, ActionType, CombatAction, CombatOption};
 use combat_core::damage::{DamageDice, ExtendedDamageDice};
 use combat_core::damage::dice_expr::{DiceExpr, DiceExprTerm};
 use combat_core::resources::{RefreshTiming, Resource, ResourceName};
@@ -68,7 +68,7 @@ impl Feature for SecondWind {
         let mut heal = CharDiceExpr::new();
         heal.add_term(DiceExprTerm::Die(ExtendedDamageDice::Basic(DamageDice::D10)));
         heal.add_char_term(BonusTerm::new(BonusType::ClassLevel(ClassName::Fighter)));
-        character.combat_actions.insert(ActionName::SecondWind, CombatOption::new(ActionType::BonusAction, CABuilder::SelfHeal(heal)));
+        character.combat_actions.insert(ActionName::SecondWind, CombatOption::new(ActionType::BonusAction, CombatAction::SelfHeal(heal)));
 
         let mut res = Resource::from(ResourceCap::Hard(1));
         res.add_refresh(RefreshTiming::ShortRest, RefreshBy::ToFull);
@@ -82,7 +82,7 @@ impl Feature for SecondWind {
 pub struct ActionSurge(pub usize);
 impl Feature for ActionSurge {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        character.combat_actions.insert(ActionName::ActionSurge, CombatOption::new(ActionType::FreeAction, CABuilder::ByName));
+        character.combat_actions.insert(ActionName::ActionSurge, CombatOption::new(ActionType::FreeAction, CombatAction::ByName));
 
         let mut res = Resource::from(ResourceCap::Hard(self.0));
         res.add_refresh(RefreshTiming::ShortRest, RefreshBy::ToFull);
@@ -97,7 +97,7 @@ pub struct Indomitable(pub usize);
 impl Feature for Indomitable {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
         // TODO: change action type to OnSave ?
-        character.combat_actions.insert(ActionName::Indomitable, CombatOption::new(ActionType::FreeAction, CABuilder::ByName));
+        character.combat_actions.insert(ActionName::Indomitable, CombatOption::new(ActionType::FreeAction, CombatAction::ByName));
 
         let mut res = Resource::from(ResourceCap::Hard(self.0));
         res.add_refresh(RefreshTiming::LongRest, RefreshBy::ToFull);
@@ -111,7 +111,7 @@ pub struct ImprovedCritical(pub isize);
 impl Feature for ImprovedCritical {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
         for (_, co) in character.combat_actions.iter_mut() {
-            if let CABuilder::WeaponAttack(wa) = &mut co.action {
+            if let CombatAction::Attack(wa) = &mut co.action {
                 wa.set_crit_lb(self.0);
             }
         }

@@ -47,6 +47,22 @@ impl CombatTiming {
             },
         }
     }
+
+    pub fn register_pid(&mut self, pid: ParticipantId) {
+        match self {
+            CombatTiming::BeginTurn(old_pid) => {
+                if old_pid == &ParticipantId::me() {
+                    old_pid.0 = pid.0;
+                }
+            },
+            CombatTiming::EndTurn(old_pid) => {
+                if old_pid == &ParticipantId::me() {
+                    old_pid.0 = pid.0;
+                }
+            },
+            _ => {}
+        }
+    }
 }
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
@@ -57,7 +73,7 @@ pub enum CombatEvent {
     AR(AttackResult),
     HP(ParticipantId, Health),
     ApplyCond(ConditionName, ParticipantId),
-    RemoveCond(ConditionName),
+    RemoveCond(ConditionName, ParticipantId),
     SkillContest(ParticipantId, SkillName, ParticipantId, SkillName),
     SkCR(ContestResult),
 }

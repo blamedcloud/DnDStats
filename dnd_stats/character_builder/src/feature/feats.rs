@@ -1,7 +1,7 @@
 use std::clone::Clone;
 
 use combat_core::ability_scores::Ability;
-use combat_core::actions::{ActionName, ActionType, AttackType, CABuilder, CombatOption};
+use combat_core::actions::{ActionName, ActionType, AttackType, CombatAction, CombatOption};
 use combat_core::damage::{DamageTerm, ExtendedDamageType};
 use combat_core::damage::dice_expr::DiceExprTerm;
 use combat_core::resources::{RefreshTiming, Resource, ResourceName};
@@ -15,12 +15,12 @@ use crate::feature::Feature;
 pub struct GreatWeaponMaster;
 impl GreatWeaponMaster {
     pub fn get_new_co(co: &CharacterCO) -> Option<CharacterCO> {
-        if let CABuilder::WeaponAttack(wa) = &co.action {
+        if let CombatAction::Attack(wa) = &co.action {
             if wa.get_weapon().get_type().is_melee() && wa.get_weapon().has_property(WeaponProperty::Heavy) {
                 let mut new_wa = wa.clone();
                 new_wa.add_accuracy_bonus(BonusTerm::new_attr(BonusType::Constant(-5), String::from("gwm")));
                 new_wa.get_damage_mut().cdm.add_base_dmg(DamageTerm::new(DiceExprTerm::Const(10), ExtendedDamageType::WeaponDamage));
-                return Some(CombatOption::new(co.action_type, CABuilder::WeaponAttack(new_wa)));
+                return Some(CombatOption::new(co.action_type, CombatAction::Attack(new_wa)));
             }
         }
         None
@@ -55,7 +55,7 @@ impl Feature for GreatWeaponMaster {
         for (ca, co) in new_actions.into_iter() {
             character.combat_actions.insert(ca, co);
         }
-        character.combat_actions.insert(ActionName::BonusGWMAttack, CombatOption::new(ActionType::BonusAction, CABuilder::AdditionalAttacks(1)));
+        character.combat_actions.insert(ActionName::BonusGWMAttack, CombatOption::new(ActionType::BonusAction, CombatAction::AdditionalAttacks(1)));
 
         let mut res = Resource::new(ResourceCap::Soft(1), ResourceCount::Count(0));
         res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToEmpty);
@@ -78,10 +78,10 @@ impl PolearmMaster {
     }
 
     pub fn get_new_co(co: &CharacterCO) -> Option<CharacterCO> {
-        if let CABuilder::WeaponAttack(wa) = &co.action {
+        if let CombatAction::Attack(wa) = &co.action {
             if PolearmMaster::is_valid_weapon(wa.get_weapon()) {
                 let new_wa = wa.as_pam_attack();
-                return Some(CombatOption::new(ActionType::BonusAction, CABuilder::WeaponAttack(new_wa)));
+                return Some(CombatOption::new(ActionType::BonusAction, CombatAction::Attack(new_wa)));
             }
         }
         None
@@ -121,12 +121,12 @@ impl Feature for Resilient {
 pub struct SharpShooter;
 impl SharpShooter {
     pub fn get_new_co(co: &CharacterCO) -> Option<CharacterCO> {
-        if let CABuilder::WeaponAttack(wa) = &co.action {
+        if let CombatAction::Attack(wa) = &co.action {
             if wa.get_weapon().get_type().is_ranged() {
                 let mut new_wa = wa.clone();
                 new_wa.add_accuracy_bonus(BonusTerm::new_attr(BonusType::Constant(-5), String::from("ss")));
                 new_wa.get_damage_mut().cdm.add_base_dmg(DamageTerm::new(DiceExprTerm::Const(10), ExtendedDamageType::WeaponDamage));
-                return Some(CombatOption::new(co.action_type, CABuilder::WeaponAttack(new_wa)));
+                return Some(CombatOption::new(co.action_type, CombatAction::Attack(new_wa)));
             }
         }
         None
@@ -162,7 +162,7 @@ impl Feature for SharpShooter {
 pub struct ShieldMaster;
 impl Feature for ShieldMaster {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        let co = CombatOption::new_target(ActionType::BonusAction, CABuilder::ByName, true);
+        let co = CombatOption::new_target(ActionType::BonusAction, CombatAction::ByName, true);
         character.combat_actions.insert(ActionName::ShoveProne, co);
 
         let shield = character.get_equipment().get_shield();
@@ -186,7 +186,7 @@ mod tests {
     use num::{BigInt, BigRational, FromPrimitive};
 
     use combat_core::ability_scores::Ability;
-    use combat_core::actions::{ActionName, AttackType, CABuilder};
+    use combat_core::actions::{ActionName, AttackType, CombatAction};
     use combat_core::attack::AccMRV64;
     use combat_core::D20RollType;
     use rand_var::num_rand_var::NumRandVar;
@@ -203,7 +203,7 @@ mod tests {
     use crate::weapon_attack::WeaponAttack;
 
     fn get_attack(option: &CharacterCO) -> &WeaponAttack {
-        if let CABuilder::WeaponAttack(wa) = &option.action {
+        if let CombatAction::Attack(wa) = &option.action {
             wa
         } else {
             panic!("should be an attack");
@@ -238,7 +238,7 @@ mod tests {
         let acc: AccMRV64 = gwm_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
-        let dmg: VRVBig = gwm_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let dmg: VRVBig = gwm_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!(), HashSet::new()).unwrap();
         assert_eq!(15, dmg.lower_bound());
         assert_eq!(25, dmg.upper_bound());
         assert_eq!(BigRational::from_isize(20).unwrap(), dmg.expected_value());
@@ -258,7 +258,7 @@ mod tests {
         let acc: AccMRV64 = ss_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
-        let dmg: VRVBig = ss_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let dmg: VRVBig = ss_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!(), HashSet::new()).unwrap();
         assert_eq!(14, dmg.lower_bound());
         assert_eq!(21, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from_isize(35).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());
@@ -278,7 +278,7 @@ mod tests {
         let acc: AccMRV64 = pam_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 6), acc.lower_bound());
         assert_eq!(Pair(20, 25), acc.upper_bound());
-        let dmg: VRVBig = pam_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let dmg: VRVBig = pam_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!(), HashSet::new()).unwrap();
         assert_eq!(4, dmg.lower_bound());
         assert_eq!(7, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from_isize(11).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());
@@ -305,7 +305,7 @@ mod tests {
         let acc: AccMRV64 = gwm_pam_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
-        let dmg: VRVBig = gwm_pam_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let dmg: VRVBig = gwm_pam_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!(), HashSet::new()).unwrap();
         assert_eq!(14, dmg.lower_bound());
         assert_eq!(17, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from_isize(31).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());
@@ -332,7 +332,7 @@ mod tests {
         let acc: AccMRV64 = pam_gwm_attack.get_accuracy_rv(D20RollType::Normal).unwrap();
         assert_eq!(Pair(1, 1), acc.lower_bound());
         assert_eq!(Pair(20, 20), acc.upper_bound());
-        let dmg: VRVBig = pam_gwm_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let dmg: VRVBig = pam_gwm_attack.get_damage().cdm.get_base_dmg(&HashSet::new(), vec!(), HashSet::new()).unwrap();
         assert_eq!(14, dmg.lower_bound());
         assert_eq!(17, dmg.upper_bound());
         assert_eq!(BigRational::new(BigInt::from_isize(31).unwrap(), BigInt::from_isize(2).unwrap()), dmg.expected_value());

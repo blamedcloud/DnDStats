@@ -5,7 +5,7 @@ use std::fmt::Write;
 use std::rc::Rc;
 
 use combat_core::ability_scores::AbilityScores;
-use combat_core::actions::{ActionBuilder, ActionName, ActionType, AttackType, CABuilder, CombatOption};
+use combat_core::actions::{ActionBuilder, ActionName, ActionType, AttackType, CombatAction, CombatOption};
 use combat_core::CCError;
 use combat_core::conditions::ConditionManager;
 use combat_core::damage::DamageType;
@@ -62,7 +62,7 @@ impl From<CBError> for CCError {
     }
 }
 
-pub type CharacterCO = CombatOption<CABuilder<WeaponAttack, CharDiceExpr>>;
+pub type CharacterCO = CombatOption<WeaponAttack, CharDiceExpr>;
 
 #[derive(Debug, Clone)]
 pub struct Character {
@@ -163,8 +163,8 @@ impl Character {
         let clone = self.clone();
         for (_, co) in self.combat_actions.iter_mut() {
             match &mut co.action {
-                CABuilder::WeaponAttack(wa) => wa.cache_char_vals(&clone),
-                CABuilder::SelfHeal(de) => de.cache_char_terms(&clone),
+                CombatAction::Attack(wa) => wa.cache_char_vals(&clone),
+                CombatAction::SelfHeal(de) => de.cache_char_terms(&clone),
                 _ => {}
             }
         }
@@ -252,7 +252,7 @@ impl Character {
 
     pub fn get_weapon_attack(&self) -> Option<&WeaponAttack> {
         self.combat_actions.get(&ActionName::PrimaryAttack(AttackType::Normal)).and_then(|co| {
-            if let CABuilder::WeaponAttack(wa) = &co.action {
+            if let CombatAction::Attack(wa) = &co.action {
                 Some(wa)
             } else {
                 None
@@ -262,7 +262,7 @@ impl Character {
 
     pub fn get_offhand_attack(&self) -> Option<&WeaponAttack> {
         self.combat_actions.get(&ActionName::OffhandAttack(AttackType::Normal)).and_then(|co| {
-            if let CABuilder::WeaponAttack(wa) = &co.action {
+            if let CombatAction::Attack(wa) = &co.action {
                 Some(wa)
             } else {
                 None
@@ -302,17 +302,16 @@ impl Character {
     }
 }
 
-
 pub fn create_character_ab(character: &Character) -> ActionBuilder<WeaponAttack, CharDiceExpr> {
     let mut am = ActionBuilder::new();
-    am.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CABuilder::AdditionalAttacks(1)));
+    am.insert(ActionName::AttackAction, CombatOption::new(ActionType::Action, CombatAction::AdditionalAttacks(1)));
 
     let wa = WeaponAttack::primary_weapon(character);
-    let pa_co = CombatOption::new_target(ActionType::SingleAttack, CABuilder::WeaponAttack(wa), true);
+    let pa_co = CombatOption::new_target(ActionType::SingleAttack, CombatAction::Attack(wa), true);
     am.insert(ActionName::PrimaryAttack(AttackType::Normal), pa_co);
 
     if let Some(owa) = WeaponAttack::offhand_weapon(character) {
-        let oa_co = CombatOption::new_target(ActionType::BonusAction, CABuilder::WeaponAttack(owa), true);
+        let oa_co = CombatOption::new_target(ActionType::BonusAction, CombatAction::Attack(owa), true);
         am.insert(ActionName::OffhandAttack(AttackType::Normal), oa_co);
     }
     am

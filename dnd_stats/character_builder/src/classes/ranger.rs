@@ -1,5 +1,9 @@
-use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
+use combat_core::actions::{ActionName, ActionType, CombatAction, CombatOption};
+use combat_core::combat_event::CombatTiming;
+use combat_core::conditions::{Condition, ConditionEffect, ConditionLifetime, ConditionName};
+use combat_core::damage::{DamageDice, DamageFeature, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
 use combat_core::damage::dice_expr::DiceExprTerm;
+use combat_core::participant::ParticipantId;
 use crate::{CBError, Character};
 use crate::classes::{Class, ClassName, SubClass};
 use crate::feature::{ExtraAttack, Feature};
@@ -47,7 +51,7 @@ impl SubClass for HorizonWalkerRanger {
 
     fn get_static_features(&self, level: u8) -> Result<Vec<Box<dyn Feature>>, CBError> {
         match level {
-            3 => Ok(Vec::new()), // TODO: planar warrior
+            3 => Ok(vec!(Box::new(PlanarWarrior))),
             7 => Ok(Vec::new()),
             11 => Ok(Vec::new()), // TODO: situational third attack. Validation ?
             15 => Ok(Vec::new()),
@@ -64,9 +68,25 @@ impl Feature for PlanarWarrior {
             ExtendedDamageType::Basic(DamageType::Force)
         );
 
-        // TODO add action for ApplyComplexCondition(ConditionName, Condition),
+        let to_force = ConditionEffect::TakeDmgFeatureFrom(
+            DamageFeature::DmgTypeConversion(DamageType::Force),
+            ParticipantId::me()
+        );
+        let bonus_dmg = ConditionEffect::TakeBonusDmgFrom(damage, ParticipantId::me());
 
-        todo!()
+        let cond = Condition {
+            effects: vec!(to_force, bonus_dmg),
+            lifetimes: vec!(
+                ConditionLifetime::OnHitByAtk(ParticipantId::me()),
+                ConditionLifetime::UntilTime(CombatTiming::EndTurn(ParticipantId::me()))
+            ),
+        };
+        let co = CombatOption::new(
+            ActionType::BonusAction,
+            CombatAction::ApplyComplexCondition(ConditionName::PlanarWarriorTarget, cond)
+        );
+        character.combat_actions.insert(ActionName::PlanarWarrior, co);
+        Ok(())
     }
 }
 

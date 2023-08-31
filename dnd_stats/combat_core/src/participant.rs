@@ -22,6 +22,8 @@ pub trait Participant : Debug {
     fn has_triggers(&self) -> bool;
     fn get_trigger_manager(&self) -> Option<&TriggerManager>;
     fn get_condition_manager(&self) -> &ConditionManager;
+
+    fn register_pid(&mut self, pid: ParticipantId);
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -41,6 +43,10 @@ impl TeamMember {
             team,
             participant,
         }
+    }
+
+    pub fn register_pid(&mut self, pid: ParticipantId) {
+        self.participant.register_pid(pid);
     }
 }
 
@@ -71,6 +77,16 @@ impl From<usize> for ParticipantId {
     }
 }
 
+impl ParticipantId {
+    // This is kind of a dirty hack, since Character's don't know their
+    // ParticipantId until they are in an encounter. These will get
+    // registered when the ParticipantManager is created...
+    // For sure. Definitely.
+    pub fn me() -> Self {
+        Self(usize::MAX)
+    }
+}
+
 #[derive(Debug)]
 pub struct ParticipantManager { // In order of initiative
     participants: Vec<TeamMember>,
@@ -97,10 +113,11 @@ impl ParticipantManager {
         self.add_participant(TeamMember::new(Team::Enemies, enemy))
     }
 
-    pub fn add_participant(&mut self, tm: TeamMember) -> Result<(), CCError> {
+    pub fn add_participant(&mut self, mut tm: TeamMember) -> Result<(), CCError> {
         if self.compiled {
             return Err(CCError::PMPushAfterCompile);
         }
+        tm.register_pid(ParticipantId(self.len()));
         self.initial_resources.push(tm.participant.get_resource_manager().clone());
         self.initial_conditions.push(tm.participant.get_condition_manager().clone());
         self.participants.push(tm);

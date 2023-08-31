@@ -7,7 +7,7 @@ use rand_var::rand_var::sequential::Pair;
 use crate::{CCError, D20RollType, D20Type};
 use crate::attack::{AccMRV, AtkDmgMap, Attack};
 use crate::conditions::AttackDistance;
-use crate::damage::{DamageDice, DamageManager, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
+use crate::damage::{DamageDice, DamageFeature, DamageManager, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
 use crate::damage::dice_expr::{DiceExpression, DiceExprTerm};
 
 #[derive(Debug, Clone)]
@@ -51,17 +51,17 @@ impl BasicAttack {
 }
 
 impl Attack for BasicAttack {
-    fn get_miss_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
-        Ok(self.damage.get_miss_dmg(resistances, bonus_dmg)?)
+    fn get_miss_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>, dmg_feats: HashSet<DamageFeature>) -> Result<VecRandVar<P>, CCError> {
+        Ok(self.damage.get_miss_dmg(resistances, bonus_dmg, dmg_feats)?)
     }
 
     // TODO: also add a possible list of damage features ? or just specific ones...
-    fn get_hit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
-        Ok(self.damage.get_base_dmg(resistances, bonus_dmg)?)
+    fn get_hit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>, dmg_feats: HashSet<DamageFeature>) -> Result<VecRandVar<P>, CCError> {
+        Ok(self.damage.get_base_dmg(resistances, bonus_dmg, dmg_feats)?)
     }
 
-    fn get_crit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
-        Ok(self.damage.get_crit_dmg(resistances, bonus_dmg)?)
+    fn get_crit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>, dmg_feats: HashSet<DamageFeature>) -> Result<VecRandVar<P>, CCError> {
+        Ok(self.damage.get_crit_dmg(resistances, bonus_dmg, dmg_feats)?)
     }
 
     fn get_acc_rv<P: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<P>, CCError> {

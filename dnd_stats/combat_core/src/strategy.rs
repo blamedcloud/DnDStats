@@ -12,6 +12,7 @@ pub mod basic_atk_str;
 pub mod basic_strategies;
 pub mod dual_wield_str;
 pub mod linear_str;
+pub mod planar_warrior_str;
 pub mod second_wind_str;
 pub mod shield_master_str;
 pub mod sneak_atk_str;

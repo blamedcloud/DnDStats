@@ -105,6 +105,7 @@ mod tests {
     use combat_core::strategy::basic_atk_str::BasicAtkStrBuilder;
     use combat_core::strategy::dual_wield_str::DualWieldStrBuilder;
     use combat_core::strategy::linear_str::LinearStrategyBuilder;
+    use combat_core::strategy::planar_warrior_str::PlanarWarriorStrBldr;
     use combat_core::strategy::shield_master_str::ShieldMasterStrBuilder;
     use combat_core::strategy::sneak_atk_str::SneakAttackStrBuilder;
     use combat_core::strategy::StrategyBuilder;
@@ -239,15 +240,16 @@ mod tests {
 
         let angery_dummy = TargetDummy::resistant(isize::MAX, 15, resistances);
 
-        let cs = CombatSimulator::vs_dummy(ranger.clone(), BasicAtkStrBuilder, angery_dummy, 1).unwrap();
+        let cs = CombatSimulator::vs_dummy(ranger.clone(), PlanarWarriorStrBldr, angery_dummy, 1).unwrap();
         let cr_rv = cs.get_cr_rv();
         {
             assert_eq!(1, cr_rv.len());
 
             let dmg = cr_rv.get_dmg(ParticipantId(1));
             assert_eq!(0, dmg.lower_bound());
-            assert_eq!(20, dmg.upper_bound());
-            assert_eq!(Rational64::new(249, 40), dmg.expected_value());
+            // (2*(2D8) + 4) + (2*(1D8) + 4)/2 = 46
+            assert_eq!(46, dmg.upper_bound());
+            assert_eq!(Rational64::new(4827, 320), dmg.expected_value());
         }
     }
 }

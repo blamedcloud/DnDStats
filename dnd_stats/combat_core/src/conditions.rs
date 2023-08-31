@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::vec;
 
 use crate::{CCError, D20RollType};
@@ -67,7 +67,7 @@ pub enum ConditionEffect {
 pub enum ConditionLifetime {
     Permanent,
     UntilSpendAT(ActionType),
-    OnTakeDmg,
+    OnHitByAtk(ParticipantId),
     UntilTime(CombatTiming),
 }
 
@@ -76,6 +76,37 @@ pub struct Condition {
     pub effects: Vec<ConditionEffect>,
     // conditions go away when any of the lifetimes are met (logical OR)
     pub lifetimes: Vec<ConditionLifetime>,
+}
+
+impl Condition {
+    pub fn register_pid(&mut self, pid: ParticipantId) {
+        for ce in self.effects.iter_mut() {
+            match ce {
+                ConditionEffect::TakeBonusDmgFrom(_, old_pid) => {
+                    if old_pid == &ParticipantId::me() {
+                        old_pid.0 = pid.0;
+                    }
+                },
+                ConditionEffect::TakeDmgFeatureFrom(_, old_pid) => {
+                    if old_pid == &ParticipantId::me() {
+                        old_pid.0 = pid.0;
+                    }
+                },
+                _ => {}
+            }
+        }
+        for cl in self.lifetimes.iter_mut() {
+            match cl {
+                ConditionLifetime::OnHitByAtk(old_pid) => {
+                    if old_pid == &ParticipantId::me() {
+                        old_pid.0 = pid.0;
+                    }
+                },
+                ConditionLifetime::UntilTime(ct) => ct.register_pid(pid),
+                _ => {}
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -133,16 +164,32 @@ impl ConditionManager {
         self.conditions.insert(cn, cond);
     }
 
-    pub fn remove_condition(&mut self, cn: &ConditionName) {
+    pub fn remove_condition_by_name(&mut self, cn: &ConditionName) {
         let cond = self.conditions.remove(cn).unwrap();
         let lts = cond.lifetimes;
         for lt in lts {
-            let mut cns = self.by_lifetime.remove(&lt).unwrap();
-            cns.remove(cn);
-            if cns.len() > 0 {
-                self.by_lifetime.insert(lt, cns);
+            let o_cns = self.by_lifetime.remove(&lt);
+            // this can be empty if we came here from remove_conditions_by_lifetime
+            if o_cns.is_some() {
+                let mut cns = o_cns.unwrap();
+                cns.remove(cn);
+                if cns.len() > 0 {
+                    self.by_lifetime.insert(lt, cns);
+                }
             }
         }
+    }
+
+    pub fn remove_conditions_by_lifetime(&mut self, lt: &ConditionLifetime) -> HashSet<ConditionName> {
+        let mut removed_cns = HashSet::new();
+        let cns = self.by_lifetime.remove(lt);
+        if cns.is_some() {
+            for cn in cns.unwrap() {
+                self.remove_condition_by_name(&cn);
+                removed_cns.insert(cn);
+            }
+        }
+        removed_cns
     }
 
     pub fn get_atk_mod(&self, dist: AttackDistance) -> D20RollType {
@@ -189,5 +236,24 @@ impl ConditionManager {
             let target_mod = target_cm.get_atk_target_mod(dist);
             atk_mod + target_mod
         }
+    }
+
+    pub fn overall_dmg_mods(&self, atker_pid: ParticipantId) -> (HashSet<DamageFeature>, Vec<DamageTerm>) {
+        let mut dmg_feats = HashSet::new();
+        let mut dmg_terms = Vec::new();
+        for (_, cond) in self.conditions.iter() {
+            for ce in cond.effects.iter() {
+                match ce {
+                    ConditionEffect::TakeBonusDmgFrom(term, pid) if pid == &atker_pid => {
+                        dmg_terms.push(*term);
+                    }
+                    ConditionEffect::TakeDmgFeatureFrom(feat, pid) if pid == &atker_pid => {
+                        dmg_feats.insert(*feat);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        (dmg_feats, dmg_terms)
     }
 }

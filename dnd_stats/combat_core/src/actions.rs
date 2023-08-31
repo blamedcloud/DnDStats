@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use crate::attack::basic_attack::BasicAttack;
 use crate::conditions::{Condition, ConditionName};
 use crate::damage::dice_expr::DiceExpression;
+use crate::participant::ParticipantId;
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ActionType {
@@ -28,24 +29,10 @@ impl ActionType {
     }
 }
 
-// TODO:
-// either rename this one or parameterize the other one
-// now that CombatAction isn't prob-parameterized, we can
-// just make the ActionManager type know which attack and heal it uses.
 #[derive(Debug, Clone)]
-pub enum CABuilder<A, H> {
-    WeaponAttack(A),
-    SelfHeal(H),
-    AdditionalAttacks(u8),
-    ApplyCondition(ConditionName),
-    ApplyComplexCondition(ConditionName, Condition),
-    ByName,
-}
-
-#[derive(Debug, Clone)]
-pub enum CombatAction {
-    Attack(BasicAttack),
-    SelfHeal(DiceExpression),
+pub enum CombatAction<A, DE> {
+    Attack(A),
+    SelfHeal(DE),
     AdditionalAttacks(u8),
     ApplyBasicCondition(ConditionName),
     ApplyComplexCondition(ConditionName, Condition),
@@ -53,14 +40,14 @@ pub enum CombatAction {
 }
 
 #[derive(Debug, Clone)]
-pub struct CombatOption<CA> {
+pub struct CombatOption<A, DE> {
     pub action_type: ActionType,
-    pub action: CA,
+    pub action: CombatAction<A, DE>,
     pub req_target: bool,
 }
 
-impl<CA> CombatOption<CA> {
-    pub fn new(at: ActionType, ca: CA) -> Self {
+impl<A, DE> CombatOption<A, DE> {
+    pub fn new(at: ActionType, ca: CombatAction<A, DE>) -> Self {
         CombatOption {
             action_type: at,
             action: ca,
@@ -68,21 +55,11 @@ impl<CA> CombatOption<CA> {
         }
     }
 
-    pub fn new_target(at: ActionType, ca: CA, rt: bool) -> Self {
+    pub fn new_target(at: ActionType, ca: CombatAction<A, DE>, rt: bool) -> Self {
         CombatOption {
             action_type: at,
             action: ca,
             req_target: rt
-        }
-    }
-}
-
-impl From<(ActionType, CombatAction)> for CombatOption<CombatAction> {
-    fn from(value: (ActionType, CombatAction)) -> Self {
-        CombatOption {
-            action_type: value.0,
-            action: value.1,
-            req_target: false,
         }
     }
 }
@@ -105,7 +82,19 @@ pub enum ActionName {
     ActionSurge,
     Indomitable, // TODO: move to triggers (OnSave trigger)
     ShoveProne,
+    PlanarWarrior,
 }
 
-pub type ActionBuilder<A, H> = HashMap<ActionName, CombatOption<CABuilder<A, H>>>;
-pub type ActionManager = HashMap<ActionName, CombatOption<CombatAction>>;
+pub type ActionBuilder<A, DE> = HashMap<ActionName, CombatOption<A, DE>>;
+pub type ActionManager = HashMap<ActionName, CombatOption<BasicAttack, DiceExpression>>;
+
+pub fn register_pid(am: &mut ActionManager, pid: ParticipantId) {
+    for (_, co) in am.iter_mut() {
+        match &mut co.action {
+            CombatAction::ApplyComplexCondition(_, cond) => {
+                cond.register_pid(pid);
+            },
+            _ => {}
+        }
+    }
+}

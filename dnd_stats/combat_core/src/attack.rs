@@ -13,7 +13,7 @@ use rand_var::vec_rand_var::VecRandVar;
 use crate::{CCError, D20RollType};
 use crate::combat_event::CombatEvent;
 use crate::conditions::AttackDistance;
-use crate::damage::{DamageTerm, DamageType};
+use crate::damage::{DamageFeature, DamageTerm, DamageType};
 
 pub mod basic_attack;
 
@@ -127,9 +127,9 @@ impl<P: RVProb> AtkDmgMap<P> {
 }
 
 pub trait Attack : Debug {
-    fn get_miss_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError>;
-    fn get_hit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError>;
-    fn get_crit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError>;
+    fn get_miss_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>, dmg_feats: HashSet<DamageFeature>) -> Result<VecRandVar<P>, CCError>;
+    fn get_hit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>, dmg_feats: HashSet<DamageFeature>) -> Result<VecRandVar<P>, CCError>;
+    fn get_crit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>, dmg_feats: HashSet<DamageFeature>) -> Result<VecRandVar<P>, CCError>;
 
     fn get_acc_rv<P: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<P>, CCError>;
 
@@ -139,19 +139,19 @@ pub trait Attack : Debug {
     fn get_crit_lb(&self) -> isize;
     fn get_hit_bonus(&self) -> isize;
 
-    fn get_ar_dmg<P: RVProb>(&self, ar: AttackResult, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
+    fn get_ar_dmg<P: RVProb>(&self, ar: AttackResult, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>, dmg_feats: HashSet<DamageFeature>) -> Result<VecRandVar<P>, CCError> {
         match ar {
-            AttackResult::Miss => self.get_miss_dmg(resistances, bonus_dmg),
-            AttackResult::Hit => self.get_hit_dmg(resistances, bonus_dmg),
-            AttackResult::Crit => self.get_crit_dmg(resistances, bonus_dmg),
+            AttackResult::Miss => self.get_miss_dmg(resistances, bonus_dmg, dmg_feats),
+            AttackResult::Hit => self.get_hit_dmg(resistances, bonus_dmg, dmg_feats),
+            AttackResult::Crit => self.get_crit_dmg(resistances, bonus_dmg, dmg_feats),
         }
     }
 
     fn get_dmg_map<P: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<P>, CCError> {
         Ok(AtkDmgMap::new(
-            self.get_miss_dmg(resistances, vec!())?,
-            self.get_hit_dmg(resistances, vec!())?,
-            self.get_crit_dmg(resistances, vec!())?
+            self.get_miss_dmg(resistances, vec!(), HashSet::new())?,
+            self.get_hit_dmg(resistances, vec!(), HashSet::new())?,
+            self.get_crit_dmg(resistances, vec!(), HashSet::new())?
         ))
     }
 

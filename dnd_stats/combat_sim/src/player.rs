@@ -3,10 +3,12 @@ use std::fmt::Debug;
 
 use character_builder::Character;
 use combat_core::ability_scores::AbilityScores;
-use combat_core::actions::{ActionManager, CABuilder, CombatAction, CombatOption};
+use combat_core::actions::{ActionManager, CombatAction, CombatOption, register_pid};
+use combat_core::attack::basic_attack::BasicAttack;
 use combat_core::conditions::ConditionManager;
 use combat_core::damage::DamageType;
-use combat_core::participant::Participant;
+use combat_core::damage::dice_expr::DiceExpression;
+use combat_core::participant::{Participant, ParticipantId};
 use combat_core::resources::ResourceManager;
 use combat_core::skills::SkillManager;
 use combat_core::triggers::TriggerManager;
@@ -37,16 +39,16 @@ impl From<Character> for Player {
         let mut am = ActionManager::new();
 
         for (an, co) in value.get_action_builder().clone() {
-            let cab = co.action;
+            let ca_old = co.action;
             let at = co.action_type;
             let req_t = co.req_target;
-            let ca: CombatAction = match cab {
-                CABuilder::WeaponAttack(wa) => CombatAction::Attack(wa.into()),
-                CABuilder::SelfHeal(cde) => CombatAction::SelfHeal(cde.into()),
-                CABuilder::AdditionalAttacks(aa) => CombatAction::AdditionalAttacks(aa),
-                CABuilder::ByName => CombatAction::ByName,
-                CABuilder::ApplyCondition(cn) => CombatAction::ApplyBasicCondition(cn),
-                CABuilder::ApplyComplexCondition(cn, cond) => CombatAction::ApplyComplexCondition(cn, cond),
+            let ca: CombatAction<BasicAttack, DiceExpression> = match ca_old {
+                CombatAction::Attack(wa) => CombatAction::Attack(wa.into()),
+                CombatAction::SelfHeal(cde) => CombatAction::SelfHeal(cde.into()),
+                CombatAction::AdditionalAttacks(aa) => CombatAction::AdditionalAttacks(aa),
+                CombatAction::ApplyBasicCondition(cn) => CombatAction::ApplyBasicCondition(cn),
+                CombatAction::ApplyComplexCondition(cn, cond) => CombatAction::ApplyComplexCondition(cn, cond),
+                CombatAction::ByName => CombatAction::ByName
             };
             let co = CombatOption::new_target(at, ca, req_t);
             am.insert(an, co);
@@ -111,5 +113,9 @@ impl Participant for Player {
 
     fn get_condition_manager(&self) -> &ConditionManager {
         &self.condition_manager
+    }
+
+    fn register_pid(&mut self, pid: ParticipantId) {
+        register_pid(&mut self.action_manager, pid);
     }
 }

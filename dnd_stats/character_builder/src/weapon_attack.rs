@@ -5,7 +5,7 @@ use combat_core::ability_scores::Ability;
 use combat_core::attack::{AccMRV, AoMRV, ArMRV, AtkDmgMap, Attack, AttackResult};
 use combat_core::attack::basic_attack::BasicAttack;
 use combat_core::conditions::AttackDistance;
-use combat_core::damage::{DamageDice, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
+use combat_core::damage::{DamageDice, DamageFeature, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
 use combat_core::movement::Feet;
 use rand_var::vec_rand_var::VecRandVar;
 use rand_var::rand_var::prob_type::RVProb;
@@ -226,16 +226,16 @@ impl From<WeaponAttack> for BasicAttack {
 }
 
 impl Attack for WeaponAttack {
-    fn get_miss_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
-        Ok(self.damage.cdm.get_miss_dmg(resistances, bonus_dmg)?)
+    fn get_miss_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>, dmg_feats: HashSet<DamageFeature>) -> Result<VecRandVar<P>, CCError> {
+        Ok(self.damage.cdm.get_miss_dmg(resistances, bonus_dmg, dmg_feats)?)
     }
 
-    fn get_hit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
-        Ok(self.damage.cdm.get_base_dmg(resistances, bonus_dmg)?)
+    fn get_hit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>, dmg_feats: HashSet<DamageFeature>) -> Result<VecRandVar<P>, CCError> {
+        Ok(self.damage.cdm.get_base_dmg(resistances, bonus_dmg, dmg_feats)?)
     }
 
-    fn get_crit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
-        Ok(self.damage.cdm.get_crit_dmg(resistances, bonus_dmg)?)
+    fn get_crit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, bonus_dmg: Vec<DamageTerm>, dmg_feats: HashSet<DamageFeature>) -> Result<VecRandVar<P>, CCError> {
+        Ok(self.damage.cdm.get_crit_dmg(resistances, bonus_dmg, dmg_feats)?)
     }
 
     fn get_acc_rv<P: RVProb>(&self, hit_type: D20RollType) -> Result<AccMRV<P>, CCError> {
@@ -307,11 +307,11 @@ mod tests {
 
         let two_d6: VRVBig = VecRandVar::new_dice(6).unwrap().multiple(2);
         let base_dmg = two_d6.add_const(3);
-        assert_eq!(base_dmg, damage.get_base_dmg(&no_resist, vec!()).unwrap());
+        assert_eq!(base_dmg, damage.get_base_dmg(&no_resist, vec!(), HashSet::new()).unwrap());
         let crit_dmg = two_d6.multiple(2).add_const(3);
-        assert_eq!(crit_dmg, damage.get_crit_dmg(&no_resist, vec!()).unwrap());
+        assert_eq!(crit_dmg, damage.get_crit_dmg(&no_resist, vec!(), HashSet::new()).unwrap());
         let miss_dmg: VRVBig = VecRandVar::new_constant(0).unwrap();
-        assert_eq!(miss_dmg, damage.get_miss_dmg(&no_resist, vec!()).unwrap());
+        assert_eq!(miss_dmg, damage.get_miss_dmg(&no_resist, vec!(), HashSet::new()).unwrap());
 
         let mut dmg_map = BTreeMap::new();
         dmg_map.insert(AttackResult::Crit, crit_dmg);
@@ -340,8 +340,8 @@ mod tests {
         assert_eq!(27, dmg_rv.upper_bound());
         assert_eq!(result_rv.pdf(AttackResult::Miss), dmg_rv.pdf(0));
         let dmg = attack.get_damage();
-        let hit_ev: BigRational = dmg.cdm.get_base_dmg(&no_resist, vec!()).unwrap().expected_value();
-        let crit_ev: BigRational = dmg.cdm.get_crit_dmg(&no_resist, vec!()).unwrap().expected_value();
+        let hit_ev: BigRational = dmg.cdm.get_base_dmg(&no_resist, vec!(), HashSet::new()).unwrap().expected_value();
+        let crit_ev: BigRational = dmg.cdm.get_crit_dmg(&no_resist, vec!(), HashSet::new()).unwrap().expected_value();
         let ev = result_rv.pdf(AttackResult::Hit) * hit_ev + result_rv.pdf(AttackResult::Crit) * crit_ev;
         assert_eq!(ev, dmg_rv.expected_value());
         let attack_rv = attack.get_attack_outcome_rv(D20RollType::Normal, ac, &no_resist).unwrap();

@@ -4,7 +4,7 @@ use std::ptr;
 use combat_core::actions::{ActionName, ActionType};
 use combat_core::combat_event::{CombatEvent, CombatTiming};
 use combat_core::combat_state::CombatState;
-use combat_core::conditions::{ConditionManager, ConditionName};
+use combat_core::conditions::{Condition, ConditionLifetime, ConditionManager, ConditionName};
 use combat_core::health::Health;
 use combat_core::participant::{ParticipantId, ParticipantManager};
 use combat_core::resources::{RefreshTiming, ResourceManager, ResourceName};
@@ -108,6 +108,12 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
         }
     }
 
+    pub fn apply_complex_condition(&mut self, pid: ParticipantId, cn: ConditionName, cond: Condition) {
+        let cm = self.get_cm_mut(pid);
+        cm.add_condition(cn, cond);
+        self.push(CombatEvent::ApplyCond(cn, pid));
+    }
+
     pub fn apply_default_condition(&mut self, pid: ParticipantId, cn: ConditionName) {
         let cm = self.get_cm_mut(pid);
         cm.add_basic_condition(cn).unwrap();
@@ -116,9 +122,17 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
 
     pub fn remove_condition(&mut self, pid: ParticipantId, cn: ConditionName, at: ActionType) {
         let cm = self.get_cm_mut(pid);
-        cm.remove_condition(&cn);
+        cm.remove_condition_by_name(&cn);
         self.spend_at_resource(pid, at);
-        self.push(CombatEvent::RemoveCond(cn));
+        self.push(CombatEvent::RemoveCond(cn, pid));
+    }
+
+    pub fn remove_condition_by_lifetime(&mut self, pid: ParticipantId, lt: &ConditionLifetime) {
+        let cm = self.get_cm_mut(pid);
+        let removed_cns = cm.remove_conditions_by_lifetime(lt);
+        for cn in removed_cns {
+            self.push(CombatEvent::RemoveCond(cn, pid));
+        }
     }
 
     pub fn get_dmg(&self, pid: ParticipantId) -> &VecRandVar<P> {

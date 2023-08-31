@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::combat_event::{CombatEvent, CombatTiming};
 use crate::combat_state::combat_log::CombatLog;
-use crate::conditions::ConditionManager;
+use crate::conditions::{ConditionLifetime, ConditionManager};
 use crate::health::Health;
 use crate::participant::ParticipantId;
 use crate::resources::ResourceManager;
@@ -92,6 +92,12 @@ impl CombatState {
     pub fn push(&mut self, ce: CombatEvent) {
         if let CombatEvent::Timing(ct) = ce {
             self.last_combat_timing = Some(ct);
+            for (i, cm) in self.conditions.iter_mut().enumerate() {
+                let removed_cns = cm.remove_conditions_by_lifetime(&ConditionLifetime::UntilTime(ct));
+                for cn in removed_cns {
+                    self.logs.push(CombatEvent::RemoveCond(cn, ParticipantId(i)));
+                }
+            }
         }
         self.logs.push(ce);
     }

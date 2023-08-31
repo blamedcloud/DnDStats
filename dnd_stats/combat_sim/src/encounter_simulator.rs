@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use num::{BigRational, Rational64};
 
@@ -294,23 +294,43 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
                 pcs.get_rm_mut(pid).gain(ResourceName::RAT(ResourceActionType::SingleAttack), *aa as usize);
                 Ok(HandledAction::InPlace(pcs))
             },
-            CombatAction::ByName => {
-                match an {
-                    ActionName::ActionSurge => {
-                        pcs.get_rm_mut(pid).gain(ResourceName::RAT(ResourceActionType::Action), 1);
-                        Ok(HandledAction::InPlace(pcs))
-                    },
-                    ActionName::ShoveProne => {
-                        if let Target::Participant(target_pid) = so.target.unwrap() {
-                            Ok(HandledAction::Children(self.handle_shove_prone(pcs, pid, target_pid)?))
-                        } else {
-                            Err(CSError::InvalidTarget)
-                        }
-                    }
-                    _ => Err(CSError::ActionNotHandled),
+            CombatAction::ApplyBasicCondition(cn) => {
+                if let Target::Participant(target_pid) = so.target.unwrap() {
+                    pcs.apply_default_condition(target_pid, *cn);
+                    Ok(HandledAction::InPlace(pcs))
+                } else {
+                    Err(CSError::InvalidTarget)
                 }
             },
-            _ => Err(CSError::UnknownAction)
+            CombatAction::ApplyComplexCondition(cn, cond) => {
+                if let Target::Participant(target_pid) = so.target.unwrap() {
+                    pcs.apply_complex_condition(target_pid, *cn, cond.clone());
+                    Ok(HandledAction::InPlace(pcs))
+                } else {
+                    Err(CSError::InvalidTarget)
+                }
+            }
+            CombatAction::ByName => {
+                self.handle_action_by_name(pcs, an, pid, so)
+            },
+            //_ => Err(CSError::UnknownAction)
+        }
+    }
+
+    fn handle_action_by_name(&self, mut pcs: ProbCombatState<'pm, P>, an: ActionName, pid: ParticipantId, so: StrategicAction) -> ResultHA<'pm, P> {
+        match an {
+            ActionName::ActionSurge => {
+                pcs.get_rm_mut(pid).gain(ResourceName::RAT(ResourceActionType::Action), 1);
+                Ok(HandledAction::InPlace(pcs))
+            },
+            ActionName::ShoveProne => {
+                if let Target::Participant(target_pid) = so.target.unwrap() {
+                    Ok(HandledAction::Children(self.handle_shove_prone(pcs, pid, target_pid)?))
+                } else {
+                    Err(CSError::InvalidTarget)
+                }
+            }
+            _ => Err(CSError::ActionNotHandled),
         }
     }
 
@@ -350,39 +370,41 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         let ce_rv: MapRandVar<CombatEvent, P> = atk.get_ce_rv(roll_type, target.get_ac())?;
         // TODO: handle AC boosts somehow...
 
-        if attacker.has_triggers() && attacker.get_trigger_manager().unwrap().has_triggers(TriggerType::SuccessfulAttack) {
-            let children = pcs.split(ce_rv);
-            let mut results = Vec::with_capacity(children.len());
-            let resist = target.get_resistances();
-            for mut child in children {
-                if let CombatEvent::AR(ar) = child.get_last_event().unwrap() {
-                    match ar {
-                        AttackResult::Miss => {
-                            let v = child.add_dmg(&atk.get_miss_dmg(resist, vec!())?, target_pid, dead_at_zero);
-                            results.extend(v.into_iter());
-                        }
-                        _ => {
+        let children = pcs.split(ce_rv);
+        let mut results = Vec::with_capacity(children.len());
+        let resist = target.get_resistances();
+        for mut child in children {
+            if let CombatEvent::AR(ar) = child.get_last_event().unwrap() {
+                match ar {
+                    AttackResult::Miss => {
+                        let v = child.add_dmg(&atk.get_miss_dmg(resist, vec!(), HashSet::new())?, target_pid, dead_at_zero);
+                        results.extend(v.into_iter());
+                    },
+                    _ => {
+                        let mut bonus_dmg = Vec::new();
+                        if attacker.has_triggers() && attacker.get_trigger_manager().unwrap().has_triggers(TriggerType::SuccessfulAttack) {
                             let response = self.get_strategy(atker_pid).handle_trigger(TriggerType::SuccessfulAttack, TriggerContext::AR(ar), child.get_state());
                             let cost = self.validate_trigger_cost(&child, atker_pid, TriggerType::SuccessfulAttack, &response);
                             if cost.is_some() {
                                 child.spend_resource_cost(atker_pid, cost.unwrap());
-                                let bonus_dmg = self.handle_dmg_bonus(response);
-                                let v = child.add_dmg(&atk.get_ar_dmg(ar, resist, bonus_dmg)?, target_pid, dead_at_zero);
-                                results.extend(v.into_iter());
+                                bonus_dmg = self.handle_dmg_bonus(response);
                             } else {
                                 return Err(CSError::InvalidTriggerResponse);
                             }
                         }
+                        let target_cm = child.get_state().get_cm(target_pid);
+                        let (dmg_feats, dmg_terms) = target_cm.overall_dmg_mods(atker_pid);
+                        bonus_dmg.extend(dmg_terms.into_iter());
+                        child.remove_condition_by_lifetime(target_pid, &ConditionLifetime::OnHitByAtk(atker_pid));
+                        let v = child.add_dmg(&atk.get_ar_dmg(ar, resist, bonus_dmg, dmg_feats)?, target_pid, dead_at_zero);
+                        results.extend(v.into_iter());
                     }
-                } else {
-                    return Err(CSError::UnknownEvent(child.get_last_event().unwrap()));
                 }
+            } else {
+                return Err(CSError::UnknownEvent(child.get_last_event().unwrap()));
             }
-            Ok(results)
-        } else {
-            let ce_dmg_map = atk.get_dmg_map(target.get_resistances())?.into_ce_map();
-            Ok(pcs.split_dmg(ce_rv, ce_dmg_map, target_pid, dead_at_zero))
         }
+        Ok(results)
     }
 
     fn handle_dmg_bonus(&self, response: Vec<TriggerResponse>) -> Vec<DamageTerm> {

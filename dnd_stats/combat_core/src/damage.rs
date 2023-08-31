@@ -235,15 +235,22 @@ impl<DE: DiceExpr + Clone> DamageManager<DE> {
         }
     }
 
-    fn get_total_dmg<P: RVProb>(&self, dmg_expr: &DamageExpression<DE>, resistances: &HashSet<DamageType>, double_dice: bool) -> Result<VecRandVar<P>, CCError> {
+    fn get_total_dmg<P: RVProb>(&self, dmg_expr: &DamageExpression<DE>, resistances: &HashSet<DamageType>, double_dice: bool, mut extra_dmg_feats: HashSet<DamageFeature>) -> Result<VecRandVar<P>, CCError> {
         let mut rv = VecRandVar::new_constant(0).unwrap();
+        extra_dmg_feats.extend(self.damage_features.iter());
+        let mut dmg_convert: Option<DamageType> = None;
+        for df in extra_dmg_feats.iter() {
+            if let DamageFeature::DmgTypeConversion(dt) = df {
+                dmg_convert = Some(*dt);
+            }
+        }
         for (k, de) in dmg_expr.iter() {
-            let mut dice_rv = de.get_dice_rv(&self.damage_features, self.weapon_die)?;
+            let mut dice_rv = de.get_dice_rv(&extra_dmg_feats, self.weapon_die)?;
             if double_dice {
                 dice_rv = dice_rv.multiple(2);
             }
             dice_rv = dice_rv.add_const(de.get_const());
-            let dmg_type = self.get_dmg_type(k)?;
+            let dmg_type = dmg_convert.unwrap_or(self.get_dmg_type(k)?);
             if resistances.contains(&dmg_type) {
                 rv = rv.add_rv(&dice_rv.half().unwrap());
             } else {
@@ -255,55 +262,55 @@ impl<DE: DiceExpr + Clone> DamageManager<DE> {
         Ok(rv)
     }
 
-    pub fn get_base_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
+    pub fn get_base_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>, dmg_feats: HashSet<DamageFeature>) -> Result<VecRandVar<P>, CCError> {
         if dtv.len() == 0 {
-            self.get_total_dmg(&self.base_dmg, resistances, false)
+            self.get_total_dmg(&self.base_dmg, resistances, false, dmg_feats)
         } else {
             let mut base_dmg = self.base_dmg.clone();
             DamageManager::merge_dmg(&mut base_dmg, dtv);
-            self.get_total_dmg(&base_dmg, resistances, false)
+            self.get_total_dmg(&base_dmg, resistances, false, dmg_feats)
         }
     }
 
-    pub fn get_crit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
+    pub fn get_crit_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>, dmg_feats: HashSet<DamageFeature>) -> Result<VecRandVar<P>, CCError> {
         if dtv.len() == 0 {
             // double base dice + base const
-            let mut rv = self.get_total_dmg(&self.base_dmg, resistances, true)?;
+            let mut rv = self.get_total_dmg(&self.base_dmg, resistances, true, dmg_feats.clone())?;
             // bonus crit dmg
-            rv = rv.add_rv(&self.get_total_dmg(&self.bonus_crit_dmg, resistances, false)?);
+            rv = rv.add_rv(&self.get_total_dmg(&self.bonus_crit_dmg, resistances, false, dmg_feats)?);
             Ok(rv)
         } else {
             let mut base_dmg = self.base_dmg.clone();
             DamageManager::merge_dmg(&mut base_dmg, dtv);
             // double base dice + base const
-            let mut rv = self.get_total_dmg(&base_dmg, resistances, true)?;
+            let mut rv = self.get_total_dmg(&base_dmg, resistances, true, dmg_feats.clone())?;
             // bonus crit dmg
-            rv = rv.add_rv(&self.get_total_dmg(&self.bonus_crit_dmg, resistances, false)?);
+            rv = rv.add_rv(&self.get_total_dmg(&self.bonus_crit_dmg, resistances, false, dmg_feats)?);
             Ok(rv)
         }
     }
 
-    pub fn get_miss_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>) -> Result<VecRandVar<P>, CCError> {
+    pub fn get_miss_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>, dtv: Vec<DamageTerm>, dmg_feats: HashSet<DamageFeature>) -> Result<VecRandVar<P>, CCError> {
         if dtv.len() == 0 {
-            self.get_total_dmg(&self.miss_dmg, resistances, false)
+            self.get_total_dmg(&self.miss_dmg, resistances, false, dmg_feats)
         } else {
             let mut miss_dmg = self.miss_dmg.clone();
             DamageManager::merge_dmg(&mut miss_dmg, dtv);
-            self.get_total_dmg(&miss_dmg, resistances, false)
+            self.get_total_dmg(&miss_dmg, resistances, false, dmg_feats)
         }
     }
 
     // this is often easier for "half dmg on save" than building
     // an actual miss_dmg DamageExpression
     pub fn get_half_base_dmg<P: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<VecRandVar<P>, CCError> {
-        Ok(self.get_base_dmg(resistances, vec!())?.half().unwrap())
+        Ok(self.get_base_dmg(resistances, vec!(), HashSet::new())?.half().unwrap())
     }
 
     pub fn get_attack_dmg_map<P: RVProb>(&self, resistances: &HashSet<DamageType>) -> Result<AtkDmgMap<P>, CCError> {
         let map = AtkDmgMap::new(
-            self.get_miss_dmg(resistances, vec!())?,
-            self.get_base_dmg(resistances, vec!())?,
-            self.get_crit_dmg(resistances, vec!())?
+            self.get_miss_dmg(resistances, vec!(), HashSet::new())?,
+            self.get_base_dmg(resistances, vec!(), HashSet::new())?,
+            self.get_crit_dmg(resistances, vec!(), HashSet::new())?
         );
         Ok(map)
     }
@@ -321,13 +328,13 @@ mod tests {
         let mut dmg: DamageManager<DiceExpression>  = DamageManager::new();
         dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Die(ExtendedDamageDice::Basic(DamageDice::D6)), ExtendedDamageType::Basic(DamageType::Bludgeoning)));
         dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Const(3), ExtendedDamageType::Basic(DamageType::Bludgeoning)));
-        let rv1: VRV64 = dmg.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let rv1: VRV64 = dmg.get_base_dmg(&HashSet::new(), vec!(), HashSet::new()).unwrap();
 
         let rv2: VRV64 = VecRandVar::new_dice(6).unwrap();
         let rv2 = rv2.add_const(3);
         assert_eq!(rv1, rv2);
 
-        let rv3: VRV64 = dmg.get_crit_dmg(&HashSet::new(), vec!()).unwrap();
+        let rv3: VRV64 = dmg.get_crit_dmg(&HashSet::new(), vec!(), HashSet::new()).unwrap();
 
         let rv4: VRV64 = VecRandVar::new_dice(6).unwrap().multiple(2);
         let rv4 = rv4.add_const(3);
@@ -343,14 +350,14 @@ mod tests {
         dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Const(5), ExtendedDamageType::WeaponDamage));
         let brutal_crit_dmg = DamageTerm::new(DiceExprTerm::Die(ExtendedDamageDice::SingleWeaponDie), ExtendedDamageType::WeaponDamage);
         dmg.add_bonus_crit_dmg(brutal_crit_dmg);
-        let rv1: VRV64 = dmg.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let rv1: VRV64 = dmg.get_base_dmg(&HashSet::new(), vec!(), HashSet::new()).unwrap();
 
         let d12: VRV64 = VecRandVar::new_dice(12).unwrap();
         let const_dmg = 5;
         let base_dmg = d12.add_const(const_dmg);
         assert_eq!(rv1, base_dmg);
 
-        let rv2: VRV64 = dmg.get_crit_dmg(&HashSet::new(), vec!()).unwrap();
+        let rv2: VRV64 = dmg.get_crit_dmg(&HashSet::new(), vec!(), HashSet::new()).unwrap();
         let crit_dmg = d12.multiple(3).add_const(const_dmg);
         assert_eq!(rv2, crit_dmg);
     }
@@ -360,7 +367,7 @@ mod tests {
         let mut dmg: DamageManager<DiceExpression> = DamageManager::new();
         dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Dice(4, DamageDice::D6.into()), DamageType::Fire.into()));
         dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Dice(4, DamageDice::D6.into()), DamageType::Radiant.into()));
-        let rv1: VRV64 = dmg.get_base_dmg(&HashSet::new(), vec!()).unwrap();
+        let rv1: VRV64 = dmg.get_base_dmg(&HashSet::new(), vec!(), HashSet::new()).unwrap();
         let rv2: VRV64 = dmg.get_half_base_dmg(&HashSet::new()).unwrap();
 
         let eight_d6: VRV64 = VecRandVar::new_dice(6).unwrap().multiple(8);
@@ -370,7 +377,7 @@ mod tests {
 
         let resist_fire = HashSet::from([DamageType::Fire]);
 
-        let rv3: VRV64 = dmg.get_base_dmg(&resist_fire, vec!()).unwrap();
+        let rv3: VRV64 = dmg.get_base_dmg(&resist_fire, vec!(), HashSet::new()).unwrap();
         let four_d6: VRV64 = VecRandVar::new_dice(6).unwrap().multiple(4);
         let resist_dmg = four_d6.add_rv(&four_d6.half().unwrap());
         assert_eq!(rv3, resist_dmg);
