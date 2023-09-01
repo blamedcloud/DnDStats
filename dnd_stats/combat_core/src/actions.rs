@@ -84,6 +84,8 @@ pub enum ActionName {
     Indomitable, // TODO: move to triggers (OnSave trigger)
     ShoveProne,
     PlanarWarrior,
+    FavoredFoeApply,
+    FavoredFoeUse,
 }
 
 pub type ActionBuilder<A, DE> = HashMap<ActionName, CombatOption<A, DE>>;

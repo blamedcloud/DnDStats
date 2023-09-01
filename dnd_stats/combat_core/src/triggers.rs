@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::attack::AttackResult;
+use crate::conditions::ConditionName;
 use crate::damage::DamageTerm;
 use crate::resources::ResourceName;
 
@@ -15,6 +16,7 @@ pub enum TriggerType {
 pub enum TriggerContext {
     NoContext,
     AR(AttackResult),
+    CondNotice(ConditionName),
 }
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
@@ -44,6 +46,7 @@ impl From<TriggerType> for TriggerInfo {
 pub enum TriggerName {
     SneakAttack,
     GWMBonusAtk,
+    FavoredFoeKill,
 }
 
 #[derive(Debug, Copy, Clone)]

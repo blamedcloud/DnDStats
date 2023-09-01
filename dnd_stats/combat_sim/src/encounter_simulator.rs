@@ -363,7 +363,6 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
     }
 
     fn handle_attack(&self, pcs: ProbCombatState<'pm, P>, atk: &impl Attack, atker_pid: ParticipantId, target_pid: ParticipantId) -> ResultVS<'pm, P> {
-        let attacker = self.get_participant(atker_pid);
         let target = self.get_participant(target_pid);
         let dead_at_zero = self.is_dead_at_zero(target_pid);
         let atk_cm = pcs.get_state().get_cm(atker_pid);
@@ -391,15 +390,11 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
                 return Err(CSError::UnknownEvent(child.get_last_event().unwrap()));
             }
         }
-        if attacker.has_triggers() && attacker.get_trigger_manager().unwrap().has_triggers(TriggerType::OnKill.into()) {
-            let mut health = Health::ZeroHP;
-            if dead_at_zero {
-                health = Health::Dead;
-            }
-            self.handle_on_kill_triggers(results, atker_pid, target_pid, health)
-        } else {
-            Ok(results)
+        let mut health = Health::ZeroHP;
+        if dead_at_zero {
+            health = Health::Dead;
         }
+        Ok(self.handle_on_kill_triggers(results, atker_pid, target_pid, health)?)
     }
 
     fn handle_successful_attack(&self, mut pcs: ProbCombatState<'pm, P>, atk: &impl Attack, ar: AttackResult, atker_pid: ParticipantId, target_pid: ParticipantId) -> ResultVS<'pm, P> {
@@ -413,8 +408,8 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
             let cost = self.validate_trigger_cost(&pcs, atker_pid, &response);
             if cost.is_some() {
                 pcs.spend_resource_cost(atker_pid, cost.unwrap());
-                self.handle_add_resource_triggers(&mut pcs, atker_pid, &response);
-                bonus_dmg = self.handle_dmg_bonus_triggers(&response);
+                self.resolve_add_resource_triggers(&mut pcs, atker_pid, &response);
+                bonus_dmg = self.resolve_dmg_bonus_triggers(&response);
             } else {
                 return Err(CSError::InvalidTriggerResponse);
             }
@@ -429,20 +424,34 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
     fn handle_on_kill_triggers(&self, mut results: Vec<ProbCombatState<'pm, P>>, atker_pid: ParticipantId, target_pid: ParticipantId, health: Health) -> ResultVS<'pm, P> {
         for pcs in results.iter_mut() {
             if pcs.get_last_event().unwrap() == CombatEvent::HP(target_pid, health) {
-                let response = self.get_strategy(atker_pid).handle_trigger(TriggerType::OnKill.into(), pcs.get_state());
-                let cost = self.validate_trigger_cost(pcs, atker_pid, &response);
-                if cost.is_some() {
-                    pcs.spend_resource_cost(atker_pid, cost.unwrap());
-                    self.handle_add_resource_triggers(pcs, atker_pid, &response);
-                } else {
-                    return Err(CSError::InvalidTriggerResponse);
+                self.handle_triggers(pcs, atker_pid, TriggerType::OnKill.into())?;
+                let death_notices = pcs.get_cm(target_pid).get_death_notices();
+                for pid in death_notices {
+                    let cns = pcs.get_cm(target_pid).get_cns_for_lifetime(&ConditionLifetime::NotifyOnDeath(pid)).clone();
+                    for cn in cns {
+                        self.handle_triggers(pcs, pid, TriggerInfo::new(TriggerType::OnKill, TriggerContext::CondNotice(cn)))?;
+                    }
                 }
             }
         }
         Ok(results)
     }
 
-    fn handle_add_resource_triggers(&self, pcs: &mut ProbCombatState<'pm, P>, pid: ParticipantId, response: &Vec<TriggerResponse>) {
+    fn handle_triggers(&self, pcs: &mut ProbCombatState<'pm, P>, pid: ParticipantId, ti: TriggerInfo) -> ResultCSE {
+        if self.get_participant(pid).has_triggers() && self.get_participant(pid).get_trigger_manager().unwrap().has_triggers(ti) {
+            let response = self.get_strategy(pid).handle_trigger(ti, pcs.get_state());
+            let cost = self.validate_trigger_cost(pcs, pid, &response);
+            if cost.is_some() {
+                pcs.spend_resource_cost(pid, cost.unwrap());
+                self.resolve_add_resource_triggers(pcs, pid, &response);
+            } else {
+                return Err(CSError::InvalidTriggerResponse);
+            }
+        }
+        Ok(())
+    }
+
+    fn resolve_add_resource_triggers(&self, pcs: &mut ProbCombatState<'pm, P>, pid: ParticipantId, response: &Vec<TriggerResponse>) {
         for tr in response {
             if let TriggerAction::AddResource(rn, amount) = tr.action {
                 pcs.add_resource(pid, rn, amount);
@@ -450,7 +459,7 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         }
     }
 
-    fn handle_dmg_bonus_triggers(&self, response: &Vec<TriggerResponse>) -> Vec<DamageTerm> {
+    fn resolve_dmg_bonus_triggers(&self, response: &Vec<TriggerResponse>) -> Vec<DamageTerm> {
         let mut v = Vec::with_capacity(response.len());
         for tr in response {
             if let TriggerAction::AddAttackDamage(dt) = tr.action {
@@ -482,11 +491,13 @@ mod tests {
     use num::{One, Rational64};
 
     use character_builder::Character;
-    use character_builder::classes::ClassName;
+    use character_builder::classes::{ChooseSubClass, ClassName};
+    use character_builder::classes::ranger::HorizonWalkerRanger;
     use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};
+    use character_builder::feature::AbilityScoreIncrease;
     use character_builder::feature::feats::GreatWeaponMaster;
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
-    use combat_core::ability_scores::AbilityScores;
+    use combat_core::ability_scores::{Ability, AbilityScores};
     use combat_core::actions::{ActionName, AttackType};
     use combat_core::attack::AttackResult;
     use combat_core::attack::basic_attack::BasicAttack;
@@ -495,12 +506,15 @@ mod tests {
     use combat_core::damage::{DamageDice, DamageType};
     use combat_core::health::Health;
     use combat_core::participant::{Participant, ParticipantId, ParticipantManager};
+    use combat_core::resources::ResourceName;
     use combat_core::strategy::basic_atk_str::BasicAtkStrBuilder;
     use combat_core::strategy::basic_strategies::DoNothingBuilder;
+    use combat_core::strategy::favored_foe_str::FavoredFoeStrBldr;
     use combat_core::strategy::gwm_str::GWMStrBldr;
     use combat_core::strategy::linear_str::PairStrBuilder;
     use combat_core::strategy::second_wind_str::SecondWindStrBuilder;
     use combat_core::strategy::StrategyManager;
+    use rand_var::num_rand_var::NumRandVar;
     use rand_var::vec_rand_var::VRV64;
     use rand_var::rand_var::RandVar;
 
@@ -830,6 +844,53 @@ mod tests {
                 let pcs = cs_rv.get_pcs(i);
                 assert_eq!(Health::Dead, pcs.get_state().get_health(ParticipantId(1)));
             }
+        }
+    }
+
+    #[test]
+    fn favored_foe_test() {
+        let name = String::from("Jason");
+        let ability_scores =  AbilityScores::new(11,16,16,8,14,10);
+        let equipment = Equipment::new(
+            Armor::studded_leather(),
+            Weapon::longbow(),
+            OffHand::Free,
+        );
+        let mut ranger = Character::new(name, ability_scores, equipment);
+        ranger.level_up(ClassName::Ranger, vec!()).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(FightingStyle(FightingStyles::Archery)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(HorizonWalkerRanger)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
+        let player = Player::from(ranger.clone());
+
+        let minion = TargetDummy::new(1, 14);
+        let dummy = TargetDummy::new(isize::MAX, 14);
+
+        let mut pm = ParticipantManager::new();
+        pm.add_player(Box::new(player)).unwrap();
+        pm.add_enemy(Box::new(minion)).unwrap();
+        pm.add_enemy(Box::new(dummy)).unwrap();
+        pm.compile();
+
+        let mut sm = StrategyManager::new(&pm).unwrap();
+        sm.add_participant(FavoredFoeStrBldr).unwrap();
+        sm.add_participant(DoNothingBuilder).unwrap();
+        sm.add_participant(DoNothingBuilder).unwrap();
+
+        let mut em: ES64 = EncounterSimulator::new(&sm).unwrap();
+        em.simulate_n_rounds(2).unwrap();
+        {
+            let cs_rv = em.get_state_rv();
+            assert_eq!(9, cs_rv.len());
+
+            assert_eq!(2, ranger.get_ability_scores().wisdom.get_mod());
+            for i in 0..cs_rv.len() {
+                assert_eq!(1, cs_rv.get_pcs(i).get_rm(ParticipantId(0)).get_current(ResourceName::AN(ActionName::FavoredFoeUse)).count().unwrap())
+            }
+            let dmg = cs_rv.get_dmg(ParticipantId(2));
+            assert_eq!(0, dmg.lower_bound());
+            assert_eq!(32, dmg.upper_bound());
+            assert_eq!(Rational64::new(141, 20), dmg.expected_value());
         }
     }
 }

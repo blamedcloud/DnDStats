@@ -4,6 +4,9 @@ use combat_core::conditions::{Condition, ConditionEffect, ConditionLifetime, Con
 use combat_core::damage::{DamageDice, DamageFeature, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
 use combat_core::damage::dice_expr::DiceExprTerm;
 use combat_core::participant::ParticipantId;
+use combat_core::resources::{RefreshTiming, Resource, ResourceName};
+use combat_core::resources::resource_amounts::{RefreshBy, ResourceCap, ResourceCount};
+use combat_core::triggers::{TriggerAction, TriggerContext, TriggerInfo, TriggerName, TriggerResponse, TriggerType};
 use crate::{CBError, Character};
 use crate::classes::{Class, ClassName, SubClass};
 use crate::feature::{ExtraAttack, Feature};
@@ -17,7 +20,7 @@ impl Class for VariantRangerClass {
 
     fn get_static_features(&self, level: u8) -> Result<Vec<Box<dyn Feature>>, CBError> {
         match level {
-            1 => Ok(Vec::new()), // TODO no-conc hunter's mark
+            1 => Ok(vec!(Box::new(FavoredFoe))), // TODO no-conc hunter's mark
             2 => Ok(Vec::new()),
             3 => Ok(self.get_subclass_features(level)),
             4 => Ok(Vec::new()),
@@ -57,6 +60,47 @@ impl SubClass for HorizonWalkerRanger {
             15 => Ok(Vec::new()),
             _ => Err(CBError::InvalidLevel),
         }
+    }
+}
+
+pub struct FavoredFoe;
+impl Feature for FavoredFoe {
+    fn apply(&self, character: &mut Character) -> Result<(), CBError> {
+        let damage = DamageTerm::new(
+            DiceExprTerm::Dice(1, ExtendedDamageDice::Basic(DamageDice::D6)),
+            ExtendedDamageType::WeaponDamage
+        );
+        let bonus_dmg = ConditionEffect::TakeBonusDmgFrom(damage, ParticipantId::me());
+        let cond = Condition {
+            effects: vec!(bonus_dmg),
+            lifetimes: vec!(ConditionLifetime::NotifyOnDeath(ParticipantId::me()))
+        };
+        let co_apply = CombatOption::new(
+            ActionType::BonusAction,
+            CombatAction::ApplyComplexCondition(ConditionName::FavoredFoe, cond)
+        );
+        character.combat_actions.insert(ActionName::FavoredFoeApply, co_apply);
+
+        let co_use = CombatOption::new(
+            ActionType::FreeAction,
+            CombatAction::GainResource(ResourceName::AN(ActionName::FavoredFoeApply), 1)
+        );
+        character.combat_actions.insert(ActionName::FavoredFoeUse, co_use);
+
+        // TODO this would get out of date if the wisdom changes. Fixed with a feature::update method?
+        let mut ffu_res = Resource::from(ResourceCap::Hard(character.ability_scores.wisdom.get_mod() as usize));
+        ffu_res.add_refresh(RefreshTiming::LongRest, RefreshBy::ToFull);
+        character.resource_manager.add_perm(ResourceName::AN(ActionName::FavoredFoeUse), ffu_res);
+
+        let ffa_res = Resource::new(ResourceCap::Hard(1), ResourceCount::Count(0));
+        character.resource_manager.add_perm(ResourceName::AN(ActionName::FavoredFoeApply), ffa_res);
+
+        let response = TriggerResponse::from(TriggerAction::AddResource(ResourceName::AN(ActionName::FavoredFoeApply), 1));
+        let ti = TriggerInfo::new(TriggerType::OnKill, TriggerContext::CondNotice(ConditionName::FavoredFoe));
+        character.trigger_manager.add_trigger(ti, TriggerName::FavoredFoeKill);
+        character.trigger_manager.set_response(TriggerName::FavoredFoeKill, response);
+
+        Ok(())
     }
 }
 

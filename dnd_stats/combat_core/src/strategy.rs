@@ -8,10 +8,16 @@ use crate::movement::Square;
 use crate::participant::{Participant, ParticipantId, ParticipantManager, TeamMember};
 use crate::triggers::{TriggerInfo, TriggerResponse};
 
+// I don't really like having so many strategy modules
+// So maybe I should think about creating a more generally
+// applicable one? It's much easier to make sure everything
+// is working properly with them individual though.
+
 pub mod action_surge_str;
 pub mod basic_atk_str;
 pub mod basic_strategies;
 pub mod dual_wield_str;
+pub mod favored_foe_str;
 pub mod gwm_str;
 pub mod linear_str;
 pub mod planar_warrior_str;

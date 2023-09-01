@@ -14,6 +14,7 @@ pub enum ConditionName {
     Invisible,
     Prone,
     PlanarWarriorTarget,
+    FavoredFoe,
 }
 
 impl ConditionName {
@@ -69,6 +70,9 @@ pub enum ConditionLifetime {
     UntilSpendAT(ActionType),
     OnHitByAtk(ParticipantId),
     UntilTime(CombatTiming),
+    // conditions don't get removed on death, but notifications
+    // to the killer are useful (for hunter's mark for example)
+    NotifyOnDeath(ParticipantId),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -103,6 +107,11 @@ impl Condition {
                     }
                 },
                 ConditionLifetime::UntilTime(ct) => ct.register_pid(pid),
+                ConditionLifetime::NotifyOnDeath(old_pid) => {
+                    if old_pid == &ParticipantId::me() {
+                        old_pid.0 = pid.0;
+                    }
+                }
                 _ => {}
             }
         }
@@ -133,6 +142,26 @@ impl ConditionManager {
 
     pub fn get_condition(&self, cn: &ConditionName) -> &Condition {
         self.conditions.get(cn).unwrap()
+    }
+
+    pub fn get_death_notices(&self) -> Vec<ParticipantId> {
+        let mut v = Vec::new();
+        for (cl, _) in self.by_lifetime.iter() {
+            if let ConditionLifetime::NotifyOnDeath(pid) = cl {
+                v.push(*pid);
+            }
+        }
+        v
+    }
+
+    pub fn has_condition_with_lifetime(&self, cl: &ConditionLifetime, cn: &ConditionName) -> bool {
+        if self.by_lifetime.contains_key(cl) {
+            let cns = self.by_lifetime.get(cl).unwrap();
+            if cns.contains(cn) {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn has_lifetime(&self, cl: &ConditionLifetime) -> bool {

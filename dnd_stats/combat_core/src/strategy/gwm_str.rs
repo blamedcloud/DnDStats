@@ -70,8 +70,7 @@ impl<'pm> Strategy for GWMStr<'pm> {
     fn handle_trigger(&self, ti: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
         let mut v = Vec::new();
         let on_crit = TriggerInfo::new(TriggerType::SuccessfulAttack, TriggerContext::AR(AttackResult::Crit));
-        let on_kill = TriggerInfo::new(TriggerType::OnKill, TriggerContext::NoContext);
-        if ti == on_crit || ti == on_kill {
+        if ti == on_crit || ti.tt == TriggerType::OnKill {
             let my_tm = self.get_me().get_trigger_manager().unwrap();
             v.push(my_tm.get_response(TriggerName::GWMBonusAtk).unwrap());
         }
