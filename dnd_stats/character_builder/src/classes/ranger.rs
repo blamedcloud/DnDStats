@@ -20,7 +20,7 @@ impl Class for VariantRangerClass {
 
     fn get_static_features(&self, level: u8) -> Result<Vec<Box<dyn Feature>>, CBError> {
         match level {
-            1 => Ok(vec!(Box::new(FavoredFoe))), // TODO no-conc hunter's mark
+            1 => Ok(vec!(Box::new(FavoredFoe))),
             2 => Ok(Vec::new()),
             3 => Ok(self.get_subclass_features(level)),
             4 => Ok(Vec::new()),

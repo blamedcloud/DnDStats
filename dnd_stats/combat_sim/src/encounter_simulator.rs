@@ -884,6 +884,9 @@ mod tests {
             assert_eq!(9, cs_rv.len());
 
             assert_eq!(2, ranger.get_ability_scores().wisdom.get_mod());
+            let ffu_rv = cs_rv.get_resource_rv(ParticipantId(0), ResourceName::AN(ActionName::FavoredFoeUse)).unwrap();
+            assert_eq!(1, ffu_rv.lower_bound());
+            assert_eq!(1, ffu_rv.upper_bound());
             for i in 0..cs_rv.len() {
                 assert_eq!(1, cs_rv.get_pcs(i).get_rm(ParticipantId(0)).get_current(ResourceName::AN(ActionName::FavoredFoeUse)).count().unwrap())
             }

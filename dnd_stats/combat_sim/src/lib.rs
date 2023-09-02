@@ -29,6 +29,7 @@ pub enum CSError {
     UnknownAction,
     UnknownEvent(CombatEvent),
     InvalidTriggerResponse,
+    UncappedResource,
     RVE(RVError),
     CCE(CCError),
     CBE(CBError),

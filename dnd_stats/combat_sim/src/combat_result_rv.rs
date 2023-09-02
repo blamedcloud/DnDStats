@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use combat_core::participant::ParticipantId;
+use combat_core::resources::ResourceName;
 use rand_var::map_rand_var::MapRandVar;
 use rand_var::rand_var::prob_type::RVProb;
 use rand_var::rand_var::RandVar;
@@ -8,6 +9,7 @@ use rand_var::vec_rand_var::VecRandVar;
 
 use crate::combat_result_rv::prob_combat_result::ProbCombatResult;
 use crate::combat_state_rv::CombatStateRV;
+use crate::CSError;
 
 pub mod prob_combat_result;
 
@@ -47,6 +49,29 @@ impl<P: RVProb> CombatResultRV<P> {
             }
         }
         MapRandVar::from_map(pdf_map).unwrap().into_rv()
+    }
+
+    pub fn get_resource_rv(&self, pid: ParticipantId, rn: ResourceName) -> Result<MapRandVar<isize, P>, CSError> {
+        let mut pdf_map: BTreeMap<isize, P> = BTreeMap::new();
+        let rms = self.states.iter().map(|pcr| pcr.get_state().get_rm(pid));
+        for (i, rm) in rms.enumerate() {
+            let prob = self.get_pcr(i).get_prob().clone();
+            if rm.has_resource(rn) {
+                let rc = rm.get_current(rn);
+                if rc.is_uncapped() {
+                    return Err(CSError::UncappedResource);
+                } else {
+                    let count = rc.count().unwrap() as isize;
+                    if pdf_map.contains_key(&count) {
+                        let old_prob = pdf_map.get(&count).unwrap().clone();
+                        pdf_map.insert(count, old_prob + prob);
+                    } else {
+                        pdf_map.insert(count, prob);
+                    }
+                }
+            }
+        }
+        Ok(MapRandVar::from_map(pdf_map)?)
     }
 }
 
