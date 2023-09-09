@@ -8,12 +8,13 @@ use crate::{CBError, Character};
 use crate::classes::fighter::FighterClass;
 use crate::classes::ranger::VariantRangerClass;
 use crate::classes::rogue::RogueClass;
+use crate::classes::wizard::WizardClass;
 use crate::feature::{Feature, SaveProficiencies};
 
 pub mod fighter;
 pub mod ranger;
 pub mod rogue;
-
+pub mod wizard;
 
 pub trait Class {
     fn get_class_name(&self) -> ClassName;
@@ -52,7 +53,7 @@ pub struct SubclassFeatures {
 }
 impl Feature for SubclassFeatures {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        let sub_class = character.get_sub_class(self.class_name)?;
+        let sub_class = character.get_sub_class(self.class_name).ok_or(CBError::NoSubClassSet)?;
         let features = sub_class.get_static_features(self.class_lvl)?;
         for feat in features {
             feat.apply(character)?;
@@ -91,6 +92,7 @@ impl ClassName {
             ClassName::Fighter => Ok(Box::new(FighterClass)),
             ClassName::Ranger => Ok(Box::new(VariantRangerClass)),
             ClassName::Rogue => Ok(Box::new(RogueClass)),
+            ClassName::Wizard => Ok(Box::new(WizardClass)),
             _ => Err(CBError::NotImplemented)
         }
     }

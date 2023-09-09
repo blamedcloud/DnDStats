@@ -26,6 +26,7 @@ pub mod classes;
 pub mod char_damage;
 pub mod equipment;
 pub mod feature;
+pub mod spellcasting;
 pub mod weapon_attack;
 
 #[derive(Debug, Clone)]
@@ -213,11 +214,11 @@ impl Character {
         self.class_lvls.iter().filter(|c| **c == class).map(|_| 1).sum()
     }
 
-    pub fn get_sub_class(&self, class: ClassName) -> Result<Rc<dyn SubClass>, CBError> {
+    pub fn get_sub_class(&self, class: ClassName) -> Option<&dyn SubClass> {
         if let Some(sub) = self.sub_classes.get(&class) {
-            Ok(sub.clone())
+            Some(sub.as_ref())
         } else {
-            Err(CBError::NoSubClassSet)
+            None
         }
     }
 

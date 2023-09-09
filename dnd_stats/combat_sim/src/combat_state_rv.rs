@@ -45,6 +45,7 @@ impl<'pm, P: RVProb> CombatStateRV<'pm, P> {
         self.states.get_mut(i).unwrap()
     }
 
+    // TODO: make these return slices?
     pub fn get_states(&self) -> &Vec<ProbCombatState<'pm, P>> {
         &self.states
     }

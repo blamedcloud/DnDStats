@@ -18,6 +18,7 @@ pub mod movement;
 pub mod participant;
 pub mod resources;
 pub mod skills;
+pub mod spells;
 pub mod strategy;
 pub mod transposition;
 pub mod triggers;

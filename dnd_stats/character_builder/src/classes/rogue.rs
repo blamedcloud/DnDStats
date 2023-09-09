@@ -7,7 +7,7 @@ use combat_core::resources::resource_amounts::{RefreshBy, ResourceCap};
 use combat_core::triggers::{TriggerAction, TriggerContext, TriggerInfo, TriggerName, TriggerType};
 
 use crate::{CBError, Character};
-use crate::classes::{Class, ClassName, SubClass};
+use crate::classes::{Class, ClassName, SpellCasterType, SubClass};
 use crate::feature::{Feature, SaveProficiencies};
 
 pub struct RogueClass;
@@ -71,6 +71,24 @@ impl SubClass for ScoutRogue {
         ClassName::Rogue
     }
 
+    // TODO: impl some features
+    fn get_static_features(&self, level: u8) -> Result<Vec<Box<dyn Feature>>, CBError> {
+        match level {
+            3 => Ok(Vec::new()),
+            9 => Ok(Vec::new()),
+            13 => Ok(Vec::new()),
+            17 => Ok(Vec::new()),
+            _ => Err(CBError::InvalidLevel),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct ArcaneTricksterRogue;
+impl SubClass for ArcaneTricksterRogue {
+    fn get_class_name(&self) -> ClassName {
+        ClassName::Rogue
+    }
 
     // TODO: impl some features
     fn get_static_features(&self, level: u8) -> Result<Vec<Box<dyn Feature>>, CBError> {
@@ -81,6 +99,10 @@ impl SubClass for ScoutRogue {
             17 => Ok(Vec::new()),
             _ => Err(CBError::InvalidLevel),
         }
+    }
+
+    fn get_spellcasting_override(&self) -> Option<SpellCasterType> {
+        Some(SpellCasterType::ThirdCaster)
     }
 }
 
