@@ -9,6 +9,7 @@ use combat_core::health::Health;
 use combat_core::participant::{ParticipantId, ParticipantManager};
 use combat_core::resources::{RefreshTiming, ResourceManager, ResourceName};
 use combat_core::resources::resource_amounts::ResourceCount;
+use combat_core::spells::SpellSlot;
 use combat_core::transposition::Transposition;
 use rand_var::map_rand_var::MapRandVar;
 use rand_var::num_rand_var::NumRandVar;
@@ -155,6 +156,13 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
             rm.spend(ResourceName::AN(an));
         }
         self.spend_at_resource(pid, at);
+    }
+
+    pub fn spend_spell_slot(&mut self, pid: ParticipantId, ss: SpellSlot) {
+        let rm = self.get_rm_mut(pid);
+        if rm.has_resource(ResourceName::SS(ss)) {
+            rm.spend(ResourceName::SS(ss));
+        }
     }
 
     pub fn spend_at_resource(&mut self, pid: ParticipantId, at: ActionType) {

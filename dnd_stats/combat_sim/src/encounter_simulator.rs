@@ -14,6 +14,7 @@ use combat_core::participant::{Participant, ParticipantId, ParticipantManager, T
 use combat_core::resources::{ResourceActionType, ResourceName};
 use combat_core::resources::resource_amounts::ResourceCount;
 use combat_core::skills::{ContestResult, SkillContest, SkillName};
+use combat_core::spells::{SpellEffect, SpellSlot};
 use combat_core::strategy::{StrategicAction, Strategy, StrategyDecision, StrategyManager, Target};
 use combat_core::triggers::{TriggerAction, TriggerContext, TriggerInfo, TriggerResponse, TriggerType};
 use rand_var::map_rand_var::MapRandVar;
@@ -163,30 +164,32 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         }
         let strategy = self.get_strategy(pid);
         let sd = strategy.get_action(pcs.get_state());
-        if let StrategyDecision::MyAction(so) = sd {
-            if self.possible_action(&pcs, pid, so) {
-                let children = self.finish_action(pcs, pid, so)?;
-                let mut finished_pcs = Vec::new();
-                for pcs in children.into_iter() {
-                    let new_pcs = self.finish_turn(pcs, pid)?;
-                    finished_pcs.extend(new_pcs.into_iter());
+        match sd {
+            StrategyDecision::MyAction(so) => {
+                if self.possible_action(&pcs, pid, so) {
+                    let children = self.finish_action(pcs, pid, so)?;
+                    let mut finished_pcs = Vec::new();
+                    for pcs in children.into_iter() {
+                        let new_pcs = self.finish_turn(pcs, pid)?;
+                        finished_pcs.extend(new_pcs.into_iter());
+                    }
+                    Ok(finished_pcs)
+                } else {
+                    // strategy gave me an invalid StrategicDecision
+                    Ok(vec!(pcs))
                 }
-                Ok(finished_pcs)
-            } else {
-                // strategy gave me an invalid StrategicDecision
-                Ok(vec!(pcs))
-            }
-        } else {
-            if let StrategyDecision::RemoveCondition(cond, at) = sd {
+            },
+            StrategyDecision::RemoveCondition(cn, at) => {
                 // remove a condition
-                if self.possible_condition_removal(&pcs, pid, cond, at) {
-                    pcs.remove_condition(pid, cond, at);
+                if self.possible_condition_removal(&pcs, pid, cn, at) {
+                    pcs.remove_condition(pid, cn, at);
                     Ok(self.finish_turn(pcs, pid)?)
                 } else {
                     // invalid StrategicDecision
                     Ok(vec!(pcs))
                 }
-            } else {
+            }
+            StrategyDecision::DoNothing => {
                 // strategy end-turn on purpose.
                 Ok(vec!(pcs))
             }
@@ -247,6 +250,7 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
                 valid_target = false;
             }
         }
+        let mut has_spell = true;
         if has_action && valid_target {
             let rm = pcs.get_rm(pid);
             if rm.has_resource(ResourceName::AN(an)) && rm.get_current(ResourceName::AN(an)) == 0 {
@@ -258,8 +262,23 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
                     has_resources = false;
                 }
             }
+            if let ActionName::CastSpell(sn) = an {
+                if participant.has_spells() {
+                    let spell = participant.get_spell_manager().unwrap().get(&sn);
+                    if spell.is_some() {
+                        let ss = spell.unwrap().slot;
+                        if rm.has_resource(ResourceName::SS(ss)) && rm.get_current(ResourceName::SS(ss)) == 0 {
+                            has_resources = false;
+                        }
+                    } else {
+                        has_spell = false;
+                    }
+                } else {
+                    has_spell = false;
+                }
+            }
         }
-        has_action && valid_target && has_resources
+        has_action && valid_target && has_resources && has_spell
     }
 
     fn finish_action(&self, pcs: ProbCombatState<'pm, P>, pid: ParticipantId, so: StrategicAction) -> ResultVS<'pm, P> {
@@ -311,11 +330,42 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
                 } else {
                     Err(CSError::InvalidTarget)
                 }
-            }
+            },
+            CombatAction::CastSpell => {
+                self.handle_spell(pcs, pid, so)
+            },
             CombatAction::ByName => {
                 self.handle_action_by_name(pcs, an, pid, so)
             },
             //_ => Err(CSError::UnknownAction)
+        }
+    }
+
+    fn handle_spell(&self, mut pcs: ProbCombatState<'pm, P>, pid: ParticipantId, so: StrategicAction) -> ResultHA<'pm, P> {
+        let spell_name;
+        if let ActionName::CastSpell(sn) = so.action_name {
+            spell_name = sn;
+        } else {
+            return Err(CSError::InvalidAction);
+        }
+        let caster = self.get_participant(pid);
+        let spell = caster.get_spell_manager().unwrap().get(&spell_name).unwrap();
+        pcs.spend_spell_slot(pid, spell.slot);
+        match &spell.effect {
+            SpellEffect::SpellAttack(atk) => {
+                if let Target::Participant(target_pid) = so.target.unwrap() {
+                    pcs.push(CombatEvent::Attack(pid, target_pid));
+                    Ok(HandledAction::Children(self.handle_attack(pcs, atk, pid, target_pid)?))
+                } else {
+                    Err(CSError::InvalidTarget)
+                }
+            },
+            SpellEffect::SaveDamage => {
+                Err(CSError::ActionNotHandled)
+            }
+            SpellEffect::ApplyCondition => {
+                Err(CSError::ActionNotHandled)
+            }
         }
     }
 

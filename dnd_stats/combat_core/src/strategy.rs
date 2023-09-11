@@ -18,6 +18,7 @@ pub mod basic_atk_str;
 pub mod basic_strategies;
 pub mod dual_wield_str;
 pub mod favored_foe_str;
+pub mod firebolt_str;
 pub mod gwm_str;
 pub mod linear_str;
 pub mod planar_warrior_str;
@@ -72,6 +73,7 @@ impl From<ActionName> for StrategyDecision {
     }
 }
 
+// TODO: add an Option<SpellSlot> or something, for casting spells at higher levels
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
 pub struct StrategicAction {
     pub action_name: ActionName,

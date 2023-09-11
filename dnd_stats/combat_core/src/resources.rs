@@ -6,6 +6,7 @@ use resource_amounts::{RefreshBy, ResourceCap};
 use crate::actions::{ActionName, ActionType};
 use crate::movement::Feet;
 use crate::resources::resource_amounts::ResourceCount;
+use crate::spells::SpellSlot;
 use crate::triggers::TriggerName;
 
 pub mod resource_amounts;
@@ -25,6 +26,7 @@ pub enum ResourceName {
     Movement,
     AN(ActionName),
     TN(TriggerName),
+    SS(SpellSlot),
 }
 
 impl From<ActionType> for ResourceName {
@@ -72,10 +74,25 @@ pub struct Resource {
 
 impl Resource {
     pub fn new(max: ResourceCap, current: ResourceCount) -> Self {
-        Resource {
+        Self {
             max,
             current,
             refresh_map: HashMap::new(),
+            expirations: HashSet::new(),
+        }
+    }
+
+    pub fn refill_lr(max: ResourceCap) -> Self {
+        let mut refresh_map = HashMap::new();
+        refresh_map.insert(RefreshTiming::LongRest, RefreshBy::ToFull);
+        let mut current = ResourceCount::UnCapped;
+        if !max.is_uncapped() {
+            current = ResourceCount::Count(max.cap().unwrap());
+        }
+        Self {
+            max,
+            current,
+            refresh_map,
             expirations: HashSet::new(),
         }
     }
@@ -179,6 +196,20 @@ impl ResourceManager {
         if res.get_current() > 0 {
             self.temp_resources.insert(rn, res);
         }
+    }
+
+    pub fn set_spell_slots(&mut self, slots: [usize;10]) {
+        // cantrips are always uncapped
+        self.add_perm(ResourceName::SS(SpellSlot::Cantrip), Resource::refill_lr(ResourceCap::UnCapped));
+        self.add_perm(ResourceName::SS(SpellSlot::First), Resource::refill_lr(ResourceCap::Hard(slots[1])));
+        self.add_perm(ResourceName::SS(SpellSlot::Second), Resource::refill_lr(ResourceCap::Hard(slots[2])));
+        self.add_perm(ResourceName::SS(SpellSlot::Third), Resource::refill_lr(ResourceCap::Hard(slots[3])));
+        self.add_perm(ResourceName::SS(SpellSlot::Fourth), Resource::refill_lr(ResourceCap::Hard(slots[4])));
+        self.add_perm(ResourceName::SS(SpellSlot::Fifth), Resource::refill_lr(ResourceCap::Hard(slots[5])));
+        self.add_perm(ResourceName::SS(SpellSlot::Sixth), Resource::refill_lr(ResourceCap::Hard(slots[6])));
+        self.add_perm(ResourceName::SS(SpellSlot::Seventh), Resource::refill_lr(ResourceCap::Hard(slots[7])));
+        self.add_perm(ResourceName::SS(SpellSlot::Eighth), Resource::refill_lr(ResourceCap::Hard(slots[8])));
+        self.add_perm(ResourceName::SS(SpellSlot::Ninth), Resource::refill_lr(ResourceCap::Hard(slots[9])));
     }
 
     pub fn has_resource(&self, rn: ResourceName) -> bool {

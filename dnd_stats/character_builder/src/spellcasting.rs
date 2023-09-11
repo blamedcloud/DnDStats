@@ -1,6 +1,8 @@
 use crate::Character;
 use crate::classes::SpellCasterType;
 
+pub mod cantrips;
+
 pub fn character_spell_slots(character: &Character) -> [usize;10] {
     let caster_level = character_caster_level(character);
     spell_slots_by_caster_level(caster_level)

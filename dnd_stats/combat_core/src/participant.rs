@@ -8,6 +8,7 @@ use crate::conditions::ConditionManager;
 use crate::damage::DamageType;
 use crate::resources::ResourceManager;
 use crate::skills::SkillManager;
+use crate::spells::SpellManager;
 use crate::triggers::TriggerManager;
 
 pub trait Participant : Debug {
@@ -19,9 +20,21 @@ pub trait Participant : Debug {
     fn get_skill_manager(&self) -> &SkillManager;
     fn get_action_manager(&self) -> &ActionManager;
     fn get_resource_manager(&self) -> &ResourceManager;
-    fn has_triggers(&self) -> bool;
-    fn get_trigger_manager(&self) -> Option<&TriggerManager>;
     fn get_condition_manager(&self) -> &ConditionManager;
+
+    fn has_triggers(&self) -> bool {
+        false
+    }
+    fn get_trigger_manager(&self) -> Option<&TriggerManager> {
+        None
+    }
+
+    fn has_spells(&self) -> bool {
+        false
+    }
+    fn get_spell_manager(&self) -> Option<&SpellManager> {
+        None
+    }
 
     fn register_pid(&mut self, pid: ParticipantId);
 }

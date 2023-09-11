@@ -11,6 +11,7 @@ use combat_core::conditions::ConditionManager;
 use combat_core::damage::DamageType;
 use combat_core::resources::{ResourceActionType, ResourceManager, ResourceName};
 use combat_core::skills::SkillManager;
+use combat_core::spells::SpellManager;
 use combat_core::triggers::TriggerManager;
 use rand_var::RVError;
 
@@ -78,8 +79,9 @@ pub struct Character {
     combat_actions: ActionBuilder<WeaponAttack, CharDiceExpr>,
     resource_manager: ResourceManager,
     resistances: HashSet<DamageType>,
-    trigger_manager: TriggerManager,
     condition_manager: ConditionManager,
+    trigger_manager: TriggerManager,
+    spell_manager: SpellManager,
 }
 
 impl Character {
@@ -96,8 +98,9 @@ impl Character {
             combat_actions: ActionBuilder::new(),
             resource_manager: ResourceManager::just_action_types(),
             resistances: HashSet::new(),
-            trigger_manager: TriggerManager::new(),
             condition_manager: ConditionManager::new(),
+            trigger_manager: TriggerManager::new(),
+            spell_manager: SpellManager::new(),
         };
         character.calc_ac();
         character.combat_actions = create_character_ab(&character);
@@ -294,12 +297,16 @@ impl Character {
         &self.resistances
     }
 
+    pub fn get_condition_manager(&self) -> &ConditionManager {
+        &self.condition_manager
+    }
+
     pub fn get_trigger_manager(&self) -> &TriggerManager {
         &self.trigger_manager
     }
 
-    pub fn get_condition_manager(&self) -> &ConditionManager {
-        &self.condition_manager
+    pub fn get_spell_manager(&self) -> &SpellManager {
+        &self.spell_manager
     }
 }
 

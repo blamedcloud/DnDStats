@@ -95,10 +95,12 @@ mod tests {
     use character_builder::classes::fighter::ChampionFighter;
     use character_builder::classes::ranger::HorizonWalkerRanger;
     use character_builder::classes::rogue::ScoutRogue;
+    use character_builder::classes::wizard::ConjurationWizard;
     use character_builder::equipment::{ACSource, Armor, Equipment, OffHand, Weapon};
     use character_builder::feature::AbilityScoreIncrease;
     use character_builder::feature::feats::{GreatWeaponMaster, ShieldMaster};
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
+    use character_builder::spellcasting::cantrips::FireBoltCantrip;
     use combat_core::ability_scores::{Ability, AbilityScores};
     use combat_core::D20RollType;
     use combat_core::damage::DamageType;
@@ -106,6 +108,7 @@ mod tests {
     use combat_core::strategy::action_surge_str::ActionSurgeStrBuilder;
     use combat_core::strategy::basic_atk_str::BasicAtkStrBuilder;
     use combat_core::strategy::dual_wield_str::DualWieldStrBuilder;
+    use combat_core::strategy::firebolt_str::FireBoltStrBuilder;
     use combat_core::strategy::gwm_str::GWMStrBldr;
     use combat_core::strategy::linear_str::LinearStrategyBuilder;
     use combat_core::strategy::planar_warrior_str::PlanarWarriorStrBldr;
@@ -315,6 +318,33 @@ mod tests {
             // 3*(2*(2D6) + 3) = 81
             assert_eq!(81, dmg.upper_bound());
             assert_eq!(Rational64::new(3869, 250), dmg.expected_value());
+        }
+    }
+
+    #[test]
+    fn wizard_fire_bolt_test() {
+        let name = String::from("bell");
+        let ability_scores = AbilityScores::new(10,14,14,16,12,8);
+        let equipment = Equipment::new(
+            Armor::no_armor(),
+            Weapon::quarterstaff(),
+            OffHand::Free,
+        );
+        let mut wizard = Character::new(name, ability_scores, equipment);
+        wizard.level_up(ClassName::Wizard, vec!()).unwrap();
+        wizard.level_up(ClassName::Wizard, vec!(Box::new(ChooseSubClass(ConjurationWizard)))).unwrap();
+        wizard.level_up(ClassName::Wizard, vec!(Box::new(FireBoltCantrip(Ability::INT)))).unwrap();
+        let wizard_str = FireBoltStrBuilder;
+
+        let cs = CombatSimulator::dmg_sponge(wizard.clone(), wizard_str, 13, 1).unwrap();
+        let cr_rv = cs.get_cr_rv();
+        {
+            assert_eq!(1, cr_rv.len());
+
+            let dmg = cr_rv.get_dmg(ParticipantId(1));
+            assert_eq!(0, dmg.lower_bound());
+            assert_eq!(20, dmg.upper_bound());
+            assert_eq!(Rational64::new(77, 20), dmg.expected_value());
         }
     }
 }

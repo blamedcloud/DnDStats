@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 use character_builder::Character;
+use character_builder::spellcasting::character_spell_slots;
 use combat_core::ability_scores::AbilityScores;
 use combat_core::actions::{ActionManager, CombatAction, CombatOption, register_pid};
 use combat_core::attack::basic_attack::BasicAttack;
@@ -11,6 +12,7 @@ use combat_core::damage::dice_expr::DiceExpression;
 use combat_core::participant::{Participant, ParticipantId};
 use combat_core::resources::ResourceManager;
 use combat_core::skills::SkillManager;
+use combat_core::spells::SpellManager;
 use combat_core::triggers::TriggerManager;
 
 #[derive(Debug, Clone)]
@@ -24,8 +26,9 @@ pub struct Player {
     skill_manager: SkillManager,
     action_manager: ActionManager,
     resource_manager: ResourceManager,
-    trigger_manager: TriggerManager,
     condition_manager: ConditionManager,
+    trigger_manager: TriggerManager,
+    spell_manager: SpellManager,
 }
 
 impl Player {
@@ -48,11 +51,15 @@ impl From<Character> for Player {
                 CombatAction::GainResource(rn, aa) => CombatAction::GainResource(rn, aa),
                 CombatAction::ApplyBasicCondition(cn) => CombatAction::ApplyBasicCondition(cn),
                 CombatAction::ApplyComplexCondition(cn, cond) => CombatAction::ApplyComplexCondition(cn, cond),
+                CombatAction::CastSpell => CombatAction::CastSpell,
                 CombatAction::ByName => CombatAction::ByName
             };
             let co = CombatOption::new_target(at, ca, req_t);
             am.insert(an, co);
         }
+
+        let mut rm = value.get_resource_manager().clone();
+        rm.set_spell_slots(character_spell_slots(&value));
 
         Self {
             name: value.get_name().to_string(),
@@ -63,9 +70,10 @@ impl From<Character> for Player {
             ability_scores: value.get_ability_scores().clone(),
             skill_manager: value.get_skills().clone(),
             action_manager: am,
-            resource_manager: value.get_resource_manager().clone(),
+            resource_manager: rm,
             trigger_manager: value.get_trigger_manager().clone(),
             condition_manager: value.get_condition_manager().clone(),
+            spell_manager: value.get_spell_manager().clone(),
         }
     }
 }
@@ -103,6 +111,10 @@ impl Participant for Player {
         &self.resource_manager
     }
 
+    fn get_condition_manager(&self) -> &ConditionManager {
+        &self.condition_manager
+    }
+
     fn has_triggers(&self) -> bool {
         true
     }
@@ -111,8 +123,12 @@ impl Participant for Player {
         Some(&self.trigger_manager)
     }
 
-    fn get_condition_manager(&self) -> &ConditionManager {
-        &self.condition_manager
+    fn has_spells(&self) -> bool {
+        true
+    }
+
+    fn get_spell_manager(&self) -> Option<&SpellManager> {
+        Some(&self.spell_manager)
     }
 
     fn register_pid(&mut self, pid: ParticipantId) {

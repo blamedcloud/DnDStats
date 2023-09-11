@@ -4,6 +4,7 @@ use crate::conditions::{Condition, ConditionName};
 use crate::damage::dice_expr::DiceExpression;
 use crate::participant::ParticipantId;
 use crate::resources::ResourceName;
+use crate::spells::SpellName;
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ActionType {
@@ -37,6 +38,7 @@ pub enum CombatAction<A, DE> {
     GainResource(ResourceName, usize),
     ApplyBasicCondition(ConditionName),
     ApplyComplexCondition(ConditionName, Condition),
+    CastSpell,
     ByName,
 }
 
@@ -86,6 +88,7 @@ pub enum ActionName {
     PlanarWarrior,
     FavoredFoeApply,
     FavoredFoeUse,
+    CastSpell(SpellName),
 }
 
 pub type ActionBuilder<A, DE> = HashMap<ActionName, CombatOption<A, DE>>;
