@@ -7,12 +7,12 @@ use rand_var::rand_var::sequential::Pair;
 use crate::{CCError, D20RollType, D20Type};
 use crate::attack::{AccMRV, AtkDmgMap, Attack};
 use crate::conditions::AttackDistance;
-use crate::damage::{DamageDice, DamageFeature, DamageManager, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
-use crate::damage::dice_expr::{DiceExpression, DiceExprTerm};
+use crate::damage::{BasicDamageManager, DamageDice, DamageFeature, DamageManager, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
+use crate::damage::dice_expr::DiceExprTerm;
 
 #[derive(Debug, Clone)]
 pub struct BasicAttack {
-    damage: DamageManager<DiceExpression>,
+    damage: BasicDamageManager,
     hit_bonus: isize,
     crit_lb: isize,
 }
@@ -31,7 +31,7 @@ impl BasicAttack {
         }
     }
 
-    pub fn prebuilt(damage: DamageManager<DiceExpression>, hit_bonus: isize, crit_lb: isize) -> Self {
+    pub fn prebuilt(damage: BasicDamageManager, hit_bonus: isize, crit_lb: isize) -> Self {
         Self {
             damage,
             hit_bonus,
@@ -45,7 +45,7 @@ impl BasicAttack {
         }
     }
 
-    pub fn get_damage(&self) -> &DamageManager<DiceExpression> {
+    pub fn get_damage(&self) -> &BasicDamageManager {
         &self.damage
     }
 }

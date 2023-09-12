@@ -18,6 +18,7 @@ pub mod basic_atk_str;
 pub mod basic_strategies;
 pub mod dual_wield_str;
 pub mod favored_foe_str;
+pub mod fireball_str;
 pub mod firebolt_str;
 pub mod gwm_str;
 pub mod linear_str;

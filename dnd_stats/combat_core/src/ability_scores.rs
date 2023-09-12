@@ -1,10 +1,13 @@
 use std::fmt::{Display, Formatter};
+use rand_var::map_rand_var::MapRandVar;
 
 use rand_var::vec_rand_var::VecRandVar;
 use rand_var::num_rand_var::NumRandVar;
 use rand_var::rand_var::prob_type::RVProb;
 
-use crate::{D20RollType, D20Type};
+use crate::{BinaryOutcome, D20RollType, D20Type};
+use crate::combat_event::CombatEvent;
+use crate::participant::Participant;
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum Ability {
@@ -165,6 +168,41 @@ impl AbilityScores {
             &Ability::CHA => &mut self.charisma,
         };
         score
+    }
+
+    pub fn save_vs_dc<P: RVProb>(&self, ability: &Ability, prof: isize, dc: isize) -> MapRandVar<BinaryOutcome, P> {
+        let save_rv = self.get_score(ability).get_save_rv(prof).into_mrv();
+        save_rv.map_keys(|total| {
+            if total >= dc {
+                BinaryOutcome::Pass
+            } else {
+                BinaryOutcome::Fail
+            }
+        })
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub struct ForceSave {
+    pub ability: Ability,
+    pub save_dc: isize,
+}
+
+impl ForceSave {
+    pub fn new(ability: Ability, save_dc: isize) -> Self {
+        Self {
+            ability,
+            save_dc,
+        }
+    }
+
+    pub fn make_save<P: RVProb>(&self, target: &dyn Participant) -> MapRandVar<CombatEvent, P> {
+        let rv = self.get_save_rv(target.get_ability_scores(), target.get_prof());
+        rv.map_keys(|sr| CombatEvent::SaveResult(sr))
+    }
+
+    pub fn get_save_rv<P: RVProb>(&self, ability_scores: &AbilityScores, prof: isize) -> MapRandVar<BinaryOutcome, P> {
+        ability_scores.save_vs_dc(&self.ability, prof, self.save_dc)
     }
 }
 

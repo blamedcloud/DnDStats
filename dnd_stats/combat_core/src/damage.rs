@@ -9,6 +9,7 @@ use rand_var::rand_var::prob_type::RVProb;
 
 use crate::attack::AtkDmgMap;
 use crate::CCError;
+use crate::damage::dice_expr::DiceExpression;
 
 pub mod dice_expr;
 
@@ -127,6 +128,8 @@ impl DamageTerm {
 }
 
 pub type DamageExpression<DE> = HashMap<ExtendedDamageType, DE>;
+
+pub type BasicDamageManager = DamageManager<DiceExpression>;
 
 #[derive(Debug, Clone)]
 pub struct DamageManager<DE: DiceExpr> {
@@ -318,14 +321,14 @@ impl<DE: DiceExpr + Clone> DamageManager<DE> {
 
 #[cfg(test)]
 mod tests {
+    use num::Rational64;
     use rand_var::vec_rand_var::VRV64;
-    use crate::damage::dice_expr::DiceExpression;
 
     use super::*;
 
     #[test]
     fn test_simple_dmg() {
-        let mut dmg: DamageManager<DiceExpression>  = DamageManager::new();
+        let mut dmg: BasicDamageManager = DamageManager::new();
         dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Die(ExtendedDamageDice::Basic(DamageDice::D6)), ExtendedDamageType::Basic(DamageType::Bludgeoning)));
         dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Const(3), ExtendedDamageType::Basic(DamageType::Bludgeoning)));
         let rv1: VRV64 = dmg.get_base_dmg(&HashSet::new(), vec!(), HashSet::new()).unwrap();
@@ -343,7 +346,7 @@ mod tests {
 
     #[test]
     fn test_brutal_crit() {
-        let mut dmg: DamageManager<DiceExpression>  = DamageManager::new();
+        let mut dmg: BasicDamageManager = DamageManager::new();
         dmg.set_weapon(DamageDice::D12, DamageType::Slashing);
         let weapon_dmg = DamageTerm::new(DiceExprTerm::Die(ExtendedDamageDice::WeaponDice), ExtendedDamageType::WeaponDamage);
         dmg.add_base_dmg(weapon_dmg);
@@ -364,7 +367,7 @@ mod tests {
 
     #[test]
     fn test_flame_strike() {
-        let mut dmg: DamageManager<DiceExpression> = DamageManager::new();
+        let mut dmg: BasicDamageManager = DamageManager::new();
         dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Dice(4, DamageDice::D6.into()), DamageType::Fire.into()));
         dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Dice(4, DamageDice::D6.into()), DamageType::Radiant.into()));
         let rv1: VRV64 = dmg.get_base_dmg(&HashSet::new(), vec!(), HashSet::new()).unwrap();
@@ -385,5 +388,21 @@ mod tests {
         let rv4: VRV64 = dmg.get_half_base_dmg(&resist_fire).unwrap();
         let resist_save_dmg = resist_dmg.half().unwrap();
         assert_eq!(rv4, resist_save_dmg);
+    }
+
+    #[test]
+    fn test_save_fireball() {
+        let mut dmg: BasicDamageManager = DamageManager::new();
+        dmg.add_base_dmg(DamageTerm::new(DiceExprTerm::Dice(8, DamageDice::D6.into()), DamageType::Fire.into()));
+        let full_dmg: VRV64 = dmg.get_base_dmg(&HashSet::new(), vec!(), HashSet::new()).unwrap();
+        assert_eq!(8, full_dmg.lower_bound());
+        assert_eq!(48, full_dmg.upper_bound());
+        assert_eq!(Rational64::new(28, 1), full_dmg.expected_value());
+        let half_dmg = dmg.get_half_base_dmg(&HashSet::new()).unwrap();
+        assert_eq!(4, half_dmg.lower_bound());
+        assert_eq!(24, half_dmg.upper_bound());
+        // note that the expected value of "half 8d6" is 13.75, NOT 14 (= 4 * EV(d6))!!
+        // I thought this was wrong at first, but it is actually correct.
+        assert_eq!(Rational64::new(55, 4), half_dmg.expected_value());
     }
 }

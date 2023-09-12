@@ -4,7 +4,7 @@ use num::{BigRational, Rational64};
 
 use combat_core::actions::{ActionName, ActionType, CombatAction};
 use combat_core::attack::{Attack, AttackResult};
-use combat_core::CCError;
+use combat_core::{BinaryOutcome, CCError};
 use combat_core::combat_event::{CombatEvent, CombatTiming};
 use combat_core::conditions::{ConditionLifetime, ConditionName};
 use combat_core::damage::DamageTerm;
@@ -14,7 +14,7 @@ use combat_core::participant::{Participant, ParticipantId, ParticipantManager, T
 use combat_core::resources::{ResourceActionType, ResourceName};
 use combat_core::resources::resource_amounts::ResourceCount;
 use combat_core::skills::{ContestResult, SkillContest, SkillName};
-use combat_core::spells::{SpellEffect, SpellSlot};
+use combat_core::spells::{SaveDmgSpell, SpellEffect};
 use combat_core::strategy::{StrategicAction, Strategy, StrategyDecision, StrategyManager, Target};
 use combat_core::triggers::{TriggerAction, TriggerContext, TriggerInfo, TriggerResponse, TriggerType};
 use rand_var::map_rand_var::MapRandVar;
@@ -360,8 +360,14 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
                     Err(CSError::InvalidTarget)
                 }
             },
-            SpellEffect::SaveDamage => {
-                Err(CSError::ActionNotHandled)
+            SpellEffect::SaveDamage(sds) => {
+                // TODO: other targets, like AoEs?
+                if let Target::Participant(target_pid) = so.target.unwrap() {
+                    pcs.push(CombatEvent::ForceSave(pid, target_pid, sds.save.ability));
+                    Ok(HandledAction::Children(self.handle_save_dmg(pcs, sds, pid, target_pid)?))
+                } else {
+                    Err(CSError::InvalidTarget)
+                }
             }
             SpellEffect::ApplyCondition => {
                 Err(CSError::ActionNotHandled)
@@ -392,7 +398,7 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         let t_sm = target.get_skill_manager();
         let t_skill = t_sm.choose_grapple_defense(target.get_ability_scores(), target.get_prof());
         pcs.push(CombatEvent::SkillContest(shover_pid, SkillName::Athletics, target_pid, t_skill));
-        let contest = SkillContest::build(shover, target, SkillName::Athletics, t_skill);
+        let contest = SkillContest::build(shover.as_ref(), target.as_ref(), SkillName::Athletics, t_skill);
         let ce_skc = contest.result.map_keys(|cr| CombatEvent::SkCR(cr));
         let children = pcs.split(ce_skc);
         let mut results = Vec::with_capacity(children.len());
@@ -410,6 +416,44 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
             }
         }
         Ok(results)
+    }
+
+    fn handle_save_dmg(&self, pcs: ProbCombatState<'pm, P>, sds: &SaveDmgSpell, atker_pid: ParticipantId, target_pid: ParticipantId) -> ResultVS<'pm, P> {
+        let target = self.get_participant(target_pid);
+        let dead_at_zero = self.is_dead_at_zero(target_pid);
+        // TODO: check conditions for adv/disadv
+        let ce_rv = sds.save.make_save(target.as_ref());
+        let children = pcs.split(ce_rv);
+        let mut results = Vec::with_capacity(children.len());
+        let resist = target.get_resistances();
+        for child in children {
+            if let CombatEvent::SaveResult(sr) = child.get_last_event().unwrap() {
+                match sr {
+                    BinaryOutcome::Fail => {
+                        // TODO: implement something similar to handle_successful_attack for triggers and such
+                        let v = child.add_dmg(&sds.dmg.get_base_dmg(resist, vec!(), HashSet::new())?, target_pid, dead_at_zero);
+                        results.extend(v.into_iter());
+                    },
+                    BinaryOutcome::Pass => {
+                        let fail_dmg: VecRandVar<P>;
+                        if sds.half_dmg {
+                            fail_dmg = sds.dmg.get_half_base_dmg(resist)?;
+                        } else {
+                            fail_dmg = VecRandVar::new_constant(0).unwrap();
+                        }
+                        let v = child.add_dmg(&fail_dmg, target_pid, dead_at_zero);
+                        results.extend(v.into_iter());
+                    },
+                }
+            } else {
+                return Err(CSError::UnknownEvent(child.get_last_event().unwrap()));
+            }
+        }
+        let mut health = Health::ZeroHP;
+        if dead_at_zero {
+            health = Health::Dead;
+        }
+        Ok(self.handle_on_kill_triggers(results, atker_pid, target_pid, health)?)
     }
 
     fn handle_attack(&self, pcs: ProbCombatState<'pm, P>, atk: &impl Attack, atker_pid: ParticipantId, target_pid: ParticipantId) -> ResultVS<'pm, P> {

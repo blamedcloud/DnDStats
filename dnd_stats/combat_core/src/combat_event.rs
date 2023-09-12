@@ -1,5 +1,7 @@
+use crate::ability_scores::Ability;
 use crate::actions::ActionName;
 use crate::attack::AttackResult;
+use crate::BinaryOutcome;
 use crate::conditions::ConditionName;
 use crate::health::Health;
 use crate::participant::ParticipantId;
@@ -76,6 +78,8 @@ pub enum CombatEvent {
     RemoveCond(ConditionName, ParticipantId),
     SkillContest(ParticipantId, SkillName, ParticipantId, SkillName),
     SkCR(ContestResult),
+    ForceSave(ParticipantId, ParticipantId, Ability),
+    SaveResult(BinaryOutcome),
 }
 
 impl From<AttackResult> for CombatEvent {
