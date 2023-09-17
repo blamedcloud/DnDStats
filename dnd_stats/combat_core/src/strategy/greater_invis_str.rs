@@ -36,11 +36,7 @@ impl<'pm> Strategy for GreaterInvisStr<'pm> {
         let my_rm = state.get_rm(me);
         let has_slot = my_rm.get_current(ResourceName::SS(SpellSlot::Fourth)) > 0;
         if has_slot && my_rm.get_current(ResourceName::RAT(ResourceActionType::Action)) > 0 {
-            let target = self.get_first_target(state);
-            return StrategicAction {
-                action_name: ActionName::CastSpell(SpellName::GreaterInvis),
-                target
-            }.into()
+            return StrategicAction::from(ActionName::CastSpell(SpellName::GreaterInvis)).into();
         }
         StrategyDecision::DoNothing
     }

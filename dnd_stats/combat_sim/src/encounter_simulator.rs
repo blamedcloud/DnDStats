@@ -376,8 +376,12 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
                 }
             }
             SpellEffect::ApplyCondition(cn, cond) => {
-                if let Target::Participant(target_pid) = so.target.unwrap() {
-                    pcs.apply_complex_condition(target_pid, *cn, cond.clone());
+                if so.target.is_some() {
+                    if let Target::Participant(target_pid) = so.target.unwrap() {
+                        pcs.apply_complex_condition(target_pid, *cn, cond.clone());
+                    } else {
+                        return Err(CSError::InvalidTarget);
+                    }
                 } else {
                     pcs.apply_complex_condition(pid, *cn, cond.clone());
                 }
@@ -593,6 +597,7 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
     use num::{One, Rational64};
 
     use character_builder::Character;
@@ -606,9 +611,10 @@ mod tests {
     use character_builder::spellcasting::fourth_lvl_spells::GreaterInvisibilitySpell;
     use combat_core::ability_scores::{Ability, AbilityScores};
     use combat_core::actions::{ActionName, AttackType};
-    use combat_core::attack::AttackResult;
+    use combat_core::attack::{Attack, AttackResult};
     use combat_core::attack::basic_attack::BasicAttack;
     use combat_core::combat_event::{CombatEvent, CombatTiming, RoundId};
+    use combat_core::conditions::ConditionName;
     use combat_core::D20RollType;
     use combat_core::damage::{DamageDice, DamageType};
     use combat_core::health::Health;
@@ -1010,7 +1016,7 @@ mod tests {
         let name = String::from("frodo");
         let ability_scores = AbilityScores::new(10,14,14,16,12,8);
         let equipment = Equipment::new(
-            Armor::no_armor(),
+            Armor::mage_armor(),
             Weapon::quarterstaff(),
             OffHand::Free,
         );
@@ -1025,7 +1031,7 @@ mod tests {
         let player = Player::from(wizard.clone());
 
         let ba = BasicAttack::new(5, DamageType::Slashing, 3, DamageDice::D12, 1);
-        let orc = Monster::new(15, 13, 2, ba, 1);
+        let orc = Monster::new(15, 13, 2, ba.clone(), 1);
 
         let mut pm = ParticipantManager::new();
         pm.add_player(Box::new(player)).unwrap();
@@ -1039,9 +1045,98 @@ mod tests {
         let mut em: ES64 = EncounterSimulator::new(&sm).unwrap();
         em.simulate_n_rounds(1).unwrap();
         {
+            let wizard_pid = ParticipantId(0);
             let cs_rv = em.get_state_rv();
             assert_eq!(7, cs_rv.len());
-            // TODO flesh out this test
+            // case 0: miss
+            {
+                let pcs = cs_rv.get_pcs(0);
+                assert!(pcs.get_state().get_cm(wizard_pid).has_condition(&ConditionName::Concentration));
+                assert!(pcs.get_state().get_cm(wizard_pid).has_condition(&ConditionName::Invisible));
+                let dmg = pcs.get_dmg(wizard_pid);
+                assert_eq!(0, dmg.lower_bound());
+                assert_eq!(0, dmg.upper_bound());
+
+                let miss: Rational64 = ba.get_ar_rv(D20RollType::Disadvantage, wizard.get_ac() as isize).unwrap().pdf(AttackResult::Miss);
+                assert_eq!(&miss, pcs.get_prob());
+            }
+            let hit: Rational64 = ba.get_ar_rv(D20RollType::Disadvantage, wizard.get_ac() as isize).unwrap().pdf(AttackResult::Hit);
+            let conc_save: VRV64 = wizard.get_ability_scores().constitution.get_save_rv(wizard.get_prof_bonus() as isize);
+            // case 1: hit -> keep conc
+            {
+                let pcs = cs_rv.get_pcs(1);
+                assert!(pcs.get_state().get_cm(wizard_pid).has_condition(&ConditionName::Concentration));
+                assert!(pcs.get_state().get_cm(wizard_pid).has_condition(&ConditionName::Invisible));
+                let dmg = pcs.get_dmg(wizard_pid);
+                assert_eq!(4, dmg.lower_bound());
+                assert_eq!(15, dmg.upper_bound());
+
+                assert_eq!(hit * (Rational64::one() - conc_save.cdf_exclusive(10)), pcs.get_prob().clone());
+            }
+            // case 2: hit -> fail conc
+            {
+                let pcs = cs_rv.get_pcs(2);
+                assert!(!pcs.get_state().get_cm(wizard_pid).has_condition(&ConditionName::Concentration));
+                assert!(!pcs.get_state().get_cm(wizard_pid).has_condition(&ConditionName::Invisible));
+                let dmg = pcs.get_dmg(wizard_pid);
+                assert_eq!(4, dmg.lower_bound());
+                assert_eq!(15, dmg.upper_bound());
+
+                assert_eq!(hit * conc_save.cdf_exclusive(10), pcs.get_prob().clone());
+            }
+            let crit: Rational64 = ba.get_ar_rv(D20RollType::Disadvantage, wizard.get_ac() as isize).unwrap().pdf(AttackResult::Crit);
+            let crit_dmg: VRV64 = ba.get_crit_dmg(&HashSet::new(), vec!(), HashSet::new()).unwrap();
+            assert_eq!(5, crit_dmg.lower_bound());
+            assert_eq!(27, crit_dmg.upper_bound());
+            let mut keep_conc = crit_dmg.cdf(21) * (Rational64::one() - conc_save.cdf_exclusive(10));
+            keep_conc += (crit_dmg.pdf(22) + crit_dmg.pdf(23)) * (Rational64::one() - conc_save.cdf_exclusive(11));
+            keep_conc += (crit_dmg.pdf(24) + crit_dmg.pdf(25)) * (Rational64::one() - conc_save.cdf_exclusive(12));
+            keep_conc += (crit_dmg.pdf(26) + crit_dmg.pdf(27)) * (Rational64::one() - conc_save.cdf_exclusive(13));
+            // case 3: crit -> keep conc -> no bloody
+            {
+                let pcs = cs_rv.get_pcs(3);
+                assert!(pcs.get_state().get_cm(wizard_pid).has_condition(&ConditionName::Concentration));
+                assert!(pcs.get_state().get_cm(wizard_pid).has_condition(&ConditionName::Invisible));
+                let dmg = pcs.get_dmg(wizard_pid);
+                assert_eq!(5, dmg.lower_bound());
+                assert_eq!(21, dmg.upper_bound());
+
+                assert_eq!(crit * keep_conc * crit_dmg.cdf(21), pcs.get_prob().clone());
+            }
+            // case 4: crit -> keep conc -> bloody
+            {
+                let pcs = cs_rv.get_pcs(4);
+                assert!(pcs.get_state().get_cm(wizard_pid).has_condition(&ConditionName::Concentration));
+                assert!(pcs.get_state().get_cm(wizard_pid).has_condition(&ConditionName::Invisible));
+                let dmg = pcs.get_dmg(wizard_pid);
+                assert_eq!(22, dmg.lower_bound());
+                assert_eq!(27, dmg.upper_bound());
+
+                assert_eq!(crit * keep_conc * (Rational64::one() - crit_dmg.cdf(21)), pcs.get_prob().clone());
+            }
+            let drop_conc = Rational64::one() - keep_conc;
+            // case 5: crit -> drop conc -> no bloody
+            {
+                let pcs = cs_rv.get_pcs(5);
+                assert!(!pcs.get_state().get_cm(wizard_pid).has_condition(&ConditionName::Concentration));
+                assert!(!pcs.get_state().get_cm(wizard_pid).has_condition(&ConditionName::Invisible));
+                let dmg = pcs.get_dmg(wizard_pid);
+                assert_eq!(5, dmg.lower_bound());
+                assert_eq!(21, dmg.upper_bound());
+
+                assert_eq!(crit * drop_conc * crit_dmg.cdf(21), pcs.get_prob().clone());
+            }
+            // case 6: crit -> drop conc -> bloody
+            {
+                let pcs = cs_rv.get_pcs(6);
+                assert!(!pcs.get_state().get_cm(wizard_pid).has_condition(&ConditionName::Concentration));
+                assert!(!pcs.get_state().get_cm(wizard_pid).has_condition(&ConditionName::Invisible));
+                let dmg = pcs.get_dmg(wizard_pid);
+                assert_eq!(22, dmg.lower_bound());
+                assert_eq!(27, dmg.upper_bound());
+
+                assert_eq!(crit * drop_conc * (Rational64::one() - crit_dmg.cdf(21)), pcs.get_prob().clone());
+            }
         }
     }
 }

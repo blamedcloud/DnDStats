@@ -25,6 +25,14 @@ impl Armor {
         }
     }
 
+    pub fn mage_armor() -> Self {
+        Armor {
+            armor_type: ArmorType::NoArmor,
+            name: String::from("Mage Armor"),
+            ac: ACSource { base_ac: 13, magic_bonus_ac: None }
+        }
+    }
+
     pub fn padded() -> Self {
         Armor {
             armor_type: ArmorType::LightArmor,
