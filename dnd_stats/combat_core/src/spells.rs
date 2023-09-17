@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use crate::ability_scores::ForceSave;
 use crate::attack::basic_attack::BasicAttack;
+use crate::conditions::{Condition, ConditionName};
 use crate::damage::BasicDamageManager;
 
 // yes I could just use numbers, no I don't feel like it
@@ -22,13 +23,14 @@ pub enum SpellSlot {
 pub enum SpellName {
     FireBolt,
     Fireball,
+    GreaterInvis,
 }
 
 #[derive(Debug, Clone)]
 pub enum SpellEffect {
     SpellAttack(BasicAttack),
     SaveDamage(SaveDmgSpell),
-    ApplyCondition
+    ApplyCondition(ConditionName, Condition),
 }
 
 #[derive(Debug, Clone)]
@@ -52,6 +54,7 @@ impl SaveDmgSpell {
 pub struct Spell {
     pub slot: SpellSlot,
     pub effect: SpellEffect,
+    pub concentration: bool,
 }
 
 impl Spell {
@@ -59,6 +62,15 @@ impl Spell {
         Self {
             slot,
             effect,
+            concentration: false,
+        }
+    }
+
+    pub fn concentration(slot: SpellSlot, effect: SpellEffect, concentration: bool) -> Self {
+        Self {
+            slot,
+            effect,
+            concentration,
         }
     }
 }

@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::ptr;
 
 use combat_core::actions::{ActionName, ActionType};
+use combat_core::BinaryOutcome;
 use combat_core::combat_event::{CombatEvent, CombatTiming};
 use combat_core::combat_state::CombatState;
 use combat_core::conditions::{Condition, ConditionLifetime, ConditionManager, ConditionName};
@@ -230,7 +231,69 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
         result
     }
 
-    pub fn add_dmg(mut self, dmg: &VecRandVar<P>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
+    pub fn add_dmg(self, dmg: &VecRandVar<P>, target_pid: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
+        if self.get_cm(target_pid).has_condition(&ConditionName::Concentration) && dmg.upper_bound() > 0 {
+            let conc_outcome = self.get_conc_outcomes(dmg, target_pid);
+            let child_state = self.state.into_child();
+            let mut vec = Vec::with_capacity(2);
+
+            let keep_conc = Self {
+                participants: self.participants,
+                state: child_state.clone(),
+                dmg: self.dmg.clone(),
+                prob: self.prob.clone() * conc_outcome.pdf(BinaryOutcome::Pass)
+            };
+            if keep_conc.prob > P::zero() {
+                vec.extend(keep_conc.handle_dmg(dmg, target_pid, dead_at_zero).into_iter());
+            }
+
+            let mut drop_conc = Self {
+                participants: self.participants,
+                state: child_state,
+                dmg: self.dmg,
+                prob: self.prob * conc_outcome.pdf(BinaryOutcome::Fail)
+            };
+            if drop_conc.prob > P::zero() {
+                drop_conc.remove_condition_by_lifetime(target_pid, &ConditionLifetime::FailConcSave);
+                drop_conc.remove_condition_by_lifetime(target_pid, &ConditionLifetime::DropConcentration);
+                // TODO: haste does something when conc is dropped. not sure how to handle that yet.
+                vec.extend(drop_conc.handle_dmg(dmg, target_pid, dead_at_zero).into_iter());
+            }
+            vec
+        } else {
+            self.handle_dmg(dmg, target_pid, dead_at_zero)
+        }
+    }
+
+    fn get_conc_outcomes(&self, dmg_rv: &VecRandVar<P>, pid: ParticipantId) -> MapRandVar<BinaryOutcome, P> {
+        let target = self.participants.get_participant(pid).participant.as_ref();
+        let conc_save = target.get_ability_scores().constitution.get_save_rv(target.get_prof());
+        let mut pass_total = P::zero();
+        let mut fail_total = P::zero();
+        for dmg in dmg_rv.get_keys() {
+            if dmg <= 0 { // no save needed
+                pass_total = pass_total + dmg_rv.pdf(dmg);
+            } else {
+                let dc;
+                if dmg <= 21 {
+                    dc = 10;
+                } else {
+                    dc = dmg/2;
+                }
+                let fail: P = conc_save.cdf_exclusive(dc);
+                let pass = P::one() - fail.clone();
+
+                pass_total = pass_total + pass * dmg_rv.pdf(dmg);
+                fail_total = fail_total + fail * dmg_rv.pdf(dmg);
+            }
+        }
+        let mut map = BTreeMap::new();
+        map.insert(BinaryOutcome::Pass, pass_total);
+        map.insert(BinaryOutcome::Fail, fail_total);
+        MapRandVar::from_map(map).unwrap()
+    }
+
+    fn handle_dmg(mut self, dmg: &VecRandVar<P>, target: ParticipantId, dead_at_zero: bool) -> Vec<Self> {
         let old_health = self.get_health(target);
         let hp = self.get_max_hp(target);
         let bloody_hp = Health::calc_bloodied(hp);

@@ -30,7 +30,13 @@ impl ConditionName {
                     effects,
                     lifetimes: vec!(ConditionLifetime::UntilSpendAT(ActionType::HalfMove))
                 })
-            }
+            },
+            ConditionName::Concentration => {
+                Ok(Condition {
+                    effects: vec!(),
+                    lifetimes: vec!(ConditionLifetime::FailConcSave)
+                })
+            },
             _ => Err(CCError::UnknownCondition)
         }
     }
@@ -73,6 +79,8 @@ pub enum ConditionLifetime {
     // conditions don't get removed on death, but notifications
     // to the killer are useful (for hunter's mark for example)
     NotifyOnDeath(ParticipantId),
+    DropConcentration,
+    FailConcSave,
 }
 
 #[derive(Debug, Clone, PartialEq)]

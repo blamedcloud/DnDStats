@@ -270,6 +270,9 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
                         if rm.has_resource(ResourceName::SS(ss)) && rm.get_current(ResourceName::SS(ss)) == 0 {
                             has_resources = false;
                         }
+                        if spell.unwrap().concentration && pcs.get_cm(pid).has_condition(&ConditionName::Concentration) {
+                            has_spell = false;
+                        }
                     } else {
                         has_spell = false;
                     }
@@ -351,6 +354,9 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         let caster = self.get_participant(pid);
         let spell = caster.get_spell_manager().unwrap().get(&spell_name).unwrap();
         pcs.spend_spell_slot(pid, spell.slot);
+        if spell.concentration {
+            pcs.apply_default_condition(pid, ConditionName::Concentration);
+        }
         match &spell.effect {
             SpellEffect::SpellAttack(atk) => {
                 if let Target::Participant(target_pid) = so.target.unwrap() {
@@ -369,8 +375,13 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
                     Err(CSError::InvalidTarget)
                 }
             }
-            SpellEffect::ApplyCondition => {
-                Err(CSError::ActionNotHandled)
+            SpellEffect::ApplyCondition(cn, cond) => {
+                if let Target::Participant(target_pid) = so.target.unwrap() {
+                    pcs.apply_complex_condition(target_pid, *cn, cond.clone());
+                } else {
+                    pcs.apply_complex_condition(pid, *cn, cond.clone());
+                }
+                Ok(HandledAction::InPlace(pcs))
             }
         }
     }
@@ -587,10 +598,12 @@ mod tests {
     use character_builder::Character;
     use character_builder::classes::{ChooseSubClass, ClassName};
     use character_builder::classes::ranger::HorizonWalkerRanger;
+    use character_builder::classes::wizard::ConjurationWizard;
     use character_builder::equipment::{Armor, Equipment, OffHand, Weapon};
     use character_builder::feature::AbilityScoreIncrease;
     use character_builder::feature::feats::GreatWeaponMaster;
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
+    use character_builder::spellcasting::fourth_lvl_spells::GreaterInvisibilitySpell;
     use combat_core::ability_scores::{Ability, AbilityScores};
     use combat_core::actions::{ActionName, AttackType};
     use combat_core::attack::AttackResult;
@@ -604,6 +617,7 @@ mod tests {
     use combat_core::strategy::basic_atk_str::BasicAtkStrBuilder;
     use combat_core::strategy::basic_strategies::DoNothingBuilder;
     use combat_core::strategy::favored_foe_str::FavoredFoeStrBldr;
+    use combat_core::strategy::greater_invis_str::GreaterInvisStrBuilder;
     use combat_core::strategy::gwm_str::GWMStrBldr;
     use combat_core::strategy::linear_str::PairStrBuilder;
     use combat_core::strategy::second_wind_str::SecondWindStrBuilder;
@@ -988,6 +1002,46 @@ mod tests {
             assert_eq!(0, dmg.lower_bound());
             assert_eq!(32, dmg.upper_bound());
             assert_eq!(Rational64::new(141, 20), dmg.expected_value());
+        }
+    }
+
+    #[test]
+    fn conc_drop_test() {
+        let name = String::from("frodo");
+        let ability_scores = AbilityScores::new(10,14,14,16,12,8);
+        let equipment = Equipment::new(
+            Armor::no_armor(),
+            Weapon::quarterstaff(),
+            OffHand::Free,
+        );
+        let mut wizard = Character::new(name, ability_scores, equipment);
+        wizard.level_up(ClassName::Wizard, vec!()).unwrap();
+        wizard.level_up(ClassName::Wizard, vec!(Box::new(ChooseSubClass(ConjurationWizard)))).unwrap();
+        wizard.level_up_basic().unwrap();
+        wizard.level_up(ClassName::Wizard, vec!(Box::new(AbilityScoreIncrease::from(Ability::INT)))).unwrap();
+        wizard.level_up_basic().unwrap();
+        wizard.level_up_basic().unwrap();
+        wizard.level_up(ClassName::Wizard, vec!(Box::new(GreaterInvisibilitySpell))).unwrap();
+        let player = Player::from(wizard.clone());
+
+        let ba = BasicAttack::new(5, DamageType::Slashing, 3, DamageDice::D12, 1);
+        let orc = Monster::new(15, 13, 2, ba, 1);
+
+        let mut pm = ParticipantManager::new();
+        pm.add_player(Box::new(player)).unwrap();
+        pm.add_enemy(Box::new(orc.clone())).unwrap();
+        pm.compile();
+
+        let mut sm = StrategyManager::new(&pm).unwrap();
+        sm.add_participant(GreaterInvisStrBuilder).unwrap();
+        sm.add_participant(BasicAtkStrBuilder).unwrap();
+
+        let mut em: ES64 = EncounterSimulator::new(&sm).unwrap();
+        em.simulate_n_rounds(1).unwrap();
+        {
+            let cs_rv = em.get_state_rv();
+            assert_eq!(7, cs_rv.len());
+            // TODO flesh out this test
         }
     }
 }

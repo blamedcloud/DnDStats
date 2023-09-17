@@ -3,6 +3,7 @@ use crate::classes::SpellCasterType;
 
 pub mod cantrips;
 pub mod third_lvl_spells;
+pub mod fourth_lvl_spells;
 
 pub fn character_spell_slots(character: &Character) -> [usize;10] {
     let caster_level = character_caster_level(character);
