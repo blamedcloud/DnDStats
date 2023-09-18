@@ -89,6 +89,7 @@ pub enum ActionName {
     FavoredFoeApply,
     FavoredFoeUse,
     CastSpell(SpellName),
+    HasteAction,
 }
 
 pub type ActionBuilder<A, DE> = HashMap<ActionName, CombatOption<A, DE>>;

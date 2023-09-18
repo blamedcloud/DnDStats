@@ -22,6 +22,7 @@ pub mod fireball_str;
 pub mod firebolt_str;
 pub mod greater_invis_str;
 pub mod gwm_str;
+pub mod haste_str;
 pub mod linear_str;
 pub mod planar_warrior_str;
 pub mod second_wind_str;

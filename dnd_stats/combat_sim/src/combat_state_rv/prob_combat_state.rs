@@ -5,7 +5,7 @@ use combat_core::actions::{ActionName, ActionType};
 use combat_core::BinaryOutcome;
 use combat_core::combat_event::{CombatEvent, CombatTiming};
 use combat_core::combat_state::CombatState;
-use combat_core::conditions::{Condition, ConditionLifetime, ConditionManager, ConditionName};
+use combat_core::conditions::{Condition, ConditionEffect, ConditionLifetime, ConditionManager, ConditionName};
 use combat_core::health::Health;
 use combat_core::participant::{ParticipantId, ParticipantManager};
 use combat_core::resources::{RefreshTiming, ResourceManager, ResourceName};
@@ -111,6 +111,7 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
     }
 
     pub fn apply_complex_condition(&mut self, pid: ParticipantId, cn: ConditionName, cond: Condition) {
+        self.handle_instant_cond_effects(pid, &cond);
         let cm = self.get_cm_mut(pid);
         cm.add_condition(cn, cond);
         self.push(CombatEvent::ApplyCond(cn, pid));
@@ -120,6 +121,18 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
         let cm = self.get_cm_mut(pid);
         cm.add_basic_condition(cn).unwrap();
         self.push(CombatEvent::ApplyCond(cn, pid));
+    }
+
+    fn handle_instant_cond_effects(&mut self, pid: ParticipantId, cond: &Condition) {
+        for effect in cond.effects.iter() {
+            match effect {
+                ConditionEffect::ChangeResourceCap(rn, cap) => {
+                    let rm = self.get_rm_mut(pid);
+                    rm.set_cap(rn, *cap);
+                },
+                _ => {},
+            }
+        }
     }
 
     pub fn remove_condition(&mut self, pid: ParticipantId, cn: ConditionName, at: ActionType) {

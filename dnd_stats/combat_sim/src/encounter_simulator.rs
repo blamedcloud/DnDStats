@@ -609,6 +609,7 @@ mod tests {
     use character_builder::feature::feats::GreatWeaponMaster;
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
     use character_builder::spellcasting::fourth_lvl_spells::GreaterInvisibilitySpell;
+    use character_builder::spellcasting::third_lvl_spells::HasteSpell;
     use combat_core::ability_scores::{Ability, AbilityScores};
     use combat_core::actions::{ActionName, AttackType};
     use combat_core::attack::{Attack, AttackResult};
@@ -620,12 +621,14 @@ mod tests {
     use combat_core::health::Health;
     use combat_core::participant::{Participant, ParticipantId, ParticipantManager};
     use combat_core::resources::ResourceName;
+    use combat_core::spells::SpellSlot;
     use combat_core::strategy::basic_atk_str::BasicAtkStrBuilder;
     use combat_core::strategy::basic_strategies::DoNothingBuilder;
     use combat_core::strategy::favored_foe_str::FavoredFoeStrBldr;
     use combat_core::strategy::greater_invis_str::GreaterInvisStrBuilder;
     use combat_core::strategy::gwm_str::GWMStrBldr;
-    use combat_core::strategy::linear_str::PairStrBuilder;
+    use combat_core::strategy::haste_str::HasteStrBuilder;
+    use combat_core::strategy::linear_str::{LinearStrategyBuilder, PairStrBuilder};
     use combat_core::strategy::second_wind_str::SecondWindStrBuilder;
     use combat_core::strategy::StrategyManager;
     use rand_var::num_rand_var::NumRandVar;
@@ -1137,6 +1140,75 @@ mod tests {
 
                 assert_eq!(crit * drop_conc * (Rational64::one() - crit_dmg.cdf(21)), pcs.get_prob().clone());
             }
+        }
+    }
+
+    #[test]
+    fn haste_dmg_test() {
+        let name = String::from("Speedy");
+        let ability_scores = AbilityScores::new(12,16,16,8,13,10);
+        let equipment = Equipment::new(
+            Armor::studded_leather(),
+            Weapon::longbow(),
+            OffHand::Free,
+        );
+        let mut ranger = Character::new(name, ability_scores, equipment);
+        ranger.level_up(ClassName::Ranger, vec!()).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(FightingStyle(FightingStyles::Archery)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(HorizonWalkerRanger)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
+        ranger.level_up_basic().unwrap();
+        ranger.level_up_basic().unwrap();
+        ranger.level_up_basic().unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(HasteSpell))).unwrap();
+        let player = Player::from(ranger.clone());
+        let mut player_str = LinearStrategyBuilder::new();
+        player_str.add_str_bldr(Box::new(HasteStrBuilder));
+        player_str.add_str_bldr(Box::new(BasicAtkStrBuilder));
+
+        let dummy = TargetDummy::new(isize::MAX, 16);
+
+        let mut pm = ParticipantManager::new();
+        pm.add_player(Box::new(player)).unwrap();
+        pm.add_enemy(Box::new(dummy)).unwrap();
+        pm.compile();
+
+        let mut sm = StrategyManager::new(&pm).unwrap();
+        sm.add_participant(player_str).unwrap();
+        sm.add_participant(DoNothingBuilder).unwrap();
+
+        let mut em: ES64 = EncounterSimulator::new(&sm).unwrap();
+        em.set_do_merges(true);
+        em.simulate_n_rounds(1).unwrap();
+        let ranger_pid = ParticipantId(0);
+        let dummy_pid = ParticipantId(1);
+        {
+            let cs_rv = em.get_state_rv();
+            assert_eq!(1, cs_rv.len());
+            let pcs = cs_rv.get_pcs(0);
+            assert_eq!(1, pcs.get_rm(ranger_pid).get_current(ResourceName::SS(SpellSlot::Third)).count().unwrap());
+            assert!(pcs.get_cm(ranger_pid).has_condition(&ConditionName::Hasted));
+            assert!(pcs.get_cm(ranger_pid).has_condition(&ConditionName::Concentration));
+            let dmg = pcs.get_dmg(dummy_pid);
+            // one (haste) attack maxes out at 2d8+5 = 21 dmg
+            assert_eq!(0, dmg.lower_bound());
+            assert_eq!(21, dmg.upper_bound());
+            assert_eq!(Rational64::new(313, 40), dmg.expected_value());
+        }
+        em.simulate_n_rounds(1).unwrap();
+        {
+            let cs_rv = em.get_state_rv();
+            assert_eq!(1, cs_rv.len());
+            let pcs = cs_rv.get_pcs(0);
+            assert_eq!(1, pcs.get_rm(ranger_pid).get_current(ResourceName::SS(SpellSlot::Third)).count().unwrap());
+            assert!(pcs.get_cm(ranger_pid).has_condition(&ConditionName::Hasted));
+            assert!(pcs.get_cm(ranger_pid).has_condition(&ConditionName::Concentration));
+            let dmg = pcs.get_dmg(dummy_pid);
+            // 3 more attacks for a max of 4 * 21 = 84 dmg
+            assert_eq!(0, dmg.lower_bound());
+            assert_eq!(84, dmg.upper_bound());
+            assert_eq!(Rational64::new(313, 10), dmg.expected_value());
         }
     }
 }

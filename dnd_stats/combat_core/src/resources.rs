@@ -130,6 +130,13 @@ impl Resource {
             self.current += uses;
         }
     }
+    pub fn gain_to_full(&mut self) {
+        if self.max.is_uncapped() {
+            self.current = ResourceCount::UnCapped;
+        } else {
+            self.current.set_count(self.max.cap().unwrap());
+        }
+    }
     pub fn drain(&mut self) {
         self.current.set_count(0);
     }
@@ -232,6 +239,14 @@ impl ResourceManager {
         let temp_c = self.temp_resources.get(&rn).map(|r| r.get_max()).unwrap_or(ResourceCap::Hard(0));
         let perm_c = self.perm_resources.get(&rn).map(|r| r.get_max()).unwrap_or(ResourceCap::Hard(0));
         temp_c + perm_c
+    }
+
+    pub fn set_cap(&mut self, rn: &ResourceName, cap: ResourceCap) {
+        if self.perm_resources.contains_key(rn) {
+            let res = self.perm_resources.get_mut(rn).unwrap();
+            res.set_max(cap);
+            res.gain_to_full();
+        }
     }
 
     pub fn get_current(&self, rn: ResourceName) -> ResourceCount {

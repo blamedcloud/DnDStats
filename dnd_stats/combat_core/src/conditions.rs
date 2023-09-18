@@ -7,6 +7,8 @@ use crate::actions::ActionType;
 use crate::combat_event::CombatTiming;
 use crate::damage::{DamageFeature, DamageTerm};
 use crate::participant::ParticipantId;
+use crate::resources::resource_amounts::ResourceCap;
+use crate::resources::ResourceName;
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum ConditionName {
@@ -15,6 +17,7 @@ pub enum ConditionName {
     Prone,
     PlanarWarriorTarget,
     FavoredFoe,
+    Hasted,
 }
 
 impl ConditionName {
@@ -68,6 +71,9 @@ pub enum ConditionEffect {
     AtkTargetedMod(AttackDistance, D20RollType), // ~ "attacks against you have advantage"
     TakeBonusDmgFrom(DamageTerm, ParticipantId), // planar warrior / hunter's mark
     TakeDmgFeatureFrom(DamageFeature, ParticipantId), // planar warrior convert to force dmg
+    ACBonus(isize),
+    SaveMod(Ability, D20RollType),
+    ChangeResourceCap(ResourceName, ResourceCap),
 }
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]

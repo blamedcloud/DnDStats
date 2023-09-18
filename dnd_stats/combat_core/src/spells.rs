@@ -24,6 +24,7 @@ pub enum SpellName {
     FireBolt,
     Fireball,
     GreaterInvis,
+    Haste,
 }
 
 #[derive(Debug, Clone)]
