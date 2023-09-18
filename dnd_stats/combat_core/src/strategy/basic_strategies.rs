@@ -25,11 +25,11 @@ impl Strategy for DoNothing {
         panic!("Should never call this!");
     }
 
-    fn get_action(&self, _: &CombatState) -> StrategyDecision {
+    fn choose_action(&self, _: &CombatState) -> StrategyDecision {
         StrategyDecision::DoNothing
     }
 
-    fn handle_trigger(&self, _: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
+    fn choose_triggers(&self, _: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
         Vec::new()
     }
 }
@@ -57,7 +57,7 @@ impl Strategy for RemoveConditions {
         self.my_pid
     }
 
-    fn get_action(&self, state: &CombatState) -> StrategyDecision {
+    fn choose_action(&self, state: &CombatState) -> StrategyDecision {
         let my_cm = state.get_cm(self.get_my_pid());
         for at in ActionType::iterator() {
             let lifetime = ConditionLifetime::UntilSpendAT(at);
@@ -69,7 +69,7 @@ impl Strategy for RemoveConditions {
         StrategyDecision::DoNothing
     }
 
-    fn handle_trigger(&self, _: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
+    fn choose_triggers(&self, _: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
         Vec::new()
     }
 }

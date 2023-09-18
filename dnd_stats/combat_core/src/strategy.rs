@@ -100,9 +100,9 @@ pub trait Strategy : Debug {
     fn get_participants(&self) -> &Vec<TeamMember>;
     fn get_my_pid(&self) -> ParticipantId;
 
-    fn get_action(&self, state: &CombatState) -> StrategyDecision;
+    fn choose_action(&self, state: &CombatState) -> StrategyDecision;
 
-    fn handle_trigger(&self, ti: TriggerInfo, state: &CombatState) -> Vec<TriggerResponse>;
+    fn choose_triggers(&self, ti: TriggerInfo, state: &CombatState) -> Vec<TriggerResponse>;
 
     fn get_me(&self) -> &Box<dyn Participant> {
         &self.get_participants().get(self.get_my_pid().0).unwrap().participant

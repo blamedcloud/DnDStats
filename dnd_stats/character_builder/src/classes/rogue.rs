@@ -117,8 +117,8 @@ impl Feature for SneakAttack {
         let response = (TriggerAction::AddAttackDamage(damage), ResourceName::TN(TriggerName::SneakAttack)).into();
         let on_hit = TriggerInfo::new(TriggerType::SuccessfulAttack, TriggerContext::AR(AttackResult::Hit));
         let on_crit = TriggerInfo::new(TriggerType::SuccessfulAttack, TriggerContext::AR(AttackResult::Crit));
-        character.trigger_manager.add_trigger(on_hit, TriggerName::SneakAttack);
-        character.trigger_manager.add_trigger(on_crit, TriggerName::SneakAttack);
+        character.trigger_manager.add_manual_trigger(on_hit, TriggerName::SneakAttack);
+        character.trigger_manager.add_manual_trigger(on_crit, TriggerName::SneakAttack);
         character.trigger_manager.set_response(TriggerName::SneakAttack, response);
 
         let mut res = Resource::from(ResourceCap::Hard(1));

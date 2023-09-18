@@ -45,11 +45,11 @@ impl<'pm> Strategy for SneakAttackStr<'pm> {
         self.my_pid
     }
 
-    fn get_action(&self, _: &CombatState) -> StrategyDecision {
+    fn choose_action(&self, _: &CombatState) -> StrategyDecision {
         StrategyDecision::DoNothing
     }
 
-    fn handle_trigger(&self, ti: TriggerInfo, state: &CombatState) -> Vec<TriggerResponse> {
+    fn choose_triggers(&self, ti: TriggerInfo, state: &CombatState) -> Vec<TriggerResponse> {
         let mut v = Vec::new();
         if ti.tt == TriggerType::SuccessfulAttack {
             let my_rm = state.get_rm(self.my_pid);

@@ -114,12 +114,13 @@ impl AbilityScore {
         &self.default_roll_type
     }
 
-    pub fn get_save_rv<P: RVProb>(&self, prof: isize) -> VecRandVar<P> {
+    pub fn get_save_rv<P: RVProb>(&self, prof: isize, save_mod: D20RollType) -> VecRandVar<P> {
         let mut bonus = (self.get_mod() + self.save_bonus) as isize;
         if self.prof_save {
             bonus += prof;
         }
-        let d20 = self.default_roll_type.get_rv(&self.d20_type);
+        let roll_type = self.default_roll_type + save_mod;
+        let d20 = roll_type.get_rv(&self.d20_type);
         d20.add_const(bonus)
     }
 }
@@ -170,8 +171,8 @@ impl AbilityScores {
         score
     }
 
-    pub fn save_vs_dc<P: RVProb>(&self, ability: &Ability, prof: isize, dc: isize) -> MapRandVar<BinaryOutcome, P> {
-        let save_rv = self.get_score(ability).get_save_rv(prof).into_mrv();
+    pub fn save_vs_dc<P: RVProb>(&self, ability: &Ability, prof: isize, dc: isize, save_mod: D20RollType) -> MapRandVar<BinaryOutcome, P> {
+        let save_rv = self.get_score(ability).get_save_rv(prof, save_mod).into_mrv();
         save_rv.map_keys(|total| {
             if total >= dc {
                 BinaryOutcome::Pass
@@ -197,12 +198,16 @@ impl ForceSave {
     }
 
     pub fn make_save<P: RVProb>(&self, target: &dyn Participant) -> MapRandVar<CombatEvent, P> {
-        let rv = self.get_save_rv(target.get_ability_scores(), target.get_prof());
+        self.make_save_at(target, D20RollType::Normal)
+    }
+
+    pub fn make_save_at<P: RVProb>(&self, target: &dyn Participant, save_mod: D20RollType) -> MapRandVar<CombatEvent, P> {
+        let rv = self.get_save_rv(target.get_ability_scores(), target.get_prof(), save_mod);
         rv.map_keys(|sr| CombatEvent::SaveResult(sr))
     }
 
-    pub fn get_save_rv<P: RVProb>(&self, ability_scores: &AbilityScores, prof: isize) -> MapRandVar<BinaryOutcome, P> {
-        ability_scores.save_vs_dc(&self.ability, prof, self.save_dc)
+    pub fn get_save_rv<P: RVProb>(&self, ability_scores: &AbilityScores, prof: isize, save_mod: D20RollType) -> MapRandVar<BinaryOutcome, P> {
+        ability_scores.save_vs_dc(&self.ability, prof, self.save_dc, save_mod)
     }
 }
 

@@ -1,10 +1,9 @@
 use crate::actions::{ActionName, AttackType};
-use crate::attack::AttackResult;
 use crate::combat_state::CombatState;
 use crate::participant::{ParticipantId, TeamMember};
 use crate::resources::{ResourceActionType, ResourceName};
 use crate::strategy::{StrategicAction, Strategy, StrategyBuilder, StrategyDecision};
-use crate::triggers::{TriggerContext, TriggerInfo, TriggerName, TriggerResponse, TriggerType};
+use crate::triggers::{TriggerInfo, TriggerResponse};
 
 pub struct GWMStrBldr {
     use_gwm: bool // dyn Fn(isize) -> bool,
@@ -44,7 +43,7 @@ impl<'pm> Strategy for GWMStr<'pm> {
         self.my_pid
     }
 
-    fn get_action(&self, state: &CombatState) -> StrategyDecision {
+    fn choose_action(&self, state: &CombatState) -> StrategyDecision {
         let me = self.get_my_pid();
         let my_rm = state.get_rm(me);
         if my_rm.get_current(ResourceName::RAT(ResourceActionType::Action)) > 0 {
@@ -67,13 +66,7 @@ impl<'pm> Strategy for GWMStr<'pm> {
         StrategyDecision::DoNothing
     }
 
-    fn handle_trigger(&self, ti: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
-        let mut v = Vec::new();
-        let on_crit = TriggerInfo::new(TriggerType::SuccessfulAttack, TriggerContext::AR(AttackResult::Crit));
-        if ti == on_crit || ti.tt == TriggerType::OnKill {
-            let my_tm = self.get_me().get_trigger_manager().unwrap();
-            v.push(my_tm.get_response(TriggerName::GWMBonusAtk).unwrap());
-        }
-        v
+    fn choose_triggers(&self, _: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
+        Vec::new()
     }
 }

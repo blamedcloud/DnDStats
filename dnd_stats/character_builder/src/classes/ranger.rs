@@ -97,7 +97,7 @@ impl Feature for FavoredFoe {
 
         let response = TriggerResponse::from(TriggerAction::AddResource(ResourceName::AN(ActionName::FavoredFoeApply), 1));
         let ti = TriggerInfo::new(TriggerType::OnKill, TriggerContext::CondNotice(ConditionName::FavoredFoe));
-        character.trigger_manager.add_trigger(ti, TriggerName::FavoredFoeKill);
+        character.trigger_manager.add_auto_trigger(ti, TriggerName::FavoredFoeKill);
         character.trigger_manager.set_response(TriggerName::FavoredFoeKill, response);
 
         Ok(())
@@ -133,7 +133,6 @@ impl Feature for PlanarWarrior {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {

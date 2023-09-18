@@ -94,9 +94,9 @@ impl<'pm> Strategy for LinearStrategy<'pm> {
         self.strategies.first().unwrap().get_my_pid()
     }
 
-    fn get_action(&self, state: &CombatState) -> StrategyDecision {
+    fn choose_action(&self, state: &CombatState) -> StrategyDecision {
         for str in self.strategies.iter() {
-            let sd = str.get_action(state);
+            let sd = str.choose_action(state);
             if sd.is_some() {
                 return sd;
             }
@@ -104,10 +104,10 @@ impl<'pm> Strategy for LinearStrategy<'pm> {
         StrategyDecision::DoNothing
     }
 
-    fn handle_trigger(&self, ti: TriggerInfo, state: &CombatState) -> Vec<TriggerResponse> {
+    fn choose_triggers(&self, ti: TriggerInfo, state: &CombatState) -> Vec<TriggerResponse> {
         let mut v = Vec::new();
         for str in self.strategies.iter() {
-            let sub_v = str.handle_trigger(ti, state);
+            let sub_v = str.choose_triggers(ti, state);
             v.extend(sub_v.into_iter());
         }
         v

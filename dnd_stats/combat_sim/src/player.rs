@@ -133,5 +133,6 @@ impl Participant for Player {
 
     fn register_pid(&mut self, pid: ParticipantId) {
         register_pid(&mut self.action_manager, pid);
+        self.trigger_manager.register_pid(pid);
     }
 }

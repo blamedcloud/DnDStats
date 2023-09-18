@@ -30,7 +30,7 @@ impl Strategy for SecondWindStr {
         self.my_pid
     }
 
-    fn get_action(&self, state: &CombatState) -> StrategyDecision {
+    fn choose_action(&self, state: &CombatState) -> StrategyDecision {
         let me = self.get_my_pid();
         let my_rm = state.get_rm(me);
         let has_ba = my_rm.get_current(ResourceName::RAT(ResourceActionType::BonusAction)) > 0;
@@ -41,7 +41,7 @@ impl Strategy for SecondWindStr {
         StrategyDecision::DoNothing
     }
 
-    fn handle_trigger(&self, _: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
+    fn choose_triggers(&self, _: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
         Vec::new()
     }
 }

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::combat_event::{CombatEvent, CombatTiming};
 use crate::combat_state::combat_log::CombatLog;
-use crate::conditions::{ConditionLifetime, ConditionManager};
+use crate::conditions::{ConditionLifetime, ConditionManager, CondUndoEffect};
 use crate::health::Health;
 use crate::participant::ParticipantId;
 use crate::resources::ResourceManager;
@@ -93,14 +93,27 @@ impl CombatState {
     pub fn push(&mut self, ce: CombatEvent) {
         if let CombatEvent::Timing(ct) = ce {
             self.last_combat_timing = Some(ct);
-            for (i, cm) in self.conditions.iter_mut().enumerate() {
+            for i in 0..self.conditions.len() {
+                let pid = ParticipantId(i);
+                let cm = self.get_cm_mut(pid);
                 let removed_cns = cm.remove_conditions_by_lifetime(&ConditionLifetime::UntilTime(ct));
-                for cn in removed_cns {
-                    self.logs.push(CombatEvent::RemoveCond(cn, ParticipantId(i)));
+                for (cn, cues) in removed_cns {
+                    self.logs.push(CombatEvent::RemoveCond(cn, pid));
+                    self.handle_cues(pid, &cues);
                 }
             }
         }
         self.logs.push(ce);
+    }
+
+    pub fn handle_cues(&mut self, pid: ParticipantId, cues: &Vec<CondUndoEffect>) {
+        for cue in cues {
+            match cue {
+                CondUndoEffect::SetResourceLock(rn, lock) => {
+                    self.get_rm_mut(pid).set_res_lock(*rn, *lock);
+                }
+            }
+        }
     }
 }
 

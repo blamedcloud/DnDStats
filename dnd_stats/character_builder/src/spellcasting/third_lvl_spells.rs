@@ -1,12 +1,15 @@
 use combat_core::ability_scores::{Ability, ForceSave};
 use combat_core::actions::{ActionName, ActionType, CombatAction, CombatOption};
+use combat_core::combat_event::CombatTiming;
 use combat_core::conditions::{Condition, ConditionEffect, ConditionLifetime, ConditionName};
 use combat_core::D20RollType;
 use combat_core::damage::{BasicDamageManager, DamageDice, DamageTerm, DamageType, ExtendedDamageDice, ExtendedDamageType};
 use combat_core::damage::dice_expr::DiceExprTerm;
+use combat_core::participant::ParticipantId;
 use combat_core::resources::resource_amounts::{RefreshBy, ResourceCap, ResourceCount};
 use combat_core::resources::{RefreshTiming, Resource, ResourceActionType, ResourceName};
 use combat_core::spells::{SaveDmgSpell, Spell, SpellEffect, SpellName, SpellSlot};
+use combat_core::triggers::{TriggerAction, TriggerContext, TriggerInfo, TriggerName, TriggerResponse, TriggerType};
 use crate::{CBError, Character};
 use crate::feature::Feature;
 
@@ -44,7 +47,7 @@ impl Feature for HasteSpell {
         let cond_effects = vec!(
             ConditionEffect::ACBonus(2),
             ConditionEffect::SaveMod(Ability::DEX, D20RollType::Advantage),
-            ConditionEffect::ChangeResourceCap(ResourceName::AN(ActionName::HasteAction), ResourceCap::Hard(1)),
+            ConditionEffect::SetResourceLock(ResourceName::AN(ActionName::HasteAction), false),
         );
         let cond = Condition {
             effects: cond_effects,
@@ -54,9 +57,10 @@ impl Feature for HasteSpell {
         let spell = Spell::concentration(SpellSlot::Third, spell_effect, true);
         character.spell_manager.insert(SpellName::Haste, spell);
 
-        let mut res = Resource::new(ResourceCap::Hard(0), ResourceCount::Count(0));
+        let mut res = Resource::new(ResourceCap::Hard(1), ResourceCount::Count(1));
         res.add_refresh(RefreshTiming::StartMyTurn, RefreshBy::ToFull);
         res.add_refresh(RefreshTiming::EndMyTurn, RefreshBy::ToEmpty);
+        res.lock();
         character.resource_manager.add_perm(ResourceName::AN(ActionName::HasteAction), res);
 
         // TODO: eventually, I'll need to allow for the other haste actions
@@ -68,7 +72,18 @@ impl Feature for HasteSpell {
             )
         );
 
-        // TODO: add triggers for drop conc (change resource cap and haste lethargy)
+        let lethargy_effects = vec!(
+            ConditionEffect::SetResourceLock(ResourceName::RAT(ResourceActionType::Action), true),
+            ConditionEffect::SetResourceLock(ResourceName::Movement, true),
+        );
+        let lethargy = Condition {
+            effects: lethargy_effects,
+            lifetimes: vec!(ConditionLifetime::UntilTime(CombatTiming::EndTurn(ParticipantId::me())))
+        };
+        let response = TriggerResponse::from(TriggerAction::GiveCondition(ConditionName::HasteLethargy, lethargy));
+        let ti = TriggerInfo::new(TriggerType::DropConc, TriggerContext::CondNotice(ConditionName::Hasted));
+        character.trigger_manager.add_auto_trigger(ti, TriggerName::HasteLethargy);
+        character.trigger_manager.set_response(TriggerName::HasteLethargy, response);
 
         Ok(())
     }

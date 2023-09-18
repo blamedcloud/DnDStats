@@ -72,8 +72,8 @@ impl Feature for GreatWeaponMaster {
 
         let response = TriggerResponse::from(TriggerAction::AddResource(ResourceName::AN(ActionName::BonusGWMAttack), 1));
         let ti = TriggerInfo::new(TriggerType::SuccessfulAttack, TriggerContext::AR(AttackResult::Crit));
-        character.trigger_manager.add_trigger(ti, TriggerName::GWMBonusAtk);
-        character.trigger_manager.add_trigger(TriggerType::OnKill.into(), TriggerName::GWMBonusAtk);
+        character.trigger_manager.add_auto_trigger(ti, TriggerName::GWMBonusAtk);
+        character.trigger_manager.add_auto_trigger(TriggerType::OnKill.into(), TriggerName::GWMBonusAtk);
         character.trigger_manager.set_response(TriggerName::GWMBonusAtk, response);
         // TODO: add another trigger for OnKill
 

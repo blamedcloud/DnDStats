@@ -7,7 +7,6 @@ use crate::actions::ActionType;
 use crate::combat_event::CombatTiming;
 use crate::damage::{DamageFeature, DamageTerm};
 use crate::participant::ParticipantId;
-use crate::resources::resource_amounts::ResourceCap;
 use crate::resources::ResourceName;
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
@@ -18,6 +17,7 @@ pub enum ConditionName {
     PlanarWarriorTarget,
     FavoredFoe,
     Hasted,
+    HasteLethargy,
 }
 
 impl ConditionName {
@@ -73,7 +73,12 @@ pub enum ConditionEffect {
     TakeDmgFeatureFrom(DamageFeature, ParticipantId), // planar warrior convert to force dmg
     ACBonus(isize),
     SaveMod(Ability, D20RollType),
-    ChangeResourceCap(ResourceName, ResourceCap),
+    SetResourceLock(ResourceName, bool),
+}
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum CondUndoEffect {
+    SetResourceLock(ResourceName, bool),
 }
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
@@ -129,6 +134,19 @@ impl Condition {
                 _ => {}
             }
         }
+    }
+
+    pub fn get_undo_effects(&self) -> Vec<CondUndoEffect> {
+        let mut vec = Vec::new();
+        for effect in self.effects.iter() {
+            match effect {
+                ConditionEffect::SetResourceLock(rn, lock) => {
+                    vec.push(CondUndoEffect::SetResourceLock(*rn, !(*lock)));
+                },
+                _ => {}
+            }
+        }
+        vec
     }
 }
 
@@ -207,8 +225,9 @@ impl ConditionManager {
         self.conditions.insert(cn, cond);
     }
 
-    pub fn remove_condition_by_name(&mut self, cn: &ConditionName) {
+    pub fn remove_condition_by_name(&mut self, cn: &ConditionName) -> Vec<CondUndoEffect> {
         let cond = self.conditions.remove(cn).unwrap();
+        let cues = cond.get_undo_effects();
         let lts = cond.lifetimes;
         for lt in lts {
             let o_cns = self.by_lifetime.remove(&lt);
@@ -221,18 +240,45 @@ impl ConditionManager {
                 }
             }
         }
+        cues
     }
 
-    pub fn remove_conditions_by_lifetime(&mut self, lt: &ConditionLifetime) -> HashSet<ConditionName> {
-        let mut removed_cns = HashSet::new();
+    pub fn remove_conditions_by_lifetime(&mut self, lt: &ConditionLifetime) -> HashMap<ConditionName, Vec<CondUndoEffect>> {
+        let mut removed_cns = HashMap::new();
         let cns = self.by_lifetime.remove(lt);
         if cns.is_some() {
             for cn in cns.unwrap() {
-                self.remove_condition_by_name(&cn);
-                removed_cns.insert(cn);
+                let undo_effects = self.remove_condition_by_name(&cn);
+                removed_cns.insert(cn, undo_effects);
             }
         }
         removed_cns
+    }
+
+    pub fn get_ac_boost(&self) -> isize {
+        let mut ac_boost = 0;
+        for (_, cond) in &self.conditions {
+            for effect in &cond.effects {
+                if let ConditionEffect::ACBonus(bonus) = effect {
+                    ac_boost += *bonus;
+                }
+            }
+        }
+        ac_boost
+    }
+
+    pub fn get_save_mod(&self, ability: Ability) -> D20RollType {
+        let mut save_mod = D20RollType::Normal;
+        for (_, cond) in &self.conditions {
+            for effect in &cond.effects {
+                if let ConditionEffect::SaveMod(ab, s_mod) = effect {
+                    if ability == *ab {
+                        save_mod += *s_mod;
+                    }
+                }
+            }
+        }
+        save_mod
     }
 
     pub fn get_atk_mod(&self, dist: AttackDistance) -> D20RollType {

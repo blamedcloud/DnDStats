@@ -1,5 +1,6 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ptr;
+use combat_core::ability_scores::Ability;
 
 use combat_core::actions::{ActionName, ActionType};
 use combat_core::BinaryOutcome;
@@ -12,6 +13,7 @@ use combat_core::resources::{RefreshTiming, ResourceManager, ResourceName};
 use combat_core::resources::resource_amounts::ResourceCount;
 use combat_core::spells::SpellSlot;
 use combat_core::transposition::Transposition;
+use combat_core::triggers::{TriggerAction, TriggerContext, TriggerInfo, TriggerType};
 use rand_var::map_rand_var::MapRandVar;
 use rand_var::num_rand_var::NumRandVar;
 use rand_var::rand_var::RandVar;
@@ -126,9 +128,9 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
     fn handle_instant_cond_effects(&mut self, pid: ParticipantId, cond: &Condition) {
         for effect in cond.effects.iter() {
             match effect {
-                ConditionEffect::ChangeResourceCap(rn, cap) => {
+                ConditionEffect::SetResourceLock(rn, lock) => {
                     let rm = self.get_rm_mut(pid);
-                    rm.set_cap(rn, *cap);
+                    rm.set_res_lock(*rn, *lock);
                 },
                 _ => {},
             }
@@ -137,17 +139,22 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
 
     pub fn remove_condition(&mut self, pid: ParticipantId, cn: ConditionName, at: ActionType) {
         let cm = self.get_cm_mut(pid);
-        cm.remove_condition_by_name(&cn);
+        let cues = cm.remove_condition_by_name(&cn);
         self.spend_at_resource(pid, at);
         self.push(CombatEvent::RemoveCond(cn, pid));
+        self.state.handle_cues(pid, &cues);
     }
 
-    pub fn remove_condition_by_lifetime(&mut self, pid: ParticipantId, lt: &ConditionLifetime) {
+    pub fn remove_condition_by_lifetime(&mut self, pid: ParticipantId, lt: &ConditionLifetime) -> HashSet<ConditionName> {
         let cm = self.get_cm_mut(pid);
         let removed_cns = cm.remove_conditions_by_lifetime(lt);
-        for cn in removed_cns {
-            self.push(CombatEvent::RemoveCond(cn, pid));
+        let mut cns = HashSet::new();
+        for (cn, cues) in removed_cns.iter() {
+            self.push(CombatEvent::RemoveCond(*cn, pid));
+            self.state.handle_cues(pid, cues);
+            cns.insert(*cn);
         }
+        cns
     }
 
     pub fn get_dmg(&self, pid: ParticipantId) -> &VecRandVar<P> {
@@ -211,11 +218,44 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
         }
     }
 
+    pub fn spend_resources(&mut self, pid: ParticipantId, costs: Vec<ResourceName>) {
+        let rm = self.get_rm_mut(pid);
+        for rn in costs {
+            rm.spend(rn);
+        }
+    }
+
     pub fn get_health(&self, pid: ParticipantId) -> Health {
         self.state.get_health(pid)
     }
     fn set_health(&mut self, pid: ParticipantId, h: Health) {
         self.state.set_health(pid, h);
+    }
+
+    pub fn handle_auto_triggers(&mut self, pid: ParticipantId, ti: TriggerInfo) {
+        let participant = self.participants.get_participant(pid).participant.as_ref();
+        if participant.has_triggers() {
+            let tm = participant.get_trigger_manager().unwrap();
+            if tm.has_auto_triggers(ti) {
+                let responses = tm.get_auto_responses(ti);
+                for response in responses {
+                    self.spend_resources(pid, response.resources);
+                    match response.action {
+                        TriggerAction::AddResource(rn, count) => {
+                            self.add_resource(pid, rn, count);
+                        },
+                        TriggerAction::SetResourceLock(rn, lock) => {
+                            let rm = self.get_rm_mut(pid);
+                            rm.set_res_lock(rn, lock);
+                        },
+                        TriggerAction::GiveCondition(cn, cond) => {
+                            self.apply_complex_condition(pid, cn, cond);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
     }
 
     pub fn split(self, rv: MapRandVar<CombatEvent, P>) -> Vec<Self> {
@@ -268,8 +308,11 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
             };
             if drop_conc.prob > P::zero() {
                 drop_conc.remove_condition_by_lifetime(target_pid, &ConditionLifetime::FailConcSave);
-                drop_conc.remove_condition_by_lifetime(target_pid, &ConditionLifetime::DropConcentration);
-                // TODO: haste does something when conc is dropped. not sure how to handle that yet.
+                let cns = drop_conc.remove_condition_by_lifetime(target_pid, &ConditionLifetime::DropConcentration);
+                // you can only concentrate on one thing, but that thing may be split into multiple conditions
+                for cn in cns {
+                    drop_conc.handle_auto_triggers(target_pid, TriggerInfo::new(TriggerType::DropConc, TriggerContext::CondNotice(cn)));
+                }
                 vec.extend(drop_conc.handle_dmg(dmg, target_pid, dead_at_zero).into_iter());
             }
             vec
@@ -280,7 +323,9 @@ impl<'pm, P: RVProb> ProbCombatState<'pm, P> {
 
     fn get_conc_outcomes(&self, dmg_rv: &VecRandVar<P>, pid: ParticipantId) -> MapRandVar<BinaryOutcome, P> {
         let target = self.participants.get_participant(pid).participant.as_ref();
-        let conc_save = target.get_ability_scores().constitution.get_save_rv(target.get_prof());
+        // TODO: concentration save should be its own thing, since some features affect that specifically
+        let save_mod = self.get_cm(pid).get_save_mod(Ability::CON);
+        let conc_save = target.get_ability_scores().constitution.get_save_rv(target.get_prof(), save_mod);
         let mut pass_total = P::zero();
         let mut fail_total = P::zero();
         for dmg in dmg_rv.get_keys() {

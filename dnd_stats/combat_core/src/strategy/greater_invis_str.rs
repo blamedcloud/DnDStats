@@ -32,7 +32,7 @@ impl<'pm> Strategy for GreaterInvisStr<'pm> {
         self.my_pid
     }
 
-    fn get_action(&self, state: &CombatState) -> StrategyDecision {
+    fn choose_action(&self, state: &CombatState) -> StrategyDecision {
         let me = self.get_my_pid();
         let my_rm = state.get_rm(me);
         let has_slot = my_rm.get_current(ResourceName::SS(SpellSlot::Fourth)) > 0;
@@ -43,7 +43,7 @@ impl<'pm> Strategy for GreaterInvisStr<'pm> {
         StrategyDecision::DoNothing
     }
 
-    fn handle_trigger(&self, _: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
+    fn choose_triggers(&self, _: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
         Vec::new()
     }
 }

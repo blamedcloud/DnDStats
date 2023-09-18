@@ -70,6 +70,7 @@ pub struct Resource {
     current: ResourceCount,
     refresh_map: HashMap<RefreshTiming, RefreshBy>,
     expirations: HashSet<RefreshTiming>,
+    locked: bool,
 }
 
 impl Resource {
@@ -79,6 +80,7 @@ impl Resource {
             current,
             refresh_map: HashMap::new(),
             expirations: HashSet::new(),
+            locked: false,
         }
     }
 
@@ -94,6 +96,7 @@ impl Resource {
             current,
             refresh_map,
             expirations: HashSet::new(),
+            locked: false,
         }
     }
 
@@ -104,41 +107,73 @@ impl Resource {
         self.max = new_max;
     }
 
-    pub fn get_current(&self) -> ResourceCount {
-        self.current
+    pub fn set_lock(&mut self, lock: bool) {
+        self.locked = lock;
+    }
+    pub fn lock(&mut self) {
+        self.locked = true;
+    }
+    pub fn unlock(&mut self) {
+        self.locked = false;
     }
 
-    pub fn spend_many(&mut self, amount: usize) -> usize {
-        if self.current >= amount {
-            self.current -= amount;
-            0
+    pub fn is_locked(&self) -> bool {
+        self.locked
+    }
+
+    pub fn get_current(&self) -> ResourceCount {
+        if self.locked {
+            ResourceCount::Count(0)
         } else {
-            let leftover = amount - self.current.count().unwrap();
-            self.current.set_count(0);
-            leftover
+            self.current
         }
     }
+
+    // returns the amount leftover after spending amount
+    pub fn spend_many(&mut self, amount: usize) -> usize {
+        if self.locked {
+            amount
+        } else {
+            if self.current >= amount {
+                self.current -= amount;
+                0
+            } else {
+                let leftover = amount - self.current.count().unwrap();
+                self.current.set_count(0);
+                leftover
+            }
+        }
+
+    }
     pub fn spend(&mut self) {
-        if self.current > 0 {
-            self.current -= 1;
+        if !self.locked {
+            if self.current > 0 {
+                self.current -= 1;
+            }
         }
     }
     pub fn gain(&mut self, uses: usize) {
-        if let ResourceCap::Hard(cap) = self.max {
-            self.current.set_count(cmp::min(self.current.count().unwrap() + uses, cap));
-        } else {
-            self.current += uses;
+        if !self.locked {
+            if let ResourceCap::Hard(cap) = self.max {
+                self.current.set_count(cmp::min(self.current.count().unwrap() + uses, cap));
+            } else {
+                self.current += uses;
+            }
         }
     }
     pub fn gain_to_full(&mut self) {
-        if self.max.is_uncapped() {
-            self.current = ResourceCount::UnCapped;
-        } else {
-            self.current.set_count(self.max.cap().unwrap());
+        if !self.locked {
+            if self.max.is_uncapped() {
+                self.current = ResourceCount::UnCapped;
+            } else {
+                self.current.set_count(self.max.cap().unwrap());
+            }
         }
     }
     pub fn drain(&mut self) {
-        self.current.set_count(0);
+        if !self.locked {
+            self.current.set_count(0);
+        }
     }
 
     pub fn add_refresh(&mut self, timing: RefreshTiming, by: RefreshBy) {
@@ -152,11 +187,13 @@ impl Resource {
     }
 
     pub fn refresh(&mut self, timing: RefreshTiming) {
-        if let Some(by) = self.refresh_map.get(&timing) {
-            match by {
-                RefreshBy::Const(c) => self.gain(*c),
-                RefreshBy::ToFull => self.current = self.max.into(),
-                RefreshBy::ToEmpty => self.current.set_count(0),
+        if !self.locked {
+            if let Some(by) = self.refresh_map.get(&timing) {
+                match by {
+                    RefreshBy::Const(c) => self.gain(*c),
+                    RefreshBy::ToFull => self.current = self.max.into(),
+                    RefreshBy::ToEmpty => self.current.set_count(0),
+                }
             }
         }
     }
@@ -173,6 +210,7 @@ impl From<ResourceCap> for Resource {
             current: value.into(),
             refresh_map: HashMap::new(),
             expirations: HashSet::new(),
+            locked: false,
         }
     }
 }
@@ -203,6 +241,25 @@ impl ResourceManager {
         if res.get_current() > 0 {
             self.temp_resources.insert(rn, res);
         }
+    }
+
+    pub fn set_res_lock(&mut self, rn: ResourceName, lock: bool) {
+        self.perm_resources.get_mut(&rn).map(|res| res.set_lock(lock));
+        self.temp_resources.get_mut(&rn).map(|res| res.set_lock(lock));
+    }
+
+    pub fn lock_resource(&mut self, rn: ResourceName) {
+        self.perm_resources.get_mut(&rn).map(|res| res.lock());
+        self.temp_resources.get_mut(&rn).map(|res| res.lock());
+    }
+
+    pub fn unlock_resource(&mut self, rn: ResourceName) {
+        self.perm_resources.get_mut(&rn).map(|res| res.unlock());
+        self.temp_resources.get_mut(&rn).map(|res| res.unlock());
+    }
+
+    pub fn get_resource(&self, rn: ResourceName) -> Option<&Resource> {
+        self.perm_resources.get(&rn)
     }
 
     pub fn set_spell_slots(&mut self, slots: [usize;10]) {
@@ -274,7 +331,7 @@ impl ResourceManager {
     pub fn spend(&mut self, rn: ResourceName) {
         if let Some(res) = self.temp_resources.get_mut(&rn) {
             res.spend();
-            if res.get_current() == 0 {
+            if res.get_current() == 0 && !res.is_locked() {
                 self.temp_resources.remove(&rn);
             }
         } else {

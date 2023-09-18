@@ -163,7 +163,7 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
             return Ok(vec!(pcs));
         }
         let strategy = self.get_strategy(pid);
-        let sd = strategy.get_action(pcs.get_state());
+        let sd = strategy.choose_action(pcs.get_state());
         match sd {
             StrategyDecision::MyAction(so) => {
                 if self.possible_action(&pcs, pid, so) {
@@ -437,7 +437,8 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         let target = self.get_participant(target_pid);
         let dead_at_zero = self.is_dead_at_zero(target_pid);
         // TODO: check conditions for adv/disadv
-        let ce_rv = sds.save.make_save(target.as_ref());
+        let save_mod = pcs.get_cm(target_pid).get_save_mod(sds.save.ability);
+        let ce_rv = sds.save.make_save_at(target.as_ref(), save_mod);
         let children = pcs.split(ce_rv);
         let mut results = Vec::with_capacity(children.len());
         let resist = target.get_resistances();
@@ -477,9 +478,9 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         let atk_cm = pcs.get_state().get_cm(atker_pid);
         let target_cm = pcs.get_state().get_cm(target_pid);
         let roll_type = atk_cm.overall_atk_mod(target_cm, atk.get_atk_range());
-        let ce_rv: MapRandVar<CombatEvent, P> = atk.get_ce_rv(roll_type, target.get_ac())?;
-        // TODO: handle AC boosts somehow...
-
+        let target_ac = target.get_ac() + target_cm.get_ac_boost();
+        let ce_rv: MapRandVar<CombatEvent, P> = atk.get_ce_rv(roll_type, target_ac)?;
+        // TODO: handle AC triggers
         let children = pcs.split(ce_rv);
         let mut results = Vec::with_capacity(children.len());
         let resist = target.get_resistances();
@@ -507,22 +508,10 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
     }
 
     fn handle_successful_attack(&self, mut pcs: ProbCombatState<'pm, P>, atk: &impl Attack, ar: AttackResult, atker_pid: ParticipantId, target_pid: ParticipantId) -> ResultVS<'pm, P> {
-        let attacker = self.get_participant(atker_pid);
         let dead_at_zero = self.is_dead_at_zero(target_pid);
         let resist = self.get_participant(target_pid).get_resistances();
-        let mut bonus_dmg = Vec::new();
         let ti = TriggerInfo::new(TriggerType::SuccessfulAttack, TriggerContext::AR(ar));
-        if attacker.has_triggers() && attacker.get_trigger_manager().unwrap().has_triggers(ti) {
-            let response = self.get_strategy(atker_pid).handle_trigger(ti, pcs.get_state());
-            let cost = self.validate_trigger_cost(&pcs, atker_pid, &response);
-            if cost.is_some() {
-                pcs.spend_resource_cost(atker_pid, cost.unwrap());
-                self.resolve_add_resource_triggers(&mut pcs, atker_pid, &response);
-                bonus_dmg = self.resolve_dmg_bonus_triggers(&response);
-            } else {
-                return Err(CSError::InvalidTriggerResponse);
-            }
-        }
+        let mut bonus_dmg = self.handle_triggers(&mut pcs, atker_pid, ti, true)?.unwrap_or(Vec::new());
         let target_cm = pcs.get_state().get_cm(target_pid);
         let (dmg_feats, dmg_terms) = target_cm.overall_dmg_mods(atker_pid);
         bonus_dmg.extend(dmg_terms.into_iter());
@@ -533,12 +522,12 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
     fn handle_on_kill_triggers(&self, mut results: Vec<ProbCombatState<'pm, P>>, atker_pid: ParticipantId, target_pid: ParticipantId, health: Health) -> ResultVS<'pm, P> {
         for pcs in results.iter_mut() {
             if pcs.get_last_event().unwrap() == CombatEvent::HP(target_pid, health) {
-                self.handle_triggers(pcs, atker_pid, TriggerType::OnKill.into())?;
+                self.handle_triggers(pcs, atker_pid, TriggerType::OnKill.into(), false)?;
                 let death_notices = pcs.get_cm(target_pid).get_death_notices();
                 for pid in death_notices {
                     let cns = pcs.get_cm(target_pid).get_cns_for_lifetime(&ConditionLifetime::NotifyOnDeath(pid)).clone();
                     for cn in cns {
-                        self.handle_triggers(pcs, pid, TriggerInfo::new(TriggerType::OnKill, TriggerContext::CondNotice(cn)))?;
+                        self.handle_triggers(pcs, pid, TriggerInfo::new(TriggerType::OnKill, TriggerContext::CondNotice(cn)), false)?;
                     }
                 }
             }
@@ -546,24 +535,43 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         Ok(results)
     }
 
-    fn handle_triggers(&self, pcs: &mut ProbCombatState<'pm, P>, pid: ParticipantId, ti: TriggerInfo) -> ResultCSE {
-        if self.get_participant(pid).has_triggers() && self.get_participant(pid).get_trigger_manager().unwrap().has_triggers(ti) {
-            let response = self.get_strategy(pid).handle_trigger(ti, pcs.get_state());
-            let cost = self.validate_trigger_cost(pcs, pid, &response);
-            if cost.is_some() {
-                pcs.spend_resource_cost(pid, cost.unwrap());
-                self.resolve_add_resource_triggers(pcs, pid, &response);
-            } else {
-                return Err(CSError::InvalidTriggerResponse);
+    fn handle_triggers(&self, pcs: &mut ProbCombatState<'pm, P>, pid: ParticipantId, ti: TriggerInfo, get_bonus_dmg: bool) -> Result<Option<Vec<DamageTerm>>, CSError> {
+        let mut bonus_dmg = None;
+        if self.get_participant(pid).has_triggers() {
+            let tm = self.get_participant(pid).get_trigger_manager().unwrap();
+            if tm.has_triggers(ti) {
+                let mut response = tm.get_auto_responses(ti);
+                if tm.has_manual_triggers(ti) {
+                    response.extend(self.get_strategy(pid).choose_triggers(ti, pcs.get_state()).into_iter());
+                }
+                let cost = self.validate_trigger_cost(pcs, pid, &response);
+                if cost.is_some() {
+                    pcs.spend_resource_cost(pid, cost.unwrap());
+                    self.resolve_add_resource_triggers(pcs, pid, &response);
+                    self.resolve_give_cond_triggers(pcs, pid, &response);
+                    if get_bonus_dmg {
+                        bonus_dmg = Some(self.resolve_dmg_bonus_triggers(&response));
+                    }
+                } else {
+                    return Err(CSError::InvalidTriggerResponse);
+                }
             }
         }
-        Ok(())
+        Ok(bonus_dmg)
     }
 
     fn resolve_add_resource_triggers(&self, pcs: &mut ProbCombatState<'pm, P>, pid: ParticipantId, response: &Vec<TriggerResponse>) {
         for tr in response {
             if let TriggerAction::AddResource(rn, amount) = tr.action {
                 pcs.add_resource(pid, rn, amount);
+            }
+        }
+    }
+
+    fn resolve_give_cond_triggers(&self, pcs: &mut ProbCombatState<'pm, P>, pid: ParticipantId, response: &Vec<TriggerResponse>) {
+        for tr in response {
+            if let TriggerAction::GiveCondition(cn, cond) = &tr.action {
+                pcs.apply_complex_condition(pid, *cn, cond.clone());
             }
         }
     }
@@ -598,7 +606,7 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
-    use num::{One, Rational64};
+    use num::{BigRational, One, Rational64};
 
     use character_builder::Character;
     use character_builder::classes::{ChooseSubClass, ClassName};
@@ -620,7 +628,7 @@ mod tests {
     use combat_core::damage::{DamageDice, DamageType};
     use combat_core::health::Health;
     use combat_core::participant::{Participant, ParticipantId, ParticipantManager};
-    use combat_core::resources::ResourceName;
+    use combat_core::resources::{ResourceActionType, ResourceName};
     use combat_core::spells::SpellSlot;
     use combat_core::strategy::basic_atk_str::BasicAtkStrBuilder;
     use combat_core::strategy::basic_strategies::DoNothingBuilder;
@@ -632,10 +640,10 @@ mod tests {
     use combat_core::strategy::second_wind_str::SecondWindStrBuilder;
     use combat_core::strategy::StrategyManager;
     use rand_var::num_rand_var::NumRandVar;
-    use rand_var::vec_rand_var::VRV64;
+    use rand_var::vec_rand_var::{VRV64, VRVBig};
     use rand_var::rand_var::RandVar;
 
-    use crate::encounter_simulator::{EncounterSimulator, ES64};
+    use crate::encounter_simulator::{EncounterSimulator, ES64, ESBig};
     use crate::monster::Monster;
     use crate::player::Player;
     use crate::target_dummy::TargetDummy;
@@ -1064,7 +1072,7 @@ mod tests {
                 assert_eq!(&miss, pcs.get_prob());
             }
             let hit: Rational64 = ba.get_ar_rv(D20RollType::Disadvantage, wizard.get_ac() as isize).unwrap().pdf(AttackResult::Hit);
-            let conc_save: VRV64 = wizard.get_ability_scores().constitution.get_save_rv(wizard.get_prof_bonus() as isize);
+            let conc_save: VRV64 = wizard.get_ability_scores().constitution.get_save_rv(wizard.get_prof_bonus() as isize, D20RollType::Normal);
             // case 1: hit -> keep conc
             {
                 let pcs = cs_rv.get_pcs(1);
@@ -1143,8 +1151,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn haste_dmg_test() {
+    fn get_haste_ranger() -> Character {
         let name = String::from("Speedy");
         let ability_scores = AbilityScores::new(12,16,16,8,13,10);
         let equipment = Equipment::new(
@@ -1162,6 +1169,12 @@ mod tests {
         ranger.level_up_basic().unwrap();
         ranger.level_up(ClassName::Ranger, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
         ranger.level_up(ClassName::Ranger, vec!(Box::new(HasteSpell))).unwrap();
+        ranger
+    }
+
+    #[test]
+    fn haste_dmg_test() {
+        let ranger = get_haste_ranger();
         let player = Player::from(ranger.clone());
         let mut player_str = LinearStrategyBuilder::new();
         player_str.add_str_bldr(Box::new(HasteStrBuilder));
@@ -1209,6 +1222,142 @@ mod tests {
             assert_eq!(0, dmg.lower_bound());
             assert_eq!(84, dmg.upper_bound());
             assert_eq!(Rational64::new(313, 10), dmg.expected_value());
+        }
+    }
+
+    #[test]
+    fn haste_drop_test() {
+        let ranger = get_haste_ranger();
+        let player = Player::from(ranger.clone());
+        let mut player_str = LinearStrategyBuilder::new();
+        player_str.add_str_bldr(Box::new(HasteStrBuilder));
+        player_str.add_str_bldr(Box::new(BasicAtkStrBuilder));
+
+        // this attack is the same as the ranger's basic weapon attack
+        // and the monster has the same AC as the ranger with haste
+        let ba = BasicAttack::new(11, DamageType::Piercing, 5, DamageDice::D8, 1);
+        let monster = Monster::new(isize::MAX, 19, 4, ba.clone(), 1);
+
+        let mut pm = ParticipantManager::new();
+        pm.add_player(Box::new(player)).unwrap();
+        pm.add_enemy(Box::new(monster.clone())).unwrap();
+        pm.compile();
+
+        let mut sm = StrategyManager::new(&pm).unwrap();
+        sm.add_participant(player_str).unwrap();
+        sm.add_participant(BasicAtkStrBuilder).unwrap();
+
+        let mut em: ESBig = EncounterSimulator::new(&sm).unwrap();
+        em.set_do_merges(true);
+        em.simulate_n_rounds(1).unwrap();
+        let ranger_pid = ParticipantId(0);
+        let monster_pid = ParticipantId(1);
+        let conc_save: VRVBig = ranger.get_ability_scores().constitution.get_save_rv(ranger.get_prof_bonus() as isize, D20RollType::Normal);
+        let ac = ranger.get_ac() as isize + 2;
+        let miss: BigRational = ba.get_ar_rv(D20RollType::Normal, ac).unwrap().pdf(AttackResult::Miss);
+        let drop_conc = conc_save.cdf_exclusive(10) * (BigRational::one() - miss);
+        let keep_conc = BigRational::one() - drop_conc.clone();
+        {
+            let cs_rv = em.get_state_rv();
+            assert_eq!(2, cs_rv.len());
+            // case 0 - keep conc
+            {
+                let pcs = cs_rv.get_pcs(0);
+                assert_eq!(&keep_conc, pcs.get_prob());
+                assert_eq!(1, pcs.get_rm(ranger_pid).get_current(ResourceName::SS(SpellSlot::Third)).count().unwrap());
+                assert!(pcs.get_cm(ranger_pid).has_condition(&ConditionName::Hasted));
+                assert!(pcs.get_cm(ranger_pid).has_condition(&ConditionName::Concentration));
+                assert!(!pcs.get_cm(ranger_pid).has_condition(&ConditionName::HasteLethargy));
+
+                let ranger_dmg = pcs.get_dmg(ranger_pid);
+                assert_eq!(0, ranger_dmg.lower_bound());
+                assert_eq!(21, ranger_dmg.upper_bound());
+
+                let monster_dmg = pcs.get_dmg(monster_pid);
+                assert_eq!(0, monster_dmg.lower_bound());
+                assert_eq!(21, monster_dmg.upper_bound());
+            }
+            // case 1 - drop conc
+            {
+                let pcs = cs_rv.get_pcs(1);
+                assert_eq!(&drop_conc, pcs.get_prob());
+                assert_eq!(1, pcs.get_rm(ranger_pid).get_current(ResourceName::SS(SpellSlot::Third)).count().unwrap());
+                assert!(!pcs.get_cm(ranger_pid).has_condition(&ConditionName::Hasted));
+                assert!(!pcs.get_cm(ranger_pid).has_condition(&ConditionName::Concentration));
+                assert!(pcs.get_cm(ranger_pid).has_condition(&ConditionName::HasteLethargy));
+                assert!(pcs.get_rm(ranger_pid).get_resource(ResourceName::RAT(ResourceActionType::Action)).unwrap().is_locked());
+
+                let ranger_dmg = pcs.get_dmg(ranger_pid);
+                assert_eq!(6, ranger_dmg.lower_bound());
+                assert_eq!(21, ranger_dmg.upper_bound());
+
+                let monster_dmg = pcs.get_dmg(monster_pid);
+                assert_eq!(0, monster_dmg.lower_bound());
+                assert_eq!(21, monster_dmg.upper_bound());
+            }
+            let ranger_dmg = cs_rv.get_dmg(ranger_pid);
+            let monster_dmg = cs_rv.get_dmg(monster_pid);
+            assert_eq!(ranger_dmg.expected_value(), monster_dmg.expected_value());
+        }
+        em.simulate_n_rounds(1).unwrap();
+        {
+            let cs_rv = em.get_state_rv();
+            assert_eq!(3, cs_rv.len());
+            // case 0 - keep conc -> keep conc
+            {
+                let pcs = cs_rv.get_pcs(0);
+                assert_eq!(&keep_conc.pow(2), pcs.get_prob());
+                assert_eq!(1, pcs.get_rm(ranger_pid).get_current(ResourceName::SS(SpellSlot::Third)).count().unwrap());
+                assert!(pcs.get_cm(ranger_pid).has_condition(&ConditionName::Hasted));
+                assert!(pcs.get_cm(ranger_pid).has_condition(&ConditionName::Concentration));
+                assert!(!pcs.get_cm(ranger_pid).has_condition(&ConditionName::HasteLethargy));
+
+                let ranger_dmg = pcs.get_dmg(ranger_pid);
+                assert_eq!(0, ranger_dmg.lower_bound());
+                assert_eq!(42, ranger_dmg.upper_bound());
+
+                let monster_dmg = pcs.get_dmg(monster_pid);
+                assert_eq!(0, monster_dmg.lower_bound());
+                assert_eq!(84, monster_dmg.upper_bound());
+            }
+            // case 1 - keep conc -> drop conc
+            {
+                let pcs = cs_rv.get_pcs(1);
+                assert_eq!(&(keep_conc * drop_conc.clone()), pcs.get_prob());
+                assert_eq!(1, pcs.get_rm(ranger_pid).get_current(ResourceName::SS(SpellSlot::Third)).count().unwrap());
+                assert!(!pcs.get_cm(ranger_pid).has_condition(&ConditionName::Hasted));
+                assert!(!pcs.get_cm(ranger_pid).has_condition(&ConditionName::Concentration));
+                assert!(pcs.get_cm(ranger_pid).has_condition(&ConditionName::HasteLethargy));
+                assert!(pcs.get_rm(ranger_pid).get_resource(ResourceName::RAT(ResourceActionType::Action)).unwrap().is_locked());
+
+                let ranger_dmg = pcs.get_dmg(ranger_pid);
+                // at least one attack hit
+                assert_eq!(6, ranger_dmg.lower_bound());
+                assert_eq!(42, ranger_dmg.upper_bound());
+
+                let monster_dmg = pcs.get_dmg(monster_pid);
+                assert_eq!(0, monster_dmg.lower_bound());
+                assert_eq!(84, monster_dmg.upper_bound());
+            }
+            // case 2 - drop conc - do nothing
+            {
+                let pcs = cs_rv.get_pcs(2);
+                assert_eq!(&drop_conc, pcs.get_prob());
+                assert_eq!(1, pcs.get_rm(ranger_pid).get_current(ResourceName::SS(SpellSlot::Third)).count().unwrap());
+                assert!(!pcs.get_cm(ranger_pid).has_condition(&ConditionName::Hasted));
+                assert!(!pcs.get_cm(ranger_pid).has_condition(&ConditionName::Concentration));
+                assert!(!pcs.get_cm(ranger_pid).has_condition(&ConditionName::HasteLethargy));
+                assert!(!pcs.get_rm(ranger_pid).get_resource(ResourceName::RAT(ResourceActionType::Action)).unwrap().is_locked());
+
+                let ranger_dmg = pcs.get_dmg(ranger_pid);
+                // at least one attack hit
+                assert_eq!(6, ranger_dmg.lower_bound());
+                assert_eq!(42, ranger_dmg.upper_bound());
+
+                let monster_dmg = pcs.get_dmg(monster_pid);
+                assert_eq!(0, monster_dmg.lower_bound());
+                assert_eq!(21, monster_dmg.upper_bound());
+            }
         }
     }
 }

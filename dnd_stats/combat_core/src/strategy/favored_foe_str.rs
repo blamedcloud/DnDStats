@@ -4,7 +4,7 @@ use crate::conditions::{ConditionLifetime, ConditionName};
 use crate::participant::{ParticipantId, TeamMember};
 use crate::resources::{ResourceActionType, ResourceName};
 use crate::strategy::{StrategicAction, Strategy, StrategyBuilder, StrategyDecision};
-use crate::triggers::{TriggerContext, TriggerInfo, TriggerName, TriggerResponse, TriggerType};
+use crate::triggers::{TriggerInfo, TriggerResponse};
 
 pub struct FavoredFoeStrBldr;
 impl StrategyBuilder for FavoredFoeStrBldr {
@@ -49,7 +49,7 @@ impl<'pm> Strategy for FavoredFoeStr<'pm> {
         self.my_pid
     }
 
-    fn get_action(&self, state: &CombatState) -> StrategyDecision {
+    fn choose_action(&self, state: &CombatState) -> StrategyDecision {
         let me = self.get_my_pid();
         let my_rm = state.get_rm(me);
         if my_rm.get_current(ResourceName::RAT(ResourceActionType::BonusAction)) > 0 {
@@ -79,12 +79,7 @@ impl<'pm> Strategy for FavoredFoeStr<'pm> {
         StrategyDecision::DoNothing
     }
 
-    fn handle_trigger(&self, ti: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
-        let mut v = Vec::new();
-        if ti.tt == TriggerType::OnKill && ti.tc == TriggerContext::CondNotice(ConditionName::FavoredFoe) {
-            let my_tm = self.get_me().get_trigger_manager().unwrap();
-            v.push(my_tm.get_response(TriggerName::FavoredFoeKill).unwrap());
-        }
-        v
+    fn choose_triggers(&self, _: TriggerInfo, _: &CombatState) -> Vec<TriggerResponse> {
+        Vec::new()
     }
 }
