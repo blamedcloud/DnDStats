@@ -18,6 +18,8 @@ pub enum ConditionName {
     FavoredFoe,
     Hasted,
     HasteLethargy,
+    CastBASpell,
+    CastActionSpell,
 }
 
 impl ConditionName {
@@ -102,6 +104,13 @@ pub struct Condition {
 }
 
 impl Condition {
+    pub fn until_end_turn(pid: ParticipantId) -> Self {
+        Self {
+            effects: vec!(),
+            lifetimes: vec!(ConditionLifetime::UntilTime(CombatTiming::EndTurn(pid))),
+        }
+    }
+
     pub fn register_pid(&mut self, pid: ParticipantId) {
         for ce in self.effects.iter_mut() {
             match ce {

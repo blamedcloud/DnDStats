@@ -18,7 +18,7 @@ use crate::feature::Feature;
 pub struct FireBallSpell(pub Ability);
 impl Feature for FireBallSpell {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        let co = CombatOption::new_target(ActionType::Action, CombatAction::CastSpell, true);
+        let co = CombatOption::new_spell(ActionType::Action, CombatAction::CastSpell, true, true);
         character.combat_actions.insert(ActionName::CastSpell(SpellName::Fireball), co);
 
         let save_dc = 8 + (character.get_prof_bonus() as isize) + (character.get_ability_scores().get_score(&self.0).get_mod() as isize);
@@ -40,7 +40,8 @@ impl Feature for FireBallSpell {
 pub struct HasteSpell;
 impl Feature for HasteSpell {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        let co = CombatOption::new(ActionType::Action, CombatAction::CastSpell);
+        // TODO: allow to cast on allies eventually
+        let co = CombatOption::new_spell(ActionType::Action, CombatAction::CastSpell, false, true);
         character.combat_actions.insert(ActionName::CastSpell(SpellName::Haste), co);
 
         // TODO: double speed somehow?
@@ -74,6 +75,7 @@ impl Feature for HasteSpell {
 
         let lethargy_effects = vec!(
             ConditionEffect::SetResourceLock(ResourceName::RAT(ResourceActionType::Action), true),
+            ConditionEffect::SetResourceLock(ResourceName::RAT(ResourceActionType::BonusAction), true),
             ConditionEffect::SetResourceLock(ResourceName::Movement, true),
         );
         let lethargy = Condition {

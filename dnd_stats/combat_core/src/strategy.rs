@@ -6,6 +6,7 @@ use crate::combat_state::CombatState;
 use crate::conditions::ConditionName;
 use crate::movement::Square;
 use crate::participant::{Participant, ParticipantId, ParticipantManager, TeamMember};
+use crate::spells::SpellSlot;
 use crate::triggers::{TriggerInfo, TriggerResponse};
 
 // I don't really like having so many strategy modules
@@ -76,11 +77,37 @@ impl From<ActionName> for StrategyDecision {
     }
 }
 
-// TODO: add an Option<SpellSlot> or something, for casting spells at higher levels
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
 pub struct StrategicAction {
     pub action_name: ActionName,
-    pub target: Option<Target>
+    pub target: Option<Target>,
+    pub spell_slot: Option<SpellSlot>,
+}
+
+impl StrategicAction {
+    pub fn new(an: ActionName, target: Option<Target>, ss: Option<SpellSlot>) -> Self {
+        Self {
+            action_name: an,
+            target,
+            spell_slot: ss,
+        }
+    }
+
+    pub fn targeted(an: ActionName, target: Option<Target>) -> Self {
+        Self {
+            action_name: an,
+            target,
+            spell_slot: None,
+        }
+    }
+
+    pub fn spell(an: ActionName, ss: Option<SpellSlot>) -> Self {
+        Self {
+            action_name: an,
+            target: None,
+            spell_slot: ss,
+        }
+    }
 }
 
 impl From<ActionName> for StrategicAction {
@@ -88,6 +115,7 @@ impl From<ActionName> for StrategicAction {
         Self {
             action_name: value,
             target: None,
+            spell_slot: None,
         }
     }
 }

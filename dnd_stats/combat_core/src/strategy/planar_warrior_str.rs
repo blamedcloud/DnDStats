@@ -1,4 +1,4 @@
-use crate::actions::{ActionName, AttackType};
+use crate::actions::ActionName;
 use crate::combat_state::CombatState;
 use crate::participant::{ParticipantId, TeamMember};
 use crate::resources::{ResourceActionType, ResourceName};
@@ -34,22 +34,9 @@ impl<'pm> Strategy for PlanarWarriorStr<'pm> {
     fn choose_action(&self, state: &CombatState) -> StrategyDecision {
         let me = self.get_my_pid();
         let my_rm = state.get_rm(me);
-        if my_rm.get_current(ResourceName::RAT(ResourceActionType::Action)) > 0 {
-            return ActionName::AttackAction.into()
-        }
         if my_rm.get_current(ResourceName::RAT(ResourceActionType::BonusAction)) > 0 {
             let target = self.get_first_target(state);
-            return StrategicAction {
-                action_name: ActionName::PlanarWarrior,
-                target
-            }.into()
-        }
-        if my_rm.get_current(ResourceName::RAT(ResourceActionType::SingleAttack)) > 0 {
-            let target = self.get_first_target(state);
-            return StrategicAction {
-                action_name: ActionName::PrimaryAttack(AttackType::Normal),
-                target
-            }.into()
+            return StrategicAction::targeted(ActionName::PlanarWarrior, target).into();
         }
         StrategyDecision::DoNothing
     }

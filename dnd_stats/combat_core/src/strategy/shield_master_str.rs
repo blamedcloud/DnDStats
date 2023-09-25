@@ -39,17 +39,11 @@ impl<'pm> Strategy for ShieldMasterStr<'pm> {
         }
         if my_rm.get_current(ResourceName::RAT(ResourceActionType::BonusAction)) > 0 {
             let target = self.get_first_target(state);
-            return StrategicAction {
-                action_name: ActionName::ShoveProne,
-                target
-            }.into()
+            return StrategicAction::targeted(ActionName::ShoveProne, target).into();
         }
         if my_rm.get_current(ResourceName::RAT(ResourceActionType::SingleAttack)) > 0 {
             let target = self.get_first_target(state);
-            return StrategicAction {
-                action_name: ActionName::PrimaryAttack(AttackType::Normal),
-                target
-            }.into()
+            return StrategicAction::targeted(ActionName::PrimaryAttack(AttackType::Normal), target).into();
         }
         StrategyDecision::DoNothing
     }

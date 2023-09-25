@@ -101,7 +101,7 @@ mod tests {
     use character_builder::feature::feats::{GreatWeaponMaster, ShieldMaster};
     use character_builder::feature::fighting_style::{FightingStyle, FightingStyles};
     use character_builder::spellcasting::cantrips::FireBoltCantrip;
-    use character_builder::spellcasting::third_lvl_spells::FireBallSpell;
+    use character_builder::spellcasting::third_lvl_spells::{FireBallSpell, HasteSpell};
     use combat_core::ability_scores::{Ability, AbilityScores};
     use combat_core::D20RollType;
     use combat_core::damage::DamageType;
@@ -109,9 +109,11 @@ mod tests {
     use combat_core::strategy::action_surge_str::ActionSurgeStrBuilder;
     use combat_core::strategy::basic_atk_str::BasicAtkStrBuilder;
     use combat_core::strategy::dual_wield_str::DualWieldStrBuilder;
+    use combat_core::strategy::favored_foe_str::FavoredFoeStrBldr;
     use combat_core::strategy::fireball_str::FireBallStrBuilder;
     use combat_core::strategy::firebolt_str::FireBoltStrBuilder;
     use combat_core::strategy::gwm_str::GWMStrBldr;
+    use combat_core::strategy::haste_str::HasteStrBuilder;
     use combat_core::strategy::linear_str::LinearStrategyBuilder;
     use combat_core::strategy::planar_warrior_str::PlanarWarriorStrBldr;
     use combat_core::strategy::shield_master_str::ShieldMasterStrBuilder;
@@ -241,6 +243,10 @@ mod tests {
         ranger.level_up(ClassName::Ranger, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
         ranger.level_up_basic().unwrap();
 
+        let mut player_str = LinearStrategyBuilder::new();
+        player_str.add_str_bldr(Box::new(PlanarWarriorStrBldr));
+        player_str.add_str_bldr(Box::new(BasicAtkStrBuilder));
+
         let mut resistances = HashSet::new();
         resistances.insert(DamageType::Slashing);
         resistances.insert(DamageType::Piercing);
@@ -248,7 +254,7 @@ mod tests {
 
         let angery_dummy = TargetDummy::resistant(isize::MAX, 15, resistances);
 
-        let cs = CombatSimulator::vs_dummy(ranger.clone(), PlanarWarriorStrBldr, angery_dummy, 1).unwrap();
+        let cs = CombatSimulator::vs_dummy(ranger.clone(), player_str, angery_dummy, 1).unwrap();
         let cr_rv = cs.get_cr_rv();
         {
             assert_eq!(1, cr_rv.len());
@@ -377,5 +383,31 @@ mod tests {
             assert_eq!(48, dmg.upper_bound());
             assert_eq!(Rational64::new(1727, 80), dmg.expected_value());
         }
+    }
+
+    #[test]
+    fn bonus_action_spell_rule() {
+        let name = String::from("Speedy");
+        let ability_scores = AbilityScores::new(12,16,16,8,13,10);
+        let equipment = Equipment::new(
+            Armor::studded_leather(),
+            Weapon::longbow(),
+            OffHand::Free,
+        );
+        let mut ranger = Character::new(name, ability_scores, equipment);
+        ranger.level_up(ClassName::Ranger, vec!()).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(FightingStyle(FightingStyles::Archery)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(HorizonWalkerRanger)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
+        ranger.level_up_basic().unwrap();
+        ranger.level_up_basic().unwrap();
+        ranger.level_up_basic().unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(HasteSpell))).unwrap();
+
+        let mut player_str = LinearStrategyBuilder::new();
+        player_str.add_str_bldr(Box::new(HasteStrBuilder));
+        player_str.add_str_bldr(Box::new(FavoredFoeStrBldr));
+        player_str.add_str_bldr(Box::new(BasicAtkStrBuilder));
     }
 }

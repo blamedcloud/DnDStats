@@ -36,9 +36,13 @@ impl<'pm> Strategy for GreaterInvisStr<'pm> {
         let me = self.get_my_pid();
         let my_rm = state.get_rm(me);
         let has_slot = my_rm.get_current(ResourceName::SS(SpellSlot::Fourth)) > 0;
-        let invis = state.get_cm(me).has_condition(&ConditionName::Invisible);
-        if !invis && has_slot && my_rm.get_current(ResourceName::RAT(ResourceActionType::Action)) > 0 {
-            return StrategicAction::from(ActionName::CastSpell(SpellName::GreaterInvis)).into();
+        let cm = state.get_cm(me);
+        let invis = cm.has_condition(&ConditionName::Invisible);
+        let cast_ba_spell = cm.has_condition(&ConditionName::CastBASpell);
+        let no_conc = !cm.has_condition(&ConditionName::Concentration);
+        let has_action = my_rm.get_current(ResourceName::RAT(ResourceActionType::Action)) > 0;
+        if !invis && !cast_ba_spell && no_conc && has_slot && has_action {
+            return StrategicAction::spell(ActionName::CastSpell(SpellName::GreaterInvis), Some(SpellSlot::Fourth)).into();
         }
         StrategyDecision::DoNothing
     }

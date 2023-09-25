@@ -40,17 +40,11 @@ impl<'pm> Strategy for DualWieldStr<'pm> {
         }
         if my_rm.get_current(ResourceName::RAT(ResourceActionType::SingleAttack)) > 0 {
             let target = self.get_first_target(state);
-            return StrategicAction {
-                action_name: ActionName::PrimaryAttack(AttackType::Normal),
-                target
-            }.into();
+            return StrategicAction::targeted(ActionName::PrimaryAttack(AttackType::Normal), target).into();
         }
         if my_rm.get_current(ResourceName::RAT(ResourceActionType::BonusAction)) > 0 {
             let target = self.get_first_target(state);
-            return StrategicAction {
-                action_name: ActionName::OffhandAttack(AttackType::Normal),
-                target
-            }.into();
+            return StrategicAction::targeted(ActionName::OffhandAttack(AttackType::Normal), target).into();
         }
         StrategyDecision::DoNothing
     }

@@ -45,6 +45,7 @@ impl From<Character> for Player {
             let ca_old = co.action;
             let at = co.action_type;
             let req_t = co.req_target;
+            let is_spell = co.is_spell;
             let ca: CombatAction<BasicAttack, DiceExpression> = match ca_old {
                 CombatAction::Attack(wa) => CombatAction::Attack(wa.into()),
                 CombatAction::SelfHeal(cde) => CombatAction::SelfHeal(cde.into()),
@@ -54,7 +55,7 @@ impl From<Character> for Player {
                 CombatAction::CastSpell => CombatAction::CastSpell,
                 CombatAction::ByName => CombatAction::ByName
             };
-            let co = CombatOption::new_target(at, ca, req_t);
+            let co = CombatOption::new_spell(at, ca, req_t, is_spell);
             am.insert(an, co);
         }
 

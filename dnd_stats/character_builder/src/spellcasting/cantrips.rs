@@ -24,7 +24,7 @@ pub fn get_cantrip_dice(level: u8) -> u8 {
 pub struct FireBoltCantrip(pub Ability);
 impl Feature for FireBoltCantrip {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        let co = CombatOption::new_target(ActionType::Action, CombatAction::CastSpell, true);
+        let co = CombatOption::new_spell(ActionType::Action, CombatAction::CastSpell, true, true);
         character.combat_actions.insert(ActionName::CastSpell(SpellName::FireBolt), co);
 
         let num_die = get_cantrip_dice(character.get_level());

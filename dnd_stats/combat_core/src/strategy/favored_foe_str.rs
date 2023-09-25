@@ -1,4 +1,4 @@
-use crate::actions::{ActionName, AttackType};
+use crate::actions::ActionName;
 use crate::combat_state::CombatState;
 use crate::conditions::{ConditionLifetime, ConditionName};
 use crate::participant::{ParticipantId, TeamMember};
@@ -56,25 +56,14 @@ impl<'pm> Strategy for FavoredFoeStr<'pm> {
             let ffa = ResourceName::AN(ActionName::FavoredFoeApply);
             if my_rm.get_current(ffa) > 0 {
                 let target = self.get_first_target(state);
-                return StrategicAction {
-                    action_name: ActionName::FavoredFoeApply,
-                    target
-                }.into();
+                return StrategicAction::targeted(ActionName::FavoredFoeApply, target).into();
             }
-            if my_rm.get_current(ResourceName::AN(ActionName::FavoredFoeUse)) > 0 && self.use_ff(state) {
-                return ActionName::FavoredFoeUse.into()
+            let ffu = ResourceName::AN(ActionName::FavoredFoeUse);
+            let cast_action_spell = state.get_cm(me).has_condition(&ConditionName::CastActionSpell);
+            if !cast_action_spell && my_rm.get_current(ffu) > 0 && self.use_ff(state) {
+                let target = self.get_first_target(state);
+                return StrategicAction::targeted(ActionName::FavoredFoeUse, target).into();
             }
-        }
-
-        if my_rm.get_current(ResourceName::RAT(ResourceActionType::Action)) > 0 {
-            return ActionName::AttackAction.into()
-        }
-        if my_rm.get_current(ResourceName::RAT(ResourceActionType::SingleAttack)) > 0 {
-            let target = self.get_first_target(state);
-            return StrategicAction {
-                action_name: ActionName::PrimaryAttack(AttackType::Normal),
-                target
-            }.into();
         }
         StrategyDecision::DoNothing
     }

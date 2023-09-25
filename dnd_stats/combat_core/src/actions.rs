@@ -47,22 +47,34 @@ pub struct CombatOption<A, DE> {
     pub action_type: ActionType,
     pub action: CombatAction<A, DE>,
     pub req_target: bool,
+    pub is_spell: bool,
 }
 
 impl<A, DE> CombatOption<A, DE> {
     pub fn new(at: ActionType, ca: CombatAction<A, DE>) -> Self {
-        CombatOption {
+        Self {
             action_type: at,
             action: ca,
-            req_target: false
+            req_target: false,
+            is_spell: false,
         }
     }
 
     pub fn new_target(at: ActionType, ca: CombatAction<A, DE>, rt: bool) -> Self {
-        CombatOption {
+        Self {
             action_type: at,
             action: ca,
-            req_target: rt
+            req_target: rt,
+            is_spell: false,
+        }
+    }
+
+    pub fn new_spell(at: ActionType, ca: CombatAction<A, DE>, rt: bool, spell: bool) -> Self {
+        Self {
+            action_type: at,
+            action: ca,
+            req_target: rt,
+            is_spell: spell,
         }
     }
 }

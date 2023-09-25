@@ -86,6 +86,7 @@ pub struct LinearStrategy<'pm> {
 }
 
 impl<'pm> Strategy for LinearStrategy<'pm> {
+    // TODO: this and get_my_pid should be fixed in case on of them panics for the first strategy
     fn get_participants(&self) -> &Vec<TeamMember> {
         self.strategies.first().unwrap().get_participants()
     }

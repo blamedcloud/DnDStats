@@ -39,10 +39,7 @@ impl<'pm> Strategy for BasicAttackStr<'pm> {
         }
         if my_rm.get_current(ResourceName::RAT(ResourceActionType::SingleAttack)) > 0 {
             let target = self.get_first_target(state);
-            return StrategicAction {
-                action_name: ActionName::PrimaryAttack(AttackType::Normal),
-                target
-            }.into()
+            return StrategicAction::targeted(ActionName::PrimaryAttack(AttackType::Normal), target).into();
         }
         StrategyDecision::DoNothing
     }

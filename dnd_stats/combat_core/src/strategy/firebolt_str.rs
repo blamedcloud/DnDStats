@@ -2,7 +2,7 @@ use crate::actions::ActionName;
 use crate::combat_state::CombatState;
 use crate::participant::{ParticipantId, TeamMember};
 use crate::resources::{ResourceActionType, ResourceName};
-use crate::spells::SpellName;
+use crate::spells::{SpellName, SpellSlot};
 use crate::strategy::{StrategicAction, Strategy, StrategyBuilder, StrategyDecision};
 use crate::triggers::{TriggerInfo, TriggerResponse};
 
@@ -36,10 +36,11 @@ impl<'pm> Strategy for FireBoltStr<'pm> {
         let my_rm = state.get_rm(me);
         if my_rm.get_current(ResourceName::RAT(ResourceActionType::Action)) > 0 {
             let target = self.get_first_target(state);
-            return StrategicAction {
-                action_name: ActionName::CastSpell(SpellName::FireBolt),
-                target
-            }.into()
+            return StrategicAction::new(
+                ActionName::CastSpell(SpellName::FireBolt),
+                target,
+                Some(SpellSlot::Cantrip)
+            ).into();
         }
         StrategyDecision::DoNothing
     }

@@ -36,9 +36,13 @@ impl<'pm> Strategy for HasteStr<'pm> {
         let me = self.get_my_pid();
         let my_rm = state.get_rm(me);
         let has_slot = my_rm.get_current(ResourceName::SS(SpellSlot::Third)) > 0;
-        let is_hasted = state.get_cm(me).has_condition(&ConditionName::Hasted);
-        if !is_hasted && has_slot && my_rm.get_current(ResourceName::RAT(ResourceActionType::Action)) > 0 {
-            return StrategicAction::from(ActionName::CastSpell(SpellName::Haste)).into();
+        let cm = state.get_cm(me);
+        let is_hasted = cm.has_condition(&ConditionName::Hasted);
+        let cast_ba_spell = cm.has_condition(&ConditionName::CastBASpell);
+        let no_conc = !cm.has_condition(&ConditionName::Concentration);
+        let has_action = my_rm.get_current(ResourceName::RAT(ResourceActionType::Action)) > 0;
+        if !is_hasted && !cast_ba_spell && no_conc && has_slot && has_action {
+            return StrategicAction::spell(ActionName::CastSpell(SpellName::Haste), Some(SpellSlot::Third)).into();
         }
         if is_hasted && my_rm.get_current(ResourceName::AN(ActionName::HasteAction)) > 0 {
             return StrategicAction::from(ActionName::HasteAction).into();

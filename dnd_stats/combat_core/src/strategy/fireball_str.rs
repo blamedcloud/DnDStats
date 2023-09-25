@@ -1,5 +1,6 @@
 use crate::actions::ActionName;
 use crate::combat_state::CombatState;
+use crate::conditions::ConditionName;
 use crate::participant::{ParticipantId, TeamMember};
 use crate::resources::{ResourceActionType, ResourceName};
 use crate::spells::{SpellName, SpellSlot};
@@ -35,12 +36,14 @@ impl<'pm> Strategy for FireBallStr<'pm> {
         let me = self.get_my_pid();
         let my_rm = state.get_rm(me);
         let has_slot = my_rm.get_current(ResourceName::SS(SpellSlot::Third)) > 0;
-        if has_slot && my_rm.get_current(ResourceName::RAT(ResourceActionType::Action)) > 0 {
+        let cast_ba_spell = state.get_cm(me).has_condition(&ConditionName::CastBASpell);
+        if has_slot && !cast_ba_spell && my_rm.get_current(ResourceName::RAT(ResourceActionType::Action)) > 0 {
             let target = self.get_first_target(state);
-            return StrategicAction {
-                action_name: ActionName::CastSpell(SpellName::Fireball),
-                target
-            }.into()
+            return StrategicAction::new(
+                ActionName::CastSpell(SpellName::Fireball),
+                target,
+                Some(SpellSlot::Third)
+            ).into();
         }
         StrategyDecision::DoNothing
     }

@@ -75,15 +75,19 @@ impl Feature for FavoredFoe {
             effects: vec!(bonus_dmg),
             lifetimes: vec!(ConditionLifetime::NotifyOnDeath(ParticipantId::me()))
         };
-        let co_apply = CombatOption::new(
+        let co_apply = CombatOption::new_target(
             ActionType::BonusAction,
-            CombatAction::ApplyComplexCondition(ConditionName::FavoredFoe, cond)
+            CombatAction::ApplyComplexCondition(ConditionName::FavoredFoe, cond),
+            true
         );
         character.combat_actions.insert(ActionName::FavoredFoeApply, co_apply);
 
-        let co_use = CombatOption::new(
-            ActionType::FreeAction,
-            CombatAction::GainResource(ResourceName::AN(ActionName::FavoredFoeApply), 1)
+        let co_use = CombatOption::new_spell(
+            ActionType::BonusAction,
+            //CombatAction::GainResource(ResourceName::AN(ActionName::FavoredFoeApply), 1),
+            CombatAction::ByName,
+            true,
+            true,
         );
         character.combat_actions.insert(ActionName::FavoredFoeUse, co_use);
 

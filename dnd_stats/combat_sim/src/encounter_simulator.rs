@@ -6,7 +6,7 @@ use combat_core::actions::{ActionName, ActionType, CombatAction};
 use combat_core::attack::{Attack, AttackResult};
 use combat_core::{BinaryOutcome, CCError};
 use combat_core::combat_event::{CombatEvent, CombatTiming};
-use combat_core::conditions::{ConditionLifetime, ConditionName};
+use combat_core::conditions::{Condition, ConditionLifetime, ConditionName};
 use combat_core::damage::DamageTerm;
 use combat_core::damage::dice_expr::DiceExpr;
 use combat_core::health::Health;
@@ -14,7 +14,7 @@ use combat_core::participant::{Participant, ParticipantId, ParticipantManager, T
 use combat_core::resources::{ResourceActionType, ResourceName};
 use combat_core::resources::resource_amounts::ResourceCount;
 use combat_core::skills::{ContestResult, SkillContest, SkillName};
-use combat_core::spells::{SaveDmgSpell, SpellEffect};
+use combat_core::spells::{SaveDmgSpell, SpellEffect, SpellSlot};
 use combat_core::strategy::{StrategicAction, Strategy, StrategyDecision, StrategyManager, Target};
 use combat_core::triggers::{TriggerAction, TriggerContext, TriggerInfo, TriggerResponse, TriggerType};
 use rand_var::map_rand_var::MapRandVar;
@@ -241,47 +241,58 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
     fn possible_action(&self, pcs: &ProbCombatState<'pm, P>, pid: ParticipantId, so: StrategicAction) -> bool {
         let an = so.action_name;
         let participant = self.get_participant(pid);
-        let has_action = participant.get_action_manager().contains_key(&an);
-        let mut valid_target = true;
-        let mut has_resources = true;
-        if has_action {
-            let co = participant.get_action_manager().get(&an).unwrap();
-            if co.req_target && so.target.is_none() {
-                valid_target = false;
+        let am = participant.get_action_manager();
+        if !am.contains_key(&an) {
+            return false // no action
+        }
+        let co = am.get(&an).unwrap();
+        if co.req_target && so.target.is_none() {
+            return false; // invalid target
+        }
+        let rm = pcs.get_rm(pid);
+        if rm.has_resource(ResourceName::AN(an)) && rm.get_current(ResourceName::AN(an)) == 0 {
+            return false; // lacks action-specific resource
+        }
+        let at = co.action_type;
+        if rm.has_resource(at.into()) && rm.get_current(at.into()) == 0 {
+            return false; // lacks action type resource
+        }
+        let cm = pcs.get_cm(pid);
+        if let ActionName::CastSpell(sn) = an {
+            if !participant.has_spells() {
+                return false; // no spells
+            }
+            let spell = participant.get_spell_manager().unwrap().get(&sn);
+            if spell.is_none() {
+                return false; // unknown spell
+            }
+            let req_ss = spell.unwrap().slot;
+            if so.spell_slot.is_none() {
+                return false; // no spell slot used
+            }
+            let use_ss = so.spell_slot.unwrap();
+            if use_ss < req_ss {
+                return false; // use spell slot too low
+            }
+            if !rm.has_resource(ResourceName::SS(use_ss)) || rm.get_current(ResourceName::SS(use_ss)) == 0 {
+                return false; // no spell slots left
+            }
+            if spell.unwrap().concentration && cm.has_condition(&ConditionName::Concentration) {
+                return false; // can't concentrate twice
             }
         }
-        let mut has_spell = true;
-        if has_action && valid_target {
-            let rm = pcs.get_rm(pid);
-            if rm.has_resource(ResourceName::AN(an)) && rm.get_current(ResourceName::AN(an)) == 0 {
-                has_resources = false;
-            } else {
-                let co = participant.get_action_manager().get(&an).unwrap();
-                let at = co.action_type;
-                if rm.has_resource(at.into()) && rm.get_current(at.into()) == 0 {
-                    has_resources = false;
-                }
+        // bonus action spell rules
+        if co.is_spell {
+            if co.action_type == ActionType::BonusAction && cm.has_condition(&ConditionName::CastActionSpell) {
+                return false; // can't cast bonus action spell and action spell in same turn
             }
-            if let ActionName::CastSpell(sn) = an {
-                if participant.has_spells() {
-                    let spell = participant.get_spell_manager().unwrap().get(&sn);
-                    if spell.is_some() {
-                        let ss = spell.unwrap().slot;
-                        if rm.has_resource(ResourceName::SS(ss)) && rm.get_current(ResourceName::SS(ss)) == 0 {
-                            has_resources = false;
-                        }
-                        if spell.unwrap().concentration && pcs.get_cm(pid).has_condition(&ConditionName::Concentration) {
-                            has_spell = false;
-                        }
-                    } else {
-                        has_spell = false;
-                    }
-                } else {
-                    has_spell = false;
+            if cm.has_condition(&ConditionName::CastBASpell) {
+                if co.action_type != ActionType::Action || so.spell_slot.is_some_and(|ss| ss != SpellSlot::Cantrip) {
+                    return false; // if you cast a bonus action spell, you can only cast cantrips at that point
                 }
             }
         }
-        has_action && valid_target && has_resources && has_spell
+        true
     }
 
     fn finish_action(&self, pcs: ProbCombatState<'pm, P>, pid: ParticipantId, so: StrategicAction) -> ResultVS<'pm, P> {
@@ -300,6 +311,17 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         pcs.spend_action_resources(pid, an, at);
 
         pcs.push(CombatEvent::AN(an));
+
+        // Bonus action spell rules
+        if co.is_spell {
+            if co.action_type == ActionType::BonusAction {
+                pcs.apply_complex_condition(pid, ConditionName::CastBASpell, Condition::until_end_turn(pid));
+            } else if co.action_type == ActionType::Action {
+                if so.spell_slot.is_none() || so.spell_slot.unwrap() != SpellSlot::Cantrip {
+                    pcs.apply_complex_condition(pid, ConditionName::CastActionSpell, Condition::until_end_turn(pid));
+                }
+            }
+        }
 
         match &co.action {
             CombatAction::Attack(atk) => {
@@ -353,7 +375,8 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         }
         let caster = self.get_participant(pid);
         let spell = caster.get_spell_manager().unwrap().get(&spell_name).unwrap();
-        pcs.spend_spell_slot(pid, spell.slot);
+        let spend_slot = so.spell_slot.ok_or(CSError::InvalidAction)?;
+        pcs.spend_spell_slot(pid, spend_slot);
         if spell.concentration {
             pcs.apply_default_condition(pid, ConditionName::Concentration);
         }
@@ -402,7 +425,24 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
                 } else {
                     Err(CSError::InvalidTarget)
                 }
-            }
+            },
+            ActionName::FavoredFoeUse => {
+                if let Target::Participant(target_pid) = so.target.unwrap() {
+                    let co = self.participants.get_participant(pid).participant.get_action_manager().get(&ActionName::FavoredFoeApply);
+                    if co.is_none() {
+                        Err(CSError::ActionNotHandled)
+                    } else {
+                        if let CombatAction::ApplyComplexCondition(cn, cond) = &co.unwrap().action {
+                            pcs.apply_complex_condition(target_pid, *cn, cond.clone());
+                            Ok(HandledAction::InPlace(pcs))
+                        } else {
+                            Err(CSError::ActionNotHandled)
+                        }
+                    }
+                } else {
+                    Err(CSError::InvalidTarget)
+                }
+            },
             _ => Err(CSError::ActionNotHandled),
         }
     }
@@ -987,6 +1027,9 @@ mod tests {
         ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(HorizonWalkerRanger)))).unwrap();
         ranger.level_up(ClassName::Ranger, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
         let player = Player::from(ranger.clone());
+        let mut player_str = LinearStrategyBuilder::new();
+        player_str.add_str_bldr(Box::new(FavoredFoeStrBldr));
+        player_str.add_str_bldr(Box::new(BasicAtkStrBuilder));
 
         let minion = TargetDummy::new(1, 14);
         let dummy = TargetDummy::new(isize::MAX, 14);
@@ -998,7 +1041,7 @@ mod tests {
         pm.compile();
 
         let mut sm = StrategyManager::new(&pm).unwrap();
-        sm.add_participant(FavoredFoeStrBldr).unwrap();
+        sm.add_participant(player_str).unwrap();
         sm.add_participant(DoNothingBuilder).unwrap();
         sm.add_participant(DoNothingBuilder).unwrap();
 
@@ -1358,6 +1401,65 @@ mod tests {
                 assert_eq!(0, monster_dmg.lower_bound());
                 assert_eq!(21, monster_dmg.upper_bound());
             }
+        }
+    }
+
+    #[test]
+    fn bonus_action_spell_rule() {
+        let ranger = get_haste_ranger();
+        let player = Player::from(ranger.clone());
+        let mut player_str = LinearStrategyBuilder::new();
+        player_str.add_str_bldr(Box::new(HasteStrBuilder));
+        player_str.add_str_bldr(Box::new(FavoredFoeStrBldr));
+        player_str.add_str_bldr(Box::new(BasicAtkStrBuilder));
+
+        let dummy = TargetDummy::new(isize::MAX, 16);
+
+        let mut pm = ParticipantManager::new();
+        pm.add_player(Box::new(player)).unwrap();
+        pm.add_enemy(Box::new(dummy)).unwrap();
+        pm.compile();
+
+        let mut sm = StrategyManager::new(&pm).unwrap();
+        sm.add_participant(player_str).unwrap();
+        sm.add_participant(DoNothingBuilder).unwrap();
+
+        let mut em: ES64 = EncounterSimulator::new(&sm).unwrap();
+        em.set_do_merges(true);
+        em.simulate_n_rounds(1).unwrap();
+        let ranger_pid = ParticipantId(0);
+        let dummy_pid = ParticipantId(1);
+        {
+            let cs_rv = em.get_state_rv();
+            assert_eq!(1, cs_rv.len());
+            let pcs = cs_rv.get_pcs(0);
+            assert_eq!(1, pcs.get_rm(ranger_pid).get_current(ResourceName::SS(SpellSlot::Third)).count().unwrap());
+            assert_eq!(1, pcs.get_rm(ranger_pid).get_current(ResourceName::AN(ActionName::FavoredFoeUse)).count().unwrap());
+            assert!(pcs.get_cm(ranger_pid).has_condition(&ConditionName::Hasted));
+            assert!(pcs.get_cm(ranger_pid).has_condition(&ConditionName::Concentration));
+            assert!(!pcs.get_cm(dummy_pid).has_condition(&ConditionName::FavoredFoe));
+            let dmg = pcs.get_dmg(dummy_pid);
+            // one (haste) attack maxes out at 2d8+5 = 21 dmg
+            assert_eq!(0, dmg.lower_bound());
+            assert_eq!(21, dmg.upper_bound());
+            assert_eq!(Rational64::new(313, 40), dmg.expected_value());
+        }
+        em.simulate_n_rounds(1).unwrap();
+        {
+            let cs_rv = em.get_state_rv();
+            assert_eq!(1, cs_rv.len());
+            let pcs = cs_rv.get_pcs(0);
+            assert_eq!(1, pcs.get_rm(ranger_pid).get_current(ResourceName::SS(SpellSlot::Third)).count().unwrap());
+            assert_eq!(0, pcs.get_rm(ranger_pid).get_current(ResourceName::AN(ActionName::FavoredFoeUse)).count().unwrap());
+            assert!(pcs.get_cm(ranger_pid).has_condition(&ConditionName::Hasted));
+            assert!(pcs.get_cm(ranger_pid).has_condition(&ConditionName::Concentration));
+            assert!(pcs.get_cm(dummy_pid).has_condition(&ConditionName::FavoredFoe));
+            let dmg = pcs.get_dmg(dummy_pid);
+            // one (haste + favored foe) attack maxes out at 2d8+2d6+5 = 33 dmg
+            // max damage is 21 + 3 * 33 = 120
+            assert_eq!(0, dmg.lower_bound());
+            assert_eq!(120, dmg.upper_bound());
+            assert_eq!(Rational64::new(1609, 40), dmg.expected_value());
         }
     }
 }

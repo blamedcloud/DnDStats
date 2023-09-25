@@ -58,10 +58,7 @@ impl<'pm> Strategy for GWMStr<'pm> {
             if self.use_gwm {
                 at = AttackType::GWMAttack;
             }
-            return StrategicAction {
-                action_name: ActionName::PrimaryAttack(at),
-                target
-            }.into()
+            return StrategicAction::targeted(ActionName::PrimaryAttack(at), target).into();
         }
         StrategyDecision::DoNothing
     }

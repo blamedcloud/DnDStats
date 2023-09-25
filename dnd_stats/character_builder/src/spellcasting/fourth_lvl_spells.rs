@@ -8,7 +8,8 @@ use crate::feature::Feature;
 pub struct GreaterInvisibilitySpell;
 impl Feature for GreaterInvisibilitySpell {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        let co = CombatOption::new(ActionType::Action, CombatAction::CastSpell);
+        // TODO: allow to cast on allies eventually
+        let co = CombatOption::new_spell(ActionType::Action, CombatAction::CastSpell, false, true);
         character.combat_actions.insert(ActionName::CastSpell(SpellName::GreaterInvis), co);
 
         let cond_effects = vec!(
