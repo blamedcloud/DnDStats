@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use serde::{Deserialize, Serialize};
 use rand_var::map_rand_var::MapRandVar;
 
 use rand_var::vec_rand_var::VecRandVar;
@@ -9,7 +10,7 @@ use crate::{BinaryOutcome, D20RollType, D20Type};
 use crate::combat_event::CombatEvent;
 use crate::participant::Participant;
 
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone, Serialize, Deserialize)]
 pub enum Ability {
     STR,
     DEX,
@@ -180,6 +181,19 @@ impl AbilityScores {
                 BinaryOutcome::Fail
             }
         })
+    }
+}
+
+impl From<[u8;6]> for AbilityScores {
+    fn from(value: [u8; 6]) -> Self {
+        AbilityScores::new(
+            value[0],
+            value[1],
+            value[2],
+            value[3],
+            value[4],
+            value[5],
+        )
     }
 }
 

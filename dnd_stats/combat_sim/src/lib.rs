@@ -88,6 +88,7 @@ impl<P: RVProb> CombatSimulator<P> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+    use std::rc::Rc;
     use num::Rational64;
 
     use character_builder::Character;
@@ -158,7 +159,7 @@ mod tests {
         let mut rogue = Character::new(name, ability_scores, equipment);
         rogue.level_up(ClassName::Rogue, vec!()).unwrap();
         rogue.level_up_basic().unwrap();
-        rogue.level_up(ClassName::Rogue, vec!(Box::new(ChooseSubClass(ScoutRogue)))).unwrap();
+        rogue.level_up(ClassName::Rogue, vec!(Box::new(ChooseSubClass(Rc::new(ScoutRogue))))).unwrap();
         rogue
     }
 
@@ -210,7 +211,7 @@ mod tests {
         let mut fighter = Character::new(name, ability_scores, equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::Dueling)))).unwrap();
         fighter.level_up_basic().unwrap();
-        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(ChampionFighter)))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(Rc::new(ChampionFighter))))).unwrap();
         fighter.level_up(ClassName::Fighter, vec!(Box::new(ShieldMaster))).unwrap();
 
         let cs = CombatSimulator::dmg_sponge(fighter.clone(), ShieldMasterStrBuilder, 14, 1).unwrap();
@@ -239,7 +240,7 @@ mod tests {
         let mut ranger = Character::new(name, ability_scores, equipment);
         ranger.level_up(ClassName::Ranger, vec!()).unwrap();
         ranger.level_up(ClassName::Ranger, vec!(Box::new(FightingStyle(FightingStyles::Archery)))).unwrap();
-        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(HorizonWalkerRanger)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(Rc::new(HorizonWalkerRanger))))).unwrap();
         ranger.level_up(ClassName::Ranger, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
         ranger.level_up_basic().unwrap();
 
@@ -279,7 +280,7 @@ mod tests {
         let mut fighter = Character::new(name, ability_scores, equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         fighter.level_up_basic().unwrap();
-        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(ChampionFighter)))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(Rc::new(ChampionFighter))))).unwrap();
         fighter.level_up(ClassName::Fighter, vec!(Box::new(GreatWeaponMaster))).unwrap();
         fighter.level_up_basic().unwrap();
         fighter.level_up(ClassName::Fighter, vec!(Box::new(AbilityScoreIncrease::from(Ability::STR)))).unwrap();
@@ -309,7 +310,7 @@ mod tests {
         let mut fighter = Character::new(name, ability_scores, equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         fighter.level_up_basic().unwrap();
-        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(ChampionFighter)))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(Rc::new(ChampionFighter))))).unwrap();
         fighter.level_up(ClassName::Fighter, vec!(Box::new(GreatWeaponMaster))).unwrap();
 
         let mut fighter_str = LinearStrategyBuilder::new();
@@ -340,7 +341,7 @@ mod tests {
         );
         let mut wizard = Character::new(name, ability_scores, equipment);
         wizard.level_up(ClassName::Wizard, vec!()).unwrap();
-        wizard.level_up(ClassName::Wizard, vec!(Box::new(ChooseSubClass(ConjurationWizard)))).unwrap();
+        wizard.level_up(ClassName::Wizard, vec!(Box::new(ChooseSubClass(Rc::new(ConjurationWizard))))).unwrap();
         wizard.level_up(ClassName::Wizard, vec!(Box::new(FireBoltCantrip(Ability::INT)))).unwrap();
         let wizard_str = FireBoltStrBuilder;
 
@@ -367,7 +368,7 @@ mod tests {
         );
         let mut wizard = Character::new(name, ability_scores, equipment);
         wizard.level_up(ClassName::Wizard, vec!()).unwrap();
-        wizard.level_up(ClassName::Wizard, vec!(Box::new(ChooseSubClass(ConjurationWizard)))).unwrap();
+        wizard.level_up(ClassName::Wizard, vec!(Box::new(ChooseSubClass(Rc::new(ConjurationWizard))))).unwrap();
         wizard.level_up_basic().unwrap();
         wizard.level_up(ClassName::Wizard, vec!(Box::new(AbilityScoreIncrease::from(Ability::INT)))).unwrap();
         wizard.level_up(ClassName::Wizard, vec!(Box::new(FireBallSpell(Ability::INT)))).unwrap();
@@ -397,7 +398,7 @@ mod tests {
         let mut ranger = Character::new(name, ability_scores, equipment);
         ranger.level_up(ClassName::Ranger, vec!()).unwrap();
         ranger.level_up(ClassName::Ranger, vec!(Box::new(FightingStyle(FightingStyles::Archery)))).unwrap();
-        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(HorizonWalkerRanger)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(Rc::new(HorizonWalkerRanger))))).unwrap();
         ranger.level_up(ClassName::Ranger, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
         ranger.level_up_basic().unwrap();
         ranger.level_up_basic().unwrap();

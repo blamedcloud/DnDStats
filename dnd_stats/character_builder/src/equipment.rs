@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use combat_core::damage::{DamageDice, DamageType};
 use combat_core::movement::Feet;
 
@@ -7,6 +8,45 @@ pub enum ArmorType {
     LightArmor,
     MediumArmor,
     HeavyArmor,
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+pub enum ArmorName {
+    NoArmor,
+    MageArmor,
+    Padded,
+    Leather,
+    StuddedLeather,
+    Hide,
+    ChainShirt,
+    ScaleMail,
+    Breastplate,
+    HalfPlate,
+    RingMail,
+    ChainMail,
+    Splint,
+    Plate,
+}
+
+impl From<ArmorName> for Armor {
+    fn from(value: ArmorName) -> Self {
+        match value {
+            ArmorName::NoArmor => Armor::no_armor(),
+            ArmorName::MageArmor => Armor::mage_armor(),
+            ArmorName::Padded => Armor::padded(),
+            ArmorName::Leather => Armor::leather(),
+            ArmorName::StuddedLeather => Armor::studded_leather(),
+            ArmorName::Hide => Armor::hide(),
+            ArmorName::ChainShirt => Armor::chain_shirt(),
+            ArmorName::ScaleMail => Armor::scale_mail(),
+            ArmorName::Breastplate => Armor::breastplate(),
+            ArmorName::HalfPlate => Armor::half_plate(),
+            ArmorName::RingMail => Armor::ring_mail(),
+            ArmorName::ChainMail => Armor::chain_mail(),
+            ArmorName::Splint => Armor::splint(),
+            ArmorName::Plate => Armor::plate(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -150,7 +190,7 @@ impl Armor {
     }
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub struct ACSource {
     base_ac: u8,
     magic_bonus_ac: Option<u8>,
@@ -220,6 +260,37 @@ pub enum WeaponRange {
     Melee(Feet),
     Ranged(Feet,Feet),
     Thrown(Feet, Feet, Feet),
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+pub enum WeaponName {
+    Dagger,
+    Quarterstaff,
+    Shortbow,
+    Glaive,
+    Greatsword,
+    Halberd,
+    Longsword,
+    Rapier,
+    Shortsword,
+    Longbow,
+}
+
+impl From<WeaponName> for Weapon {
+    fn from(value: WeaponName) -> Self {
+        match value {
+            WeaponName::Dagger => Weapon::dagger(),
+            WeaponName::Quarterstaff => Weapon::quarterstaff(),
+            WeaponName::Shortbow => Weapon::shortbow(),
+            WeaponName::Glaive => Weapon::glaive(),
+            WeaponName::Greatsword => Weapon::greatsword(),
+            WeaponName::Halberd => Weapon::halberd(),
+            WeaponName::Longsword => Weapon::longsword(),
+            WeaponName::Rapier => Weapon::rapier(),
+            WeaponName::Shortsword => Weapon::shortsword(),
+            WeaponName::Longbow => Weapon::longbow(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

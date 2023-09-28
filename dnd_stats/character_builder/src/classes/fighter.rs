@@ -127,6 +127,7 @@ impl Feature for ImprovedCritical {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
     use combat_core::ability_scores::Ability;
 
     use crate::Character;
@@ -148,7 +149,7 @@ mod tests {
         let mut fighter = Character::new(String::from("lvl20fighter"), get_str_based(), equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(FightingStyle(FightingStyles::GreatWeaponFighting)))).unwrap();
         fighter.level_up_basic().unwrap();
-        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(ChampionFighter)))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(Rc::new(ChampionFighter))))).unwrap();
         fighter.level_up(ClassName::Fighter, vec!(Box::new(GreatWeaponMaster))).unwrap();
         fighter.level_up_basic().unwrap();
         fighter.level_up(ClassName::Fighter, vec!(Box::new(AbilityScoreIncrease::from(Ability::STR)))).unwrap();

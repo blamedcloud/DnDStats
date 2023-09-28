@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
+use serde::{Deserialize, Serialize};
 
 use combat_core::ability_scores::Ability;
 use combat_core::health::HitDice;
@@ -36,13 +37,10 @@ pub trait SubClass : Debug {
     }
 }
 
-pub struct ChooseSubClass<SC: SubClass + Clone>(pub SC);
-impl<SC> Feature for ChooseSubClass<SC>
-where
-    SC: SubClass + Clone + 'static,
-{
+pub struct ChooseSubClass(pub Rc<dyn SubClass>);
+impl Feature for ChooseSubClass {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
-        character.sub_classes.insert(self.0.get_class_name(),  Rc::new(self.0.clone()));
+        character.sub_classes.insert(self.0.get_class_name(),  self.0.clone());
         Ok(())
     }
 }
@@ -70,7 +68,7 @@ pub enum SpellCasterType {
     FullCaster
 }
 
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone, Serialize, Deserialize)]
 pub enum ClassName {
     Barbarian,
     Bard,

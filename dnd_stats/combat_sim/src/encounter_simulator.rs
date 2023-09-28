@@ -646,6 +646,7 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+    use std::rc::Rc;
     use num::{BigRational, One, Rational64};
 
     use character_builder::Character;
@@ -1024,7 +1025,7 @@ mod tests {
         let mut ranger = Character::new(name, ability_scores, equipment);
         ranger.level_up(ClassName::Ranger, vec!()).unwrap();
         ranger.level_up(ClassName::Ranger, vec!(Box::new(FightingStyle(FightingStyles::Archery)))).unwrap();
-        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(HorizonWalkerRanger)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(Rc::new(HorizonWalkerRanger))))).unwrap();
         ranger.level_up(ClassName::Ranger, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
         let player = Player::from(ranger.clone());
         let mut player_str = LinearStrategyBuilder::new();
@@ -1076,7 +1077,7 @@ mod tests {
         );
         let mut wizard = Character::new(name, ability_scores, equipment);
         wizard.level_up(ClassName::Wizard, vec!()).unwrap();
-        wizard.level_up(ClassName::Wizard, vec!(Box::new(ChooseSubClass(ConjurationWizard)))).unwrap();
+        wizard.level_up(ClassName::Wizard, vec!(Box::new(ChooseSubClass(Rc::new(ConjurationWizard))))).unwrap();
         wizard.level_up_basic().unwrap();
         wizard.level_up(ClassName::Wizard, vec!(Box::new(AbilityScoreIncrease::from(Ability::INT)))).unwrap();
         wizard.level_up_basic().unwrap();
@@ -1205,7 +1206,7 @@ mod tests {
         let mut ranger = Character::new(name, ability_scores, equipment);
         ranger.level_up(ClassName::Ranger, vec!()).unwrap();
         ranger.level_up(ClassName::Ranger, vec!(Box::new(FightingStyle(FightingStyles::Archery)))).unwrap();
-        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(HorizonWalkerRanger)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(Rc::new(HorizonWalkerRanger))))).unwrap();
         ranger.level_up(ClassName::Ranger, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
         ranger.level_up_basic().unwrap();
         ranger.level_up_basic().unwrap();

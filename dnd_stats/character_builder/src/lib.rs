@@ -27,6 +27,7 @@ pub mod classes;
 pub mod char_damage;
 pub mod equipment;
 pub mod feature;
+pub mod serialization;
 pub mod spellcasting;
 pub mod weapon_attack;
 

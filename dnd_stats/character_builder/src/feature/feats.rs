@@ -197,6 +197,7 @@ impl Feature for ShieldMaster {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+    use std::rc::Rc;
 
     use num::{BigInt, BigRational, FromPrimitive};
 
@@ -309,7 +310,7 @@ mod tests {
         let mut fighter = Character::new(String::from("gwm-pam"), get_str_based(), equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(GreatWeaponMaster))).unwrap();
         fighter.level_up(ClassName::Fighter, vec!()).unwrap();
-        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(ChampionFighter)))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(Rc::new(ChampionFighter))))).unwrap();
         fighter.level_up(ClassName::Fighter, vec!(Box::new( PolearmMaster))).unwrap();
         assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::Normal)));
         assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::GWMAttack)));
@@ -336,7 +337,7 @@ mod tests {
         let mut fighter = Character::new(String::from("pam-gwm"), get_str_based(), equipment);
         fighter.level_up(ClassName::Fighter, vec!(Box::new(PolearmMaster))).unwrap();
         fighter.level_up(ClassName::Fighter, vec!()).unwrap();
-        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(ChampionFighter)))).unwrap();
+        fighter.level_up(ClassName::Fighter, vec!(Box::new(ChooseSubClass(Rc::new(ChampionFighter))))).unwrap();
         fighter.level_up(ClassName::Fighter, vec!(Box::new(GreatWeaponMaster))).unwrap();
         assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::Normal)));
         assert!(fighter.has_combat_option(ActionName::PrimaryAttack(AttackType::GWMAttack)));

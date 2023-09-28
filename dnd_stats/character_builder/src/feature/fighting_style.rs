@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use serde::{Deserialize, Serialize};
 use combat_core::actions::CombatAction;
 
 use combat_core::damage::{DamageFeature, ExtendedDamageType};
@@ -9,6 +10,7 @@ use crate::equipment::ArmorType;
 use crate::feature::Feature;
 use crate::weapon_attack::{HandType, NumHands};
 
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone, Serialize, Deserialize)]
 pub enum FightingStyles {
     Archery,
     Defense,

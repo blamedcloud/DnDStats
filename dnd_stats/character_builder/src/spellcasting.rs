@@ -145,6 +145,7 @@ pub fn ninth_level_slots(caster_level: u8) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
     use combat_core::ability_scores::AbilityScores;
     use crate::Character;
     use crate::classes::{ChooseSubClass, ClassName};
@@ -194,7 +195,7 @@ mod tests {
         let mut wizard = level0_character();
         wizard.level_up(ClassName::Wizard, vec!()).unwrap();
         assert_eq!(1, character_caster_level(&wizard));
-        wizard.level_up(ClassName::Wizard, vec!(Box::new(ChooseSubClass(ConjurationWizard)))).unwrap();
+        wizard.level_up(ClassName::Wizard, vec!(Box::new(ChooseSubClass(Rc::new(ConjurationWizard))))).unwrap();
         assert_eq!(2, character_caster_level(&wizard));
         wizard.level_up_basic().unwrap();
         assert_eq!(3, character_caster_level(&wizard));
@@ -213,7 +214,7 @@ mod tests {
         assert_eq!(0, character_caster_level(&ranger));
         ranger.level_up_basic().unwrap();
         assert_eq!(1, character_caster_level(&ranger));
-        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(HorizonWalkerRanger)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(Rc::new(HorizonWalkerRanger))))).unwrap();
         assert_eq!(2, character_caster_level(&ranger));
         ranger.level_up_basic().unwrap();
         assert_eq!(2, character_caster_level(&ranger));
@@ -236,7 +237,7 @@ mod tests {
         assert_eq!(0, character_caster_level(&rogue));
         rogue.level_up_basic().unwrap();
         assert_eq!(0, character_caster_level(&rogue));
-        rogue.level_up(ClassName::Rogue, vec!(Box::new(ChooseSubClass(ArcaneTricksterRogue)))).unwrap();
+        rogue.level_up(ClassName::Rogue, vec!(Box::new(ChooseSubClass(Rc::new(ArcaneTricksterRogue))))).unwrap();
         assert_eq!(1, character_caster_level(&rogue));
         rogue.level_up_basic().unwrap();
         assert_eq!(2, character_caster_level(&rogue));

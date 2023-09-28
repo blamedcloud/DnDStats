@@ -134,6 +134,7 @@ impl Feature for SneakAttack {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
     use combat_core::ability_scores::Ability;
     use combat_core::damage::{DamageDice, ExtendedDamageDice, ExtendedDamageType};
     use combat_core::damage::dice_expr::DiceExprTerm;
@@ -156,7 +157,7 @@ mod tests {
         let mut rogue = Character::new(String::from("lvl20rogue"), get_dex_based(), equipment);
         rogue.level_up(ClassName::Rogue, vec!()).unwrap();
         rogue.level_up_basic().unwrap();
-        rogue.level_up(ClassName::Rogue, vec!(Box::new(ChooseSubClass(ScoutRogue)))).unwrap();
+        rogue.level_up(ClassName::Rogue, vec!(Box::new(ChooseSubClass(Rc::new(ScoutRogue))))).unwrap();
         rogue.level_up(ClassName::Rogue, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
         rogue.level_up_basic().unwrap();
         rogue.level_up_basic().unwrap();

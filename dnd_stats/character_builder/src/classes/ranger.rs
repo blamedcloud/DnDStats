@@ -140,6 +140,7 @@ impl Feature for PlanarWarrior {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
     use combat_core::ability_scores::Ability;
 
     use crate::Character;
@@ -161,7 +162,7 @@ mod tests {
         let mut ranger = Character::new(String::from("lvl20ranger"), get_dex_based(), equipment);
         ranger.level_up(ClassName::Ranger, vec!()).unwrap();
         ranger.level_up(ClassName::Ranger, vec!(Box::new(FightingStyle(FightingStyles::Archery)))).unwrap();
-        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(HorizonWalkerRanger)))).unwrap();
+        ranger.level_up(ClassName::Ranger, vec!(Box::new(ChooseSubClass(Rc::new(HorizonWalkerRanger))))).unwrap();
         ranger.level_up(ClassName::Ranger, vec!(Box::new(AbilityScoreIncrease::from(Ability::DEX)))).unwrap();
         ranger.level_up_basic().unwrap();
         ranger.level_up_basic().unwrap();

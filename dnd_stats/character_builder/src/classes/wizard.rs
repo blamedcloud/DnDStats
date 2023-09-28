@@ -57,6 +57,7 @@ impl SubClass for ConjurationWizard {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
     use combat_core::ability_scores::{Ability, AbilityScores};
     use crate::Character;
     use crate::classes::{ChooseSubClass, ClassName};
@@ -74,7 +75,7 @@ mod tests {
         let scores = AbilityScores::new(8, 12, 14, 16, 13, 8);
         let mut wizard = Character::new(String::from("baelin"), scores, equipment);
         wizard.level_up(ClassName::Wizard, vec!()).unwrap();
-        wizard.level_up(ClassName::Wizard, vec!(Box::new(ChooseSubClass(ConjurationWizard)))).unwrap();
+        wizard.level_up(ClassName::Wizard, vec!(Box::new(ChooseSubClass(Rc::new(ConjurationWizard))))).unwrap();
         wizard.level_up_basic().unwrap();
         wizard.level_up(ClassName::Wizard, vec!(Box::new(AbilityScoreIncrease::from(Ability::INT)))).unwrap();
         wizard.level_up_basic().unwrap();
