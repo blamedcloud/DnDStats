@@ -85,6 +85,14 @@ pub struct LinearStrategy<'pm> {
     strategies: Vec<Box<dyn Strategy + 'pm>>,
 }
 
+impl<'pm> LinearStrategy<'pm> {
+    pub fn new(strategies: Vec<Box<dyn Strategy + 'pm>>) -> Self {
+        Self {
+            strategies,
+        }
+    }
+}
+
 impl<'pm> Strategy for LinearStrategy<'pm> {
     // TODO: this and get_my_pid should be fixed in case on of them panics for the first strategy
     fn get_participants(&self) -> &Vec<TeamMember> {

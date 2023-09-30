@@ -54,9 +54,9 @@ impl SubClass for HorizonWalkerRanger {
 
     fn get_static_features(&self, level: u8) -> Result<Vec<Box<dyn Feature>>, CBError> {
         match level {
-            3 => Ok(vec!(Box::new(PlanarWarrior))),
+            3 => Ok(vec!(Box::new(PlanarWarrior(1)))),
             7 => Ok(Vec::new()),
-            11 => Ok(Vec::new()), // TODO: situational third attack. Validation ?
+            11 => Ok(vec!(Box::new(PlanarWarrior(2)))), // TODO: situational third attack. Validation ?
             15 => Ok(Vec::new()),
             _ => Err(CBError::InvalidLevel),
         }
@@ -108,11 +108,11 @@ impl Feature for FavoredFoe {
     }
 }
 
-pub struct PlanarWarrior; // TODO do more dmg at lvl 11
+pub struct PlanarWarrior(pub u8);
 impl Feature for PlanarWarrior {
     fn apply(&self, character: &mut Character) -> Result<(), CBError> {
         let damage = DamageTerm::new(
-            DiceExprTerm::Dice(1, ExtendedDamageDice::Basic(DamageDice::D8)),
+            DiceExprTerm::Dice(self.0, ExtendedDamageDice::Basic(DamageDice::D8)),
             ExtendedDamageType::Basic(DamageType::Force)
         );
 

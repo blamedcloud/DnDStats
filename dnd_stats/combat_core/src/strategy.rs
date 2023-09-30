@@ -27,8 +27,11 @@ pub mod haste_str;
 pub mod linear_str;
 pub mod planar_warrior_str;
 pub mod second_wind_str;
+pub mod sharp_shooter_str;
 pub mod shield_master_str;
 pub mod sneak_atk_str;
+
+pub mod serialization;
 
 // TODO: add shapes eventually (for spells and such)
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]

@@ -1,11 +1,13 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
+use num::{BigRational, Rational64, ToPrimitive};
 
 use character_builder::{CBError, Character};
 use combat_core::CCError;
 use combat_core::combat_event::CombatEvent;
-use combat_core::participant::ParticipantManager;
+use combat_core::participant::{ParticipantId, ParticipantManager};
 use combat_core::strategy::{StrategyBuilder, StrategyManager};
 use combat_core::strategy::basic_strategies::RemoveCondBuilder;
+use rand_var::num_rand_var::NumRandVar;
 use rand_var::rand_var::prob_type::RVProb;
 use rand_var::RVError;
 
@@ -19,6 +21,7 @@ pub mod combat_state_rv;
 pub mod encounter_simulator;
 pub mod monster;
 pub mod player;
+pub mod serialization;
 pub mod target_dummy;
 
 #[derive(Debug, Clone)]
@@ -54,6 +57,9 @@ pub struct CombatSimulator<P: RVProb> {
     cr_rv: CombatResultRV<P>,
 }
 
+pub type CS64 = CombatSimulator<Rational64>;
+pub type CSBig = CombatSimulator<BigRational>;
+
 impl<P: RVProb> CombatSimulator<P> {
     pub fn dmg_sponge(character: Character, str_bldr: impl StrategyBuilder, dummy_ac: isize, num_rounds: u8) -> Result<Self, CSError> {
         let dummy = TargetDummy::new(isize::MAX, dummy_ac);
@@ -82,6 +88,14 @@ impl<P: RVProb> CombatSimulator<P> {
 
     pub fn get_cr_rv(&self) -> &CombatResultRV<P> {
         &self.cr_rv
+    }
+
+    pub fn describe(&self)
+    where
+        P: Display + ToPrimitive
+    {
+        let dmg_rv = self.cr_rv.get_dmg(ParticipantId(1));
+        dmg_rv.print_stats_f64();
     }
 }
 

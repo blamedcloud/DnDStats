@@ -67,6 +67,14 @@ impl EquipmentDescription {
         }
     }
 
+    pub fn set_amb(&mut self, mb: u8) {
+        self.armor_mb = Some(mb);
+    }
+
+    pub fn set_wmb(&mut self, mb: u8) {
+        self.weapon_mb = Some(mb);
+    }
+
     pub fn to_equipment(&self) -> Equipment {
         let mut armor = Armor::from(self.armor_name);
         if self.armor_mb.is_some() {

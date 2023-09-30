@@ -1,0 +1,111 @@
+{
+  "player": {
+    "name": "Sequoia",
+    "base_ability_scores": [
+      9,
+      20,
+      14,
+      14,
+      16,
+      6
+    ],
+    "equipment": {
+      "armor_name": "StuddedLeather",
+      "armor_mb": 1,
+      "weapon_name": "Longbow",
+      "weapon_mb": 1,
+      "off_hand": "Free"
+    },
+    "level_ups": [
+      {
+        "class": "Ranger",
+        "features": []
+      },
+      {
+        "class": "Ranger",
+        "features": [
+          {
+            "FightingStyle": "Archery"
+          }
+        ]
+      },
+      {
+        "class": "Ranger",
+        "features": [
+          {
+            "Subclass": "HorizonWalkerRanger"
+          }
+        ]
+      },
+      {
+        "class": "Ranger",
+        "features": []
+      },
+      {
+        "class": "Ranger",
+        "features": []
+      },
+      {
+        "class": "Ranger",
+        "features": []
+      },
+      {
+        "class": "Ranger",
+        "features": []
+      },
+      {
+        "class": "Ranger",
+        "features": ["SharpShooter"]
+      },
+      {
+        "class": "Ranger",
+        "features": ["Haste"]
+      },
+      {
+        "class": "Ranger",
+        "features": []
+      },
+      {
+        "class": "Ranger",
+        "features": []
+      },
+      {
+        "class": "Ranger",
+        "features": [
+          {
+            "Resilient": "CON"
+          }
+        ]
+      },
+      {
+        "class": "Rogue",
+        "features": []
+      },
+      {
+        "class": "Rogue",
+        "features": []
+      },
+      {
+        "class": "Rogue",
+        "features": [
+          {
+            "Subclass": "ScoutRogue"
+          }
+        ]
+      }
+    ]
+  },
+  "strategy": {
+    "List": [
+      "HasteSB",
+      "FavoredFoeSB",
+      "PlanarWarriorSB",
+      {
+        "SneakAttackSB": false
+      },
+      {
+        "SharpShooterSB": true
+      }
+    ]
+  }
+}
