@@ -1,0 +1,56 @@
+{
+  "name": "harry",
+  "base_ability_scores": [
+    8,
+    16,
+    14,
+    16,
+    12,
+    10
+  ],
+  "equipment": {
+    "armor_name": "MageArmor",
+    "armor_mb": null,
+    "weapon_name": "Rapier",
+    "weapon_mb": null,
+    "off_hand": "Free"
+  },
+  "level_ups": [
+    {
+      "class": "Wizard",
+      "features": []
+    },
+    {
+      "class": "Wizard",
+      "features": [
+        {
+          "Subclass": "ConjurationWizard"
+        }
+      ]
+    },
+    {
+      "class": "Wizard",
+      "features": []
+    },
+    {
+      "class": "Wizard",
+      "features": [
+        {
+          "ASI": [
+            "INT",
+            "INT"
+          ]
+        }
+      ]
+    },
+    {
+      "class": "Wizard",
+      "features": [
+        {
+          "Fireball": "INT"
+        }
+      ]
+    }
+  ]
+}
+

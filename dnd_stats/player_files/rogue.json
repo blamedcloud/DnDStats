@@ -1,0 +1,46 @@
+{
+  "player": {
+    "name": "rogue",
+    "base_ability_scores": [
+      8,
+      16,
+      14,
+      12,
+      13,
+      10
+    ],
+    "equipment": {
+      "armor_name": "Leather",
+      "armor_mb": null,
+      "weapon_name": "Rapier",
+      "weapon_mb": 1,
+      "off_hand": "Free"
+    },
+    "level_ups": [
+      {
+        "class": "Rogue",
+        "features": []
+      },
+      {
+        "class": "Rogue",
+        "features": []
+      },
+      {
+        "class": "Rogue",
+        "features": [
+          {
+            "Subclass": "ScoutRogue"
+          }
+        ]
+      }
+    ]
+  },
+  "strategy": {
+    "List": [
+      {
+        "SneakAttackSB": false
+      },
+      "BasicAtkSB"
+    ]
+  }
+}
