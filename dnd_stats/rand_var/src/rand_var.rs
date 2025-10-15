@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
 use rv_partition::RVPartition;
-use crate::rand_var::prob_type::{Prob, Reciprocal};
+use crate::rand_var::prob_type::{Prob, Reciprocal, two, three};
 use crate::rand_var::sequential::SeqIter;
 use crate::RVError;
 
@@ -218,7 +218,7 @@ where
         Self: Sized
     {
         let max_pdf = |k| {
-            (P::one()+ P::one()) * self.pdf_ref(&k) * self.cdf_exclusive_ref(&k) + num::pow(self.pdf_ref(&k), 2)
+            two::<P>() * self.pdf_ref(&k) * self.cdf_exclusive_ref(&k) + num::pow(self.pdf_ref(&k), 2)
         };
         // .unwrap() is fine here, because if self is a valid RV, then this also will be.
         RandVar::build(self.get_keys(), max_pdf).unwrap()
@@ -229,8 +229,8 @@ where
         Self: Sized
     {
         let min_pdf = |k| {
-            let max_pdf = (P::one()+ P::one()) * self.pdf_ref(&k) * self.cdf_exclusive_ref(&k) + num::pow(self.pdf_ref(&k), 2);
-            (P::one()+ P::one()) * self.pdf_ref(&k) - max_pdf
+            let max_pdf = two::<P>() * self.pdf_ref(&k) * self.cdf_exclusive_ref(&k) + num::pow(self.pdf_ref(&k), 2);
+            two::<P>() * self.pdf_ref(&k) - max_pdf
         };
         // .unwrap() is fine here, because if self is a valid RV, then this also will be.
         RandVar::build(self.get_keys(), min_pdf).unwrap()
@@ -241,8 +241,8 @@ where
         Self: Sized
     {
         let max_pdf = |k| {
-            let x = (P::one() + P::one() + P::one()) * self.pdf_ref(&k) * num::pow(self.cdf_exclusive_ref(&k), 2);
-            let y = (P::one() + P::one() + P::one()) * num::pow(self.pdf_ref(&k), 2) * self.cdf_exclusive_ref(&k);
+            let x = three::<P>() * self.pdf_ref(&k) * num::pow(self.cdf_exclusive_ref(&k), 2);
+            let y = three::<P>() * num::pow(self.pdf_ref(&k), 2) * self.cdf_exclusive_ref(&k);
             x + y + num::pow(self.pdf_ref(&k), 3)
         };
         // .unwrap() is fine here, because if self is a valid RV, then this also will be.

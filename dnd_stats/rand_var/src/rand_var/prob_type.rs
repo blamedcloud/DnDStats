@@ -7,6 +7,21 @@ use num::rational::Ratio;
 
 // The minimum collection of traits required of the probability-like type for the RandVar and NumRandVar traits
 pub trait Prob: Zero + One + Sum + Add<Self, Output=Self> + Sub<Self, Output=Self> + Mul<Self, Output=Self> + Clone {}
+
+pub fn two<K>() -> K
+where
+    K: One + Add<K, Output=K>
+{
+    K::one() + K::one()
+}
+
+pub fn three<K>() -> K
+where
+    K: One + Add<K, Output=K>
+{
+    K::one() + K::one() + K::one()
+}
+
 impl<I: Integer + Clone> Prob for Ratio<I> {}
 
 pub trait Reciprocal {

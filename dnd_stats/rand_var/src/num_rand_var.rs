@@ -6,7 +6,7 @@ use std::ops::{Add, Div, Mul, Sub};
 
 use num::{One, ToPrimitive, Zero};
 
-use crate::rand_var::prob_type::Prob;
+use crate::rand_var::prob_type::{Prob, two, three};
 use crate::rand_var::RandVar;
 use crate::rand_var::sequential::{Seq, SeqIter};
 use crate::RVError;
@@ -160,23 +160,22 @@ where
         K: One + Mul<K, Output=K> + Div<K, Output=K>,
         Self: Sized
     {
-        let two = K::one() + K::one();
-        let seq_iter = SeqIter { items: self.get_keys().map(|k| k /two.clone()).collect() };
+        let seq_iter = SeqIter { items: self.get_keys().map(|k| k / two::<K>()).collect() };
         // check the way rounding works.
-        if K::one()/two.clone() == K::zero() {
+        if K::one() / two::<K>() == K::zero() {
             // division truncates, so handle all collisions (i.e.: 2/2 == 3/2 == 1)
             RandVar::build(seq_iter, |k| {
                 if k > K::zero() {
-                    self.pdf(two.clone()* k.clone()) + self.pdf(two.clone()* k + K::one())
+                    self.pdf(two::<K>() * k.clone()) + self.pdf(two::<K>() * k + K::one())
                 } else if k == K::zero() {
-                    self.pdf(K::zero()- K::one()) + self.pdf(K::zero()) + self.pdf(K::one())
+                    self.pdf(K::zero() - K::one()) + self.pdf(K::zero()) + self.pdf(K::one())
                 } else {
-                    self.pdf(two.clone()* k.clone()) + self.pdf(two.clone()* k - K::one())
+                    self.pdf(two::<K>() * k.clone()) + self.pdf(two::<K>() * k - K::one())
                 }
             })
         } else if sanity_check::<K>() {
             // division is "rational-like", so there are no collisions.
-            RandVar::build(seq_iter, |k| self.pdf(two.clone()* k))
+            RandVar::build(seq_iter, |k| self.pdf(two::<K>() * k))
         } else {
             // Your numbers are garbage. It's your own fault for using a type like that.
             return Err(RVError::NoRound);
@@ -236,10 +235,9 @@ fn sanity_check<K>() -> bool
     where
         K: One + Add<K, Output=K> + Div<K, Output=K> + Clone + PartialEq
 {
-    let two = K::one() + K::one();
-    let three = K::one() + K::one() + K::one();
+    let three = three::<K>();
     let ten = three.clone() + three.clone() + three.clone() + K::one();
-    let left = (K::one()/ten.clone()) + (two/ten.clone());
+    let left = (K::one()/ten.clone()) + (two::<K>()/ten.clone());
     let right = three/ten;
     left == right
 }
@@ -248,7 +246,7 @@ fn sanity_check<K>() -> bool
 mod tests {
     use num::{BigInt, BigRational, FromPrimitive, One, Rational64, Zero};
     use crate::map_rand_var::MRV64;
-    use crate::num_rand_var::NumRandVar;
+    use crate::num_rand_var::{sanity_check, NumRandVar};
     use crate::rand_var::RandVar;
     use crate::vec_rand_var::{VecRandVar, VRV64, VRVBig};
 
@@ -423,5 +421,14 @@ mod tests {
             assert_eq!(total, rv.cdf(x));
         }
         assert_eq!(Rational64::one(), total);
+    }
+
+    #[test]
+    fn test_sanity_check() {
+        assert_eq!(true, sanity_check::<Rational64>());
+        assert_eq!(true, sanity_check::<BigRational>());
+        //assert_eq!(false, sanity_check::<f32>()); // TODO: fix this
+        assert_eq!(false, sanity_check::<f64>());
+
     }
 }

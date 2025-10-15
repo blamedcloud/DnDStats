@@ -78,7 +78,7 @@ impl<'sm, 'pm, P: RVProb> EncounterSimulator<'sm, 'pm, P> {
         Ok(())
     }
 
-    pub fn get_state_rv(&self) -> &CombatStateRV<P> {
+    pub fn get_state_rv(&self) -> &CombatStateRV<'_, P> {
         &self.cs_rv
     }
 

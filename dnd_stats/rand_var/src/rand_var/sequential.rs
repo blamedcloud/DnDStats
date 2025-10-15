@@ -134,3 +134,53 @@ where
         S::convex_bounds(SeqIter { items: set }).map(|(min, max)| (Some(min), Some(max)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+    use crate::rand_var::sequential::{Pair, Seq};
+
+    #[test]
+    fn test_isize() {
+        let seq_iter = isize::gen_seq(&3, &7);
+        assert_eq!(5, seq_iter.items.len());
+        let items = BTreeSet::from_iter(3..=7);
+        assert_eq!(items, seq_iter.items);
+
+        let bounds = isize::convex_bounds(seq_iter);
+        assert!(bounds.is_some());
+        let (lb, ub) = bounds.unwrap();
+        assert_eq!(3, lb);
+        assert_eq!(7, ub);
+    }
+
+    #[test]
+    fn test_pair() {
+        let pair1 = Pair::<isize, isize>(2, 5);
+        let pair2 = Pair::<isize, isize>(-1, 7);
+        let seq_iter = pair1.gen_seq(&pair2);
+        assert_eq!(12, seq_iter.items.len());
+
+        let mut items = BTreeSet::new();
+        items.insert(Pair(-1, 5));
+        items.insert(Pair(-1, 6));
+        items.insert(Pair(-1, 7));
+        items.insert(Pair(0, 5));
+        items.insert(Pair(0, 6));
+        items.insert(Pair(0, 7));
+        items.insert(Pair(1, 5));
+        items.insert(Pair(1, 6));
+        items.insert(Pair(1, 7));
+        items.insert(Pair(2, 5));
+        items.insert(Pair(2, 6));
+        items.insert(Pair(2, 7));
+
+        assert_eq!(items, seq_iter.items);
+
+        let bounds = Pair::<isize, isize>::convex_bounds(seq_iter);
+        assert!(bounds.is_some());
+        let (lb, ub) = bounds.unwrap();
+        assert_eq!(Pair(-1, 5), lb);
+        assert_eq!(Pair(2, 7), ub);
+    }
+}
