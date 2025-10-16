@@ -1,6 +1,8 @@
 use std::{cmp, fmt};
 use std::collections::BTreeSet;
 use std::fmt::{Debug, Display, Formatter};
+use std::ops::Add;
+use num::Rational64;
 
 #[derive(Clone)]
 pub struct SeqIter<K: Ord + Clone> {
@@ -54,6 +56,69 @@ impl Seq for isize {
 
 #[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone)]
 pub struct Pair<A: Ord + Clone, B: Ord + Clone>(pub A, pub B);
+
+pub trait Nested<K: Ord + Clone> {
+
+    fn get_k(&self) -> K;
+    fn flat_max(&self) -> K { self.get_k() }
+    fn flat_min(&self) -> K { self.get_k() }
+
+    fn flat_sum(&self) -> K
+    where K: Add<K, Output=K>
+    {
+        self.get_k()
+    }
+}
+
+impl<K, A, B> Nested<K> for Pair<A, B>
+where
+    K: Ord + Clone,
+    A: Nested<K> + Ord + Clone,
+    B: Nested<K> + Ord + Clone
+{
+    // This method should never be called because a Pair is not a K.
+    // One could do something like get the first K in the nested Pairs
+    // if they desperately wanted this to not panic.
+    // I'm fine with this the way it is, because if any of the flat_*
+    // methods accidentally call this, it will loudly fail, rather
+    // than silently return the wrong thing.
+    fn get_k(&self) -> K {
+        unimplemented!()
+    }
+
+    fn flat_max(&self) -> K {
+        let left = self.0.flat_max();
+        let right = self.1.flat_max();
+        cmp::max(left, right)
+    }
+
+    fn flat_min(&self) -> K {
+        let left = self.0.flat_min();
+        let right = self.1.flat_min();
+        cmp::min(left, right)
+    }
+
+    fn flat_sum(&self) -> K
+    where
+        K: Add<K, Output=K>
+    {
+        let left = self.0.flat_sum();
+        let right = self.1.flat_sum();
+        left + right
+    }
+}
+
+impl Nested<isize> for isize {
+    fn get_k(&self) -> isize {
+        *self
+    }
+}
+
+impl Nested<Rational64> for Rational64 {
+    fn get_k(&self) -> Rational64 {
+        *self
+    }
+}
 
 impl<A, B> Seq for Pair<A, B>
 where
@@ -138,7 +203,8 @@ where
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
-    use crate::rand_var::sequential::{Pair, Seq};
+    use num::Rational64;
+    use crate::rand_var::sequential::{Nested, Pair, Seq};
 
     #[test]
     fn test_isize() {
@@ -182,5 +248,23 @@ mod tests {
         let (lb, ub) = bounds.unwrap();
         assert_eq!(Pair(-1, 5), lb);
         assert_eq!(Pair(2, 7), ub);
+    }
+
+    #[test]
+    fn test_flatten() {
+        let p1 = Pair(0, Pair(-1, 1));
+        assert_eq!(1, p1.flat_max());
+        assert_eq!(-1, p1.flat_min());
+        assert_eq!(0, p1.flat_sum());
+
+        let p2 = Pair(Pair(Pair(3, Pair(0, 5)), Pair(1, 7)), Pair(Pair(2, Pair(Pair(Pair(4, Pair(-1, 6)), 0), Pair(-2, 8))), Pair(-3, 9)));
+        assert_eq!(9, p2.flat_max());
+        assert_eq!(-3, p2.flat_min());
+        assert_eq!(39, p2.flat_sum());
+
+        let p3 = Pair(Rational64::from_integer(2), Pair(Rational64::from_integer(3), Rational64::from_integer(1)));
+        assert_eq!(Rational64::from_integer(3), p3.flat_max());
+        assert_eq!(Rational64::from_integer(1), p3.flat_min());
+        assert_eq!(Rational64::from_integer(6), p3.flat_sum());
     }
 }

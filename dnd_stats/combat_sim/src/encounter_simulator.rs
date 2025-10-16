@@ -783,7 +783,7 @@ mod tests {
                         AttackResult::Hit => 1,
                         AttackResult::Crit => 2
                     }
-                }).into_rv();
+                }).into_vrv();
             assert_eq!(ar_rv, index_rv);
 
             let hit_pcs = cs_rv.get_pcs(1);

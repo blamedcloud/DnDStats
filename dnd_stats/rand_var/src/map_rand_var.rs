@@ -243,7 +243,7 @@ impl<P: Prob + PartialOrd<P>> From<VecRandVar<P>> for MapRandVar<isize, P> {
 }
 
 impl<P: Prob> MapRandVar<isize, P> {
-    pub fn into_rv(self) -> VecRandVar<P> {
+    pub fn into_vrv(self) -> VecRandVar<P> {
         self.into()
     }
 }
@@ -256,7 +256,7 @@ mod tests {
     use crate::map_rand_var::{MapRandVar, MRV64};
     use crate::num_rand_var::NumRandVar;
     use crate::rand_var::RandVar;
-    use crate::rand_var::sequential::Pair;
+    use crate::rand_var::sequential::{Nested, Pair};
     use crate::vec_rand_var::{VecRandVar, VRV64, VRVBig};
 
     fn get_attack_setup() -> (MRV64, BTreeMap<isize, VRV64>) {
@@ -326,10 +326,19 @@ mod tests {
                     cmp::min(rolls.0.0, rolls.0.1),
                     cmp::min(rolls.1.0, rolls.1.1));
                 rolls.0.0 + rolls.0.1 + rolls.1.0 + rolls.1.1 - smallest
-            }).into_rv();
+            }).into_vrv();
         assert_eq!(3, ability_score.lower_bound());
         assert_eq!(18, ability_score.upper_bound());
         assert_eq!(BigRational::new(BigInt::from_isize(15869).unwrap(), BigInt::from_isize(1296).unwrap()), ability_score.expected_value());
+
+        let ability_score2 = VecRandVar::new_dice(6).unwrap()
+            .into_mrv()
+            .independent_trials_self()
+            .independent_trials_self()
+            .map_keys(|rolls| {
+                rolls.flat_sum() - rolls.flat_min()
+            }).into_vrv();
+        assert_eq!(ability_score, ability_score2);
     }
 
     #[test]
@@ -339,7 +348,7 @@ mod tests {
         let other_d20_super_adv: VRV64 = other_d20
             .independent_trials(&other_d20)
             .independent_trials(&other_d20)
-            .map_keys(|pair| cmp::max(cmp::max(pair.0.0, pair.0.1), pair.1))
+            .map_keys(|triple| triple.flat_max())
             .into();
         assert_eq!(d20_super_adv, other_d20_super_adv);
     }

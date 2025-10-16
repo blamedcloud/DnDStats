@@ -48,7 +48,7 @@ impl<P: RVProb> CombatResultRV<P> {
                 }
             }
         }
-        MapRandVar::from_map(pdf_map).unwrap().into_rv()
+        MapRandVar::from_map(pdf_map).unwrap().into_vrv()
     }
 
     pub fn get_resource_rv(&self, pid: ParticipantId, rn: ResourceName) -> Result<MapRandVar<isize, P>, CSError> {
