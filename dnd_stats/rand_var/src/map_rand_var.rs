@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::iter::Sum;
-
+use std::ops::Add;
 use num::{BigRational, FromPrimitive, Rational64};
 
 use crate::num_rand_var::NumRandVar;
 use crate::rand_var::prob_type::Prob;
 use crate::rand_var::RandVar;
-use crate::rand_var::sequential::{Pair, SeqIter};
+use crate::rand_var::sequential::{FlatCmp, FlatType, Nested, Pair, SeqIter};
 use crate::RVError;
 use crate::vec_rand_var::VecRandVar;
 
@@ -61,6 +61,54 @@ where
         })
     }
 
+    pub fn flatcmp_n_ind_trials(&self, num_times: u32, fc: FlatCmp) -> Self
+    where
+        K: Nested<K> + Default
+    {
+        if num_times == 0 {
+            let seq_iter = SeqIter { items: BTreeSet::from([K::default()]) };
+            return RandVar::build(seq_iter, |_| P::one()).unwrap();
+        } else if num_times == 1  {
+            return self.clone();
+        }
+
+        let mut rv;
+        if num_times % 2 == 0 {
+            rv = self.flatcmp_n_ind_trials(num_times / 2, fc);
+            rv = rv.independent_trials_self().map_keys(|pair| pair.flat_cmp(fc));
+        } else {
+            rv = self.flatcmp_n_ind_trials((num_times - 1) / 2, fc);
+            rv = rv.independent_trials_self()
+                   .independent_trials(&self)
+                   .map_keys(|pair| pair.flat_cmp(fc));
+        }
+        rv
+    }
+
+    pub fn flatten_n_ind_trials(&self, num_times: u32, ft: FlatType) -> Self
+    where
+        K: Nested<K> + Default + Add<K, Output=K>
+    {
+        if num_times == 0 {
+            let seq_iter = SeqIter { items: BTreeSet::from([K::default()]) };
+            return RandVar::build(seq_iter, |_| P::one()).unwrap();
+        } else if num_times == 1  {
+            return self.clone();
+        }
+
+        let mut rv;
+        if num_times % 2 == 0 {
+            rv = self.flatten_n_ind_trials(num_times / 2, ft);
+            rv = rv.independent_trials_self().map_keys(|pair| pair.flatten(ft));
+        } else {
+            rv = self.flatten_n_ind_trials((num_times - 1) / 2, ft);
+            rv = rv.independent_trials_self()
+                .independent_trials(&self)
+                .map_keys(|pair| pair.flatten(ft));
+        }
+        rv
+    }
+
     pub fn independent_trials_self(&self) -> MapRandVar<Pair<K, K>, P> {
         self.independent_trials(&self)
     }
@@ -89,8 +137,8 @@ where
         for k in self.get_keys() {
             let l = f(k.clone());
             if new_pdf.contains_key(&l) {
-                let old_t = new_pdf.remove(&l).unwrap();
-                new_pdf.insert(l, old_t + self.pdf_ref(&k));
+                let old_p = new_pdf.remove(&l).unwrap();
+                new_pdf.insert(l, old_p + self.pdf_ref(&k));
             } else {
                 new_pdf.insert(l, self.pdf_ref(&k));
             }
@@ -256,7 +304,7 @@ mod tests {
     use crate::map_rand_var::{MapRandVar, MRV64};
     use crate::num_rand_var::NumRandVar;
     use crate::rand_var::RandVar;
-    use crate::rand_var::sequential::{Nested, Pair};
+    use crate::rand_var::sequential::{FlatCmp, FlatType, Nested, Pair};
     use crate::vec_rand_var::{VecRandVar, VRV64, VRVBig};
 
     fn get_attack_setup() -> (MRV64, BTreeMap<isize, VRV64>) {
@@ -339,6 +387,67 @@ mod tests {
                 rolls.flat_sum() - rolls.flat_min()
             }).into_vrv();
         assert_eq!(ability_score, ability_score2);
+    }
+
+    #[test]
+    fn test_flatcmp() {
+        let d20_super_adv: VRV64 = VecRandVar::new_dice(20).unwrap().max_three_trials();
+        let other_d20: MRV64 = VecRandVar::new_dice(20).unwrap().into();
+        let other_d20_super_adv: VRV64 = other_d20.flatcmp_n_ind_trials(3, FlatCmp::Max).into();
+        assert_eq!(d20_super_adv, other_d20_super_adv);
+
+        let rv1: MRV64 = VecRandVar::new_dice(10).unwrap().into_mrv();
+        let rv1_7 = rv1.flatcmp_n_ind_trials(7, FlatCmp::Min);
+        let rv2 = rv1.independent_trials(&rv1)
+            .map_keys(|k| k.flat_cmp(FlatCmp::Min))
+            .independent_trials(&rv1)
+            .map_keys(|k| k.flat_cmp(FlatCmp::Min))
+            .independent_trials(&rv1)
+            .map_keys(|k| k.flat_cmp(FlatCmp::Min))
+            .independent_trials(&rv1)
+            .map_keys(|k| k.flat_cmp(FlatCmp::Min))
+            .independent_trials(&rv1)
+            .map_keys(|k| k.flat_cmp(FlatCmp::Min))
+            .independent_trials(&rv1)
+            .map_keys(|k| k.flat_cmp(FlatCmp::Min));
+        assert_eq!(rv2, rv1_7);
+
+        assert_eq!(rv1, rv1.flatcmp_n_ind_trials(1, FlatCmp::Max));
+        assert_eq!(rv1, rv1.flatcmp_n_ind_trials(1, FlatCmp::Min));
+
+        let rv_0: MRV64 = VecRandVar::new_constant(0).unwrap().into_mrv();
+        assert_eq!(rv_0, rv1.flatcmp_n_ind_trials(0, FlatCmp::Min));
+    }
+
+    #[test]
+    fn test_flatten() {
+        let d20_super_adv: VRV64 = VecRandVar::new_dice(20).unwrap().max_three_trials();
+        let other_d20: MRV64 = VecRandVar::new_dice(20).unwrap().into();
+        let other_d20_super_adv: VRV64 = other_d20.flatten_n_ind_trials(3, FlatType::Max).into();
+        assert_eq!(d20_super_adv, other_d20_super_adv);
+
+        let rv1: MRV64 = VecRandVar::new_dice(12).unwrap().into_mrv();
+        let rv1_5 = rv1.flatten_n_ind_trials(5, FlatType::Min);
+        let rv2 = rv1.independent_trials(&rv1)
+            .map_keys(|k| k.flat_cmp(FlatCmp::Min))
+            .independent_trials(&rv1)
+            .map_keys(|k| k.flat_cmp(FlatCmp::Min))
+            .independent_trials(&rv1)
+            .map_keys(|k| k.flat_cmp(FlatCmp::Min))
+            .independent_trials(&rv1)
+            .map_keys(|k| k.flat_cmp(FlatCmp::Min));
+        assert_eq!(rv2, rv1_5);
+
+        assert_eq!(rv1, rv1.flatten_n_ind_trials(1, FlatType::Max));
+        assert_eq!(rv1, rv1.flatten_n_ind_trials(1, FlatType::Min));
+        assert_eq!(rv1, rv1.flatten_n_ind_trials(1, FlatType::Sum));
+
+        let rv_0: MRV64 = VecRandVar::new_constant(0).unwrap().into_mrv();
+        assert_eq!(rv_0, rv1.flatten_n_ind_trials(0, FlatType::Min));
+
+        let rv3: MRV64 = VecRandVar::new_dice(6).unwrap().multiple(12).into_mrv();
+        let rv4: MRV64 = VecRandVar::new_dice(6).unwrap().into_mrv().flatten_n_ind_trials(12, FlatType::Sum);
+        assert_eq!(rv3, rv4);
     }
 
     #[test]

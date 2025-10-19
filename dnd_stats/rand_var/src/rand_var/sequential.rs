@@ -57,6 +57,19 @@ impl Seq for isize {
 #[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone)]
 pub struct Pair<A: Ord + Clone, B: Ord + Clone>(pub A, pub B);
 
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+pub enum FlatType {
+    Max,
+    Min,
+    Sum,
+}
+
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+pub enum FlatCmp {
+    Max,
+    Min,
+}
+
 pub trait Nested<K: Ord + Clone> {
 
     fn get_k(&self) -> K;
@@ -67,6 +80,23 @@ pub trait Nested<K: Ord + Clone> {
     where K: Add<K, Output=K>
     {
         self.get_k()
+    }
+
+    fn flat_cmp(&self, fc: FlatCmp) -> K {
+        match fc {
+            FlatCmp::Max => self.flat_max(),
+            FlatCmp::Min => self.flat_min(),
+        }
+    }
+
+    fn flatten(&self, ft: FlatType) -> K
+    where K: Add<K, Output=K>
+    {
+        match ft {
+            FlatType::Max => self.flat_max(),
+            FlatType::Min => self.flat_min(),
+            FlatType::Sum => self.flat_sum(),
+        }
     }
 }
 
@@ -204,7 +234,7 @@ where
 mod tests {
     use std::collections::BTreeSet;
     use num::Rational64;
-    use crate::rand_var::sequential::{Nested, Pair, Seq};
+    use crate::rand_var::sequential::{FlatCmp, FlatType, Nested, Pair, Seq};
 
     #[test]
     fn test_isize() {
@@ -254,13 +284,23 @@ mod tests {
     fn test_flatten() {
         let p1 = Pair(0, Pair(-1, 1));
         assert_eq!(1, p1.flat_max());
+        assert_eq!(1, p1.flatten(FlatType::Max));
+        assert_eq!(1, p1.flat_cmp(FlatCmp::Max));
         assert_eq!(-1, p1.flat_min());
+        assert_eq!(-1, p1.flatten(FlatType::Min));
+        assert_eq!(-1, p1.flat_cmp(FlatCmp::Min));
         assert_eq!(0, p1.flat_sum());
+        assert_eq!(0, p1.flatten(FlatType::Sum));
 
         let p2 = Pair(Pair(Pair(3, Pair(0, 5)), Pair(1, 7)), Pair(Pair(2, Pair(Pair(Pair(4, Pair(-1, 6)), 0), Pair(-2, 8))), Pair(-3, 9)));
         assert_eq!(9, p2.flat_max());
+        assert_eq!(9, p2.flatten(FlatType::Max));
+        assert_eq!(9, p2.flat_cmp(FlatCmp::Max));
         assert_eq!(-3, p2.flat_min());
+        assert_eq!(-3, p2.flatten(FlatType::Min));
+        assert_eq!(-3, p2.flat_cmp(FlatCmp::Min));
         assert_eq!(39, p2.flat_sum());
+        assert_eq!(39, p2.flatten(FlatType::Sum));
 
         let p3 = Pair(Rational64::from_integer(2), Pair(Rational64::from_integer(3), Rational64::from_integer(1)));
         assert_eq!(Rational64::from_integer(3), p3.flat_max());

@@ -126,9 +126,14 @@ where
         }
         let is_neg = num_times < 0;
         let pos_num = num::abs(num_times);
-        let mut rv = self.add_rv(self);
-        for _ in 2..pos_num {
-            rv = rv.add_rv(self);
+        let mut rv;
+        if pos_num % 2 == 0 {
+            rv = self.multiple(pos_num / 2);
+            rv = rv.add_rv(&rv);
+        } else {
+            rv = self.multiple((pos_num - 1) / 2);
+            rv = rv.add_rv(&rv);
+            rv = self.add_rv(&rv);
         }
         if is_neg {
             rv.opposite_rv()
@@ -371,15 +376,54 @@ mod tests {
     }
 
     #[test]
-    fn test_multiple() {
+    fn test_multiple_edge() {
+        let rv1: VRV64 = VecRandVar::new_dice(8).unwrap();
+
+        let rv = rv1.multiple(1);
+        assert_eq!(rv1, rv);
+
+        let rv = rv1.multiple(-1);
+        assert_eq!(rv1.opposite_rv(), rv);
+
+        let rv = rv1.multiple(0);
+        let const_0: VRV64 = VecRandVar::new_constant(0).unwrap();
+        assert_eq!(const_0, rv);
+    }
+
+    #[test]
+    fn test_multiple_even() {
         let rv1: VRVBig = VecRandVar::new_dice(6).unwrap();
-        let rv = rv1.add_rv(&rv1);
-        let other_rv = rv1.multiple(2);
+
+        let rv = rv1.add_rv(&rv1).opposite_rv();
+        let other_rv = rv1.multiple(-2);
         assert_eq!(rv, other_rv);
 
-        let rv = rv1.add_rv(&rv1).add_rv(&rv1);
-        let other_rv = rv1.multiple(3);
+        let rv = rv1.add_rv(&rv1).add_rv(&rv1).add_rv(&rv1).add_rv(&rv1).add_rv(&rv1);
+        let other_rv = rv1.multiple(6);
         assert_eq!(rv, other_rv);
+
+        let rv = rv1.multiple(10);
+        assert_eq!(10, rv.lower_bound());
+        assert_eq!(60, rv.upper_bound());
+        assert_eq!(BigRational::new(BigInt::from_i32(70).unwrap(), BigInt::from_i32(2).unwrap()), rv.expected_value());
+    }
+
+    #[test]
+    fn test_multiple_odd() {
+        let rv1: VRVBig = VecRandVar::new_dice(4).unwrap();
+
+        let rv = rv1.add_rv(&rv1).add_rv(&rv1).add_rv(&rv1).add_rv(&rv1);
+        let other_rv = rv1.multiple(5);
+        assert_eq!(rv, other_rv);
+
+        let rv = rv1.add_rv(&rv1).add_rv(&rv1).add_rv(&rv1).add_rv(&rv1).add_rv(&rv1).add_rv(&rv1).opposite_rv();
+        let other_rv = rv1.multiple(-7);
+        assert_eq!(rv, other_rv);
+
+        let rv = rv1.multiple(17);
+        assert_eq!(17, rv.lower_bound());
+        assert_eq!(68, rv.upper_bound());
+        assert_eq!(BigRational::new(BigInt::from_i32(85).unwrap(), BigInt::from_i32(2).unwrap()), rv.expected_value());
     }
 
     #[test]
